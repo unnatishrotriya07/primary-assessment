@@ -47,10 +47,11 @@ export default function InterviewPage({ params }: PageProps) {
     const [liveCaption, setLiveCaption] = useState("");
     const [stream, setStream] = useState<MediaStream | null>(null);
 
-    // Refs
+        // Refs
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const recognitionRef = useRef<any>(null);
+    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number | null>(null);
@@ -194,7 +195,16 @@ export default function InterviewPage({ params }: PageProps) {
             return;
         }
         window.speechSynthesis.cancel();
+        
+        if (utteranceRef.current) {
+            utteranceRef.current.onstart = null;
+            utteranceRef.current.onend = null;
+            utteranceRef.current.onerror = null;
+        }
+
         const utt = new SpeechSynthesisUtterance(text);
+        utteranceRef.current = utt;
+
         utt.rate = 0.88;
         utt.pitch = 1.15;
         utt.volume = 1;
@@ -206,6 +216,15 @@ export default function InterviewPage({ params }: PageProps) {
             voices[0];
         if (voice) utt.voice = voice;
 
+        // Chrome bug: Speech synthesis stops speaking after 15 seconds.
+        // We call pause and resume periodically to keep it alive.
+        const resumeInterval = setInterval(() => {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.pause();
+                window.speechSynthesis.resume();
+            }
+        }, 10000);
+
         utt.onstart = () => {
             setIsSpeaking(true);
             setIsRecording(false);
@@ -215,11 +234,15 @@ export default function InterviewPage({ params }: PageProps) {
             }
         };
         utt.onend = () => {
+            clearInterval(resumeInterval);
             setIsSpeaking(false);
+            utteranceRef.current = null;
             onEnd?.();
         };
         utt.onerror = () => {
+            clearInterval(resumeInterval);
             setIsSpeaking(false);
+            utteranceRef.current = null;
             onEnd?.();
         };
         window.speechSynthesis.speak(utt);
@@ -286,6 +309,15 @@ export default function InterviewPage({ params }: PageProps) {
                 }, 1000);
             } else {
                 setLiveCaption("");
+                // Auto-restart if mic is enabled, and we aren't speaking or submitting
+                if (micEnabled && !isSpeaking && !isSubmitting) {
+                    setTimeout(() => {
+                        // Double check values to ensure state hasn't changed during the delay
+                        if (micEnabled && !isSpeaking && !isSubmitting) {
+                            try { rec.start(); } catch (_) {}
+                        }
+                    }, 300);
+                }
             }
         };
 
