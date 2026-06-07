@@ -270,10 +270,8 @@ export default function InterviewPage({ params }: PageProps) {
         const rec = new SR();
         rec.lang = "en-US";
         rec.interimResults = true;
-        rec.continuous = false; // Capture phrase by phrase
+        rec.continuous = true; // Continuous listening so pauses don't cut off the user
         rec.maxAlternatives = 1;
-
-        let finalAnswer = "";
 
         rec.onstart = () => {
             setIsRecording(true);
@@ -282,15 +280,18 @@ export default function InterviewPage({ params }: PageProps) {
 
         rec.onresult = (e: any) => {
             let interimTranscript = "";
-            for (let i = e.resultIndex; i < e.results.length; ++i) {
+            let finalTranscript = "";
+            for (let i = 0; i < e.results.length; ++i) {
                 const text = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
-                    finalAnswer = text;
+                    finalTranscript += text + " ";
                 } else {
-                    interimTranscript = text;
+                    interimTranscript += text;
                 }
             }
-            setLiveCaption(interimTranscript || finalAnswer);
+            const currentSpeech = (finalTranscript + interimTranscript).trim();
+            setLiveCaption(currentSpeech);
+            setTypedText(currentSpeech);
         };
 
         rec.onerror = (err: any) => {
@@ -300,24 +301,14 @@ export default function InterviewPage({ params }: PageProps) {
 
         rec.onend = () => {
             setIsRecording(false);
-            if (finalAnswer.trim()) {
-                setLiveCaption(finalAnswer);
-                // Pause briefly so student can see their final caption before moving on
+            // Auto-restart if mic is enabled, and we aren't speaking or submitting
+            if (micEnabled && !isSpeaking && !isSubmitting) {
                 setTimeout(() => {
-                    handleSubmitAnswer(finalAnswer);
-                    setLiveCaption("");
-                }, 1000);
-            } else {
-                setLiveCaption("");
-                // Auto-restart if mic is enabled, and we aren't speaking or submitting
-                if (micEnabled && !isSpeaking && !isSubmitting) {
-                    setTimeout(() => {
-                        // Double check values to ensure state hasn't changed during the delay
-                        if (micEnabled && !isSpeaking && !isSubmitting) {
-                            try { rec.start(); } catch (_) {}
-                        }
-                    }, 300);
-                }
+                    // Double check values to ensure state hasn't changed during the delay
+                    if (micEnabled && !isSpeaking && !isSubmitting) {
+                        try { rec.start(); } catch (_) {}
+                    }
+                }, 300);
             }
         };
 
@@ -431,12 +422,21 @@ export default function InterviewPage({ params }: PageProps) {
         }
     };
 
-    const handleManualNext = () => {
+    const handleManualNext = useCallback(() => {
         if (isSpeaking || isSubmitting) return;
+        
+        // Stop recognition
         if (recognitionRef.current) {
-            recognitionRef.current.stop();
+            recognitionRef.current.onend = null;
+            recognitionRef.current.onresult = null;
+            try { recognitionRef.current.stop(); } catch (_) {}
         }
-    };
+        setIsRecording(false);
+
+        // Submit the answer
+        handleSubmitAnswer(typedText);
+        setLiveCaption("");
+    }, [isSpeaking, isSubmitting, handleSubmitAnswer, typedText]);
 
     // ── Screen rendering branches ────────────────────────────────────────────
 
@@ -684,7 +684,10 @@ export default function InterviewPage({ params }: PageProps) {
                 {/* Keyboard Input Button */}
                 <button
                     style={{ ...s.controlBtn, ...s.btnKeyboard }}
-                    onClick={() => setShowKeyboardInput(true)}
+                    onClick={() => {
+                        setTypedText(liveCaption || "");
+                        setShowKeyboardInput(true);
+                    }}
                     title="Type Answer Instead"
                     disabled={isSubmitting}
                 >
@@ -697,8 +700,8 @@ export default function InterviewPage({ params }: PageProps) {
                 <button
                     style={{ ...s.controlBtn, ...s.btnEndCall }}
                     onClick={handleManualNext}
-                    disabled={isSpeaking || isSubmitting || (!isRecording && !liveCaption)}
-                    title="Skip/Submit Answer"
+                    disabled={isSpeaking || isSubmitting || !typedText.trim()}
+                    title="Submit Answer"
                 >
                     <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Next →</span>
                 </button>
