@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import subjectService from "@/services/subject.service";
+import classService from "@/services/class.service";
 import { SubjectData } from "@/types/subject.types";
+import { ClassData } from "@/types/class.types";
 
 interface SubjectsTableProps {
   refreshTrigger?: number;
@@ -10,15 +12,33 @@ interface SubjectsTableProps {
 
 export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps) {
   const [subjects, setSubjects] = useState<SubjectData[]>([]);
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  const [classesMap, setClassesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  const [selectedClassFilter, setSelectedClassFilter] = useState("");
 
-  const fetchSubjects = async () => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const fetchSubjectsAndClasses = async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await subjectService.getAll();
-      setSubjects(data);
+      const [subjectsData, classesData] = await Promise.all([
+        subjectService.getAll(),
+        classService.getAll(),
+      ]);
+      setSubjects(subjectsData);
+      setClasses(classesData);
+      
+      const clMap: Record<string, string> = {};
+      classesData.forEach((cls) => {
+        clMap[cls.id] = cls.name;
+      });
+      setClassesMap(clMap);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to load subjects.");
     } finally {
@@ -27,14 +47,14 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   };
 
   useEffect(() => {
-    fetchSubjects();
+    fetchSubjectsAndClasses();
   }, [refreshTrigger]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this subject?")) return;
     try {
       await subjectService.delete(id);
-      fetchSubjects();
+      fetchSubjectsAndClasses();
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to delete subject.");
     }
@@ -57,6 +77,16 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
     );
   }
 
+  const filteredSubjects = subjects.filter((item) => {
+    return !selectedClassFilter || String(item.classId) === selectedClassFilter;
+  });
+
+  const totalPages = Math.ceil(filteredSubjects.length / pageSize);
+  const paginatedSubjects = filteredSubjects.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   if (subjects.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
@@ -66,47 +96,168 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   }
 
   return (
-    <div style={styles.tableWrapper} className="card">
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.headerRow}>
-            <th style={styles.th}>Subject Name</th>
-            <th style={styles.th}>Code</th>
-            <th style={styles.th}>Chapters</th>
-            <th style={styles.th}>Status</th>
-            <th style={styles.th}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {subjects.map((item) => (
-            <tr key={item.id} style={styles.row}>
-              <td style={{ ...styles.td, fontWeight: 600 }}>{item.name}</td>
-              <td style={styles.td}>{item.code}</td>
-              <td style={styles.td}>{item.chaptersCount ?? 0} Chapters</td>
-              <td style={styles.td}>
-                <span 
-                  style={{
-                    ...styles.badge,
-                    backgroundColor: item.status === "Active" ? "var(--success-light)" : "var(--bg-surface-hover)",
-                    color: item.status === "Active" ? "var(--success)" : "var(--text-secondary)",
-                  }}
-                >
-                  {item.status}
-                </span>
-              </td>
-              <td style={styles.td}>
-                <button style={styles.actionBtn}>Edit</button>
-                <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
-              </td>
+    <div style={styles.container}>
+      <div style={styles.filterBar} className="card">
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Filter by Class</label>
+          <select
+            value={selectedClassFilter}
+            onChange={(e) => {
+              setSelectedClassFilter(e.target.value);
+              setCurrentPage(1); // Reset page on filter change
+            }}
+            style={styles.filterSelect}
+          >
+            <option value="">All Classes</option>
+            {classes.map((cls) => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={styles.tableWrapper} className="card">
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.headerRow}>
+              <th style={styles.th}>Subject Name</th>
+              <th style={styles.th}>Class</th>
+              <th style={styles.th}>Code</th>
+              <th style={styles.th}>Chapters</th>
+              <th style={styles.th}>Status</th>
+              <th style={styles.th}>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {paginatedSubjects.length === 0 ? (
+              <tr style={styles.row}>
+                <td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                  No subjects match the selected filters.
+                </td>
+              </tr>
+            ) : (
+              paginatedSubjects.map((item) => (
+                <tr key={item.id} style={styles.row}>
+                  <td style={{ ...styles.td, fontWeight: 600 }}>{item.name}</td>
+                  <td style={styles.td}>{classesMap[item.classId] || `Class #${item.classId}`}</td>
+                  <td style={styles.td}>{item.code}</td>
+                  <td style={styles.td}>{item.chaptersCount ?? 0} Chapters</td>
+                  <td style={styles.td}>
+                    <span 
+                      style={{
+                        ...styles.badge,
+                        backgroundColor: item.status === "Active" ? "var(--success-light)" : "var(--bg-surface-hover)",
+                        color: item.status === "Active" ? "var(--success)" : "var(--text-secondary)",
+                      }}
+                    >
+                      {item.status}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <button style={styles.actionBtn}>Edit</button>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Bar */}
+      <div style={styles.paginationBar}>
+        <div style={styles.pageSizeSelectGroup}>
+          <span style={styles.paginationText}>Items per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            style={styles.pageSizeSelect}
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        <div style={styles.paginationNavigation}>
+          <span style={styles.paginationText}>
+            Showing {filteredSubjects.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
+            {Math.min(currentPage * pageSize, filteredSubjects.length)} of {filteredSubjects.length} subjects
+          </span>
+          <div style={styles.paginationButtons}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === 1 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              &larr; Prev
+            </button>
+            <span style={styles.currentPageIndicator}>
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === totalPages || totalPages === 0 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              Next &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.2rem",
+    width: "100%",
+  },
+  filterBar: {
+    display: "flex",
+    gap: "1.5rem",
+    padding: "1rem 1.5rem",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+  },
+  filterGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+    flex: 1,
+    maxWidth: "250px",
+  },
+  filterLabel: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  },
+  filterSelect: {
+    padding: "0.5rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+  },
   tableWrapper: {
     padding: 0,
     overflowX: "auto",
@@ -163,5 +314,68 @@ const styles: Record<string, React.CSSProperties> = {
     background: "none",
     padding: 0,
     marginLeft: "1rem",
+  },
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "1rem 1.5rem",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    marginTop: "0.5rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  pageSizeSelectGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+  },
+  paginationText: {
+    fontSize: "0.85rem",
+    color: "var(--text-secondary)",
+  },
+  pageSizeSelect: {
+    padding: "0.3rem 0.5rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+  },
+  paginationNavigation: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1.5rem",
+    flexWrap: "wrap",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+  },
+  paginationBtn: {
+    padding: "0.4rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface-hover)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  },
+  paginationBtnDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    backgroundColor: "var(--bg-app)",
+  },
+  currentPageIndicator: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
   },
 };

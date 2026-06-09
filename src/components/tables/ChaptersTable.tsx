@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from "react";
 import chapterService from "@/services/chapter.service";
 import subjectService from "@/services/subject.service";
+import classService from "@/services/class.service";
 import { ChapterData } from "@/types/chapter.types";
+import { SubjectData } from "@/types/subject.types";
+import { ClassData } from "@/types/class.types";
 
 interface ChaptersTableProps {
   refreshTrigger?: number;
@@ -11,25 +14,46 @@ interface ChaptersTableProps {
 
 export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps) {
   const [chapters, setChapters] = useState<ChapterData[]>([]);
-  const [subjectsMap, setSubjectsMap] = useState<Record<string, string>>({});
+  const [subjects, setSubjects] = useState<SubjectData[]>([]);
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  
+  const [subjectsMap, setSubjectsMap] = useState<Record<string, SubjectData>>({});
+  const [classesMap, setClassesMap] = useState<Record<string, string>>({});
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchChapters = async () => {
+  const [selectedClassFilter, setSelectedClassFilter] = useState("");
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState("");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const fetchChaptersAndMetadata = async () => {
     setLoading(true);
     setError("");
     try {
-      const [chaptersData, subjectsData] = await Promise.all([
+      const [chaptersData, subjectsData, classesData] = await Promise.all([
         chapterService.getAll(),
         subjectService.getAll(),
+        classService.getAll(),
       ]);
       setChapters(chaptersData);
+      setSubjects(subjectsData);
+      setClasses(classesData);
       
-      const subMap: Record<string, string> = {};
+      const subMap: Record<string, SubjectData> = {};
       subjectsData.forEach((sub) => {
-        subMap[sub.id] = sub.name;
+        subMap[sub.id] = sub;
       });
       setSubjectsMap(subMap);
+
+      const clMap: Record<string, string> = {};
+      classesData.forEach((cls) => {
+        clMap[cls.id] = cls.name;
+      });
+      setClassesMap(clMap);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to load chapters.");
     } finally {
@@ -38,14 +62,14 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
   };
 
   useEffect(() => {
-    fetchChapters();
+    fetchChaptersAndMetadata();
   }, [refreshTrigger]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this chapter?")) return;
     try {
       await chapterService.delete(id);
-      fetchChapters();
+      fetchChaptersAndMetadata();
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to delete chapter.");
     }
@@ -68,6 +92,25 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
     );
   }
 
+  // Filter subjects for the dropdown based on selected class
+  const filteredSubjectsForDropdown = selectedClassFilter
+    ? subjects.filter((sub) => String(sub.classId) === selectedClassFilter)
+    : subjects;
+
+  // Filter chapters based on selected class and subject
+  const filteredChapters = chapters.filter((item) => {
+    const sub = subjectsMap[item.subjectId];
+    const matchesClass = !selectedClassFilter || (sub && String(sub.classId) === selectedClassFilter);
+    const matchesSubject = !selectedSubjectFilter || String(item.subjectId) === selectedSubjectFilter;
+    return matchesClass && matchesSubject;
+  });
+
+  const totalPages = Math.ceil(filteredChapters.length / pageSize);
+  const paginatedChapters = filteredChapters.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   if (chapters.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
@@ -77,37 +120,182 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
   }
 
   return (
-    <div style={styles.tableWrapper} className="card">
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.headerRow}>
-            <th style={styles.th}>Chapter</th>
-            <th style={styles.th}>Title</th>
-            <th style={styles.th}>Subject</th>
-            <th style={styles.th}>Questions Count</th>
-            <th style={styles.th}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {chapters.map((item) => (
-            <tr key={item.id} style={styles.row}>
-              <td style={{ ...styles.td, fontWeight: 700 }}>Ch {item.number}</td>
-              <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
-              <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
-              <td style={styles.td}>{item.questionsCount ?? 0} Items</td>
-              <td style={styles.td}>
-                <button style={styles.actionBtn}>Edit</button>
-                <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
-              </td>
+    <div style={styles.container}>
+      <div style={styles.filterBar} className="card">
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Filter by Class</label>
+          <select
+            value={selectedClassFilter}
+            onChange={(e) => {
+              setSelectedClassFilter(e.target.value);
+              setSelectedSubjectFilter(""); // Reset subject selection
+              setCurrentPage(1); // Reset page on filter change
+            }}
+            style={styles.filterSelect}
+          >
+            <option value="">All Classes</option>
+            {classes.map((cls) => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Filter by Subject</label>
+          <select
+            value={selectedSubjectFilter}
+            onChange={(e) => {
+              setSelectedSubjectFilter(e.target.value);
+              setCurrentPage(1); // Reset page on filter change
+            }}
+            style={styles.filterSelect}
+          >
+            <option value="">All Subjects</option>
+            {filteredSubjectsForDropdown.map((sub) => (
+              <option key={sub.id} value={sub.id}>
+                {sub.name} ({classesMap[sub.classId] || `Class #${sub.classId}`})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={styles.tableWrapper} className="card">
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.headerRow}>
+              <th style={styles.th}>Chapter</th>
+              <th style={styles.th}>Title</th>
+              <th style={styles.th}>Subject</th>
+              <th style={styles.th}>Class</th>
+              <th style={styles.th}>Questions Count</th>
+              <th style={styles.th}>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {paginatedChapters.length === 0 ? (
+              <tr style={styles.row}>
+                <td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                  No chapters match the selected filters.
+                </td>
+              </tr>
+            ) : (
+              paginatedChapters.map((item) => {
+                const sub = subjectsMap[item.subjectId];
+                const className = sub ? classesMap[sub.classId] : "";
+                return (
+                  <tr key={item.id} style={styles.row}>
+                    <td style={{ ...styles.td, fontWeight: 700 }}>Ch {item.number}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
+                    <td style={styles.td}>{sub ? sub.name : `Subject #${item.subjectId}`}</td>
+                    <td style={styles.td}>{className || `Class #${sub?.classId}`}</td>
+                    <td style={styles.td}>{item.questionsCount ?? 0} Items</td>
+                    <td style={styles.td}>
+                      <button style={styles.actionBtn}>Edit</button>
+                      <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Bar */}
+      <div style={styles.paginationBar}>
+        <div style={styles.pageSizeSelectGroup}>
+          <span style={styles.paginationText}>Items per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            style={styles.pageSizeSelect}
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        <div style={styles.paginationNavigation}>
+          <span style={styles.paginationText}>
+            Showing {filteredChapters.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
+            {Math.min(currentPage * pageSize, filteredChapters.length)} of {filteredChapters.length} chapters
+          </span>
+          <div style={styles.paginationButtons}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === 1 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              &larr; Prev
+            </button>
+            <span style={styles.currentPageIndicator}>
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === totalPages || totalPages === 0 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              Next &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.2rem",
+    width: "100%",
+  },
+  filterBar: {
+    display: "flex",
+    gap: "1.5rem",
+    padding: "1rem 1.5rem",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+  },
+  filterGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+    flex: 1,
+    maxWidth: "250px",
+  },
+  filterLabel: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  },
+  filterSelect: {
+    padding: "0.5rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+  },
   tableWrapper: {
     padding: 0,
     overflowX: "auto",
@@ -157,5 +345,68 @@ const styles: Record<string, React.CSSProperties> = {
     background: "none",
     padding: 0,
     marginLeft: "1rem",
+  },
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "1rem 1.5rem",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    marginTop: "0.5rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  pageSizeSelectGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+  },
+  paginationText: {
+    fontSize: "0.85rem",
+    color: "var(--text-secondary)",
+  },
+  pageSizeSelect: {
+    padding: "0.3rem 0.5rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+  },
+  paginationNavigation: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1.5rem",
+    flexWrap: "wrap",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+  },
+  paginationBtn: {
+    padding: "0.4rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface-hover)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  },
+  paginationBtnDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    backgroundColor: "var(--bg-app)",
+  },
+  currentPageIndicator: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
   },
 };

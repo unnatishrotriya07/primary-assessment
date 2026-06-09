@@ -2,8 +2,11 @@ import api from "./api";
 import { ChapterData } from "@/types/chapter.types";
 
 export const chapterService = {
-  getAll: (): Promise<ChapterData[]> => {
-    return api.get<ChapterData[]>("/chapters/");
+  getAll: (classId?: string | number, subjectId?: string | number): Promise<ChapterData[]> => {
+    const params: Record<string, any> = {};
+    if (classId) params.class_id = classId;
+    if (subjectId) params.subject_id = subjectId;
+    return api.get<ChapterData[]>("/chapters/", { params });
   },
   getBySubject: (subjectId: string): Promise<ChapterData[]> => {
     return api.get<ChapterData[]>(`/subjects/${subjectId}/chapters`);

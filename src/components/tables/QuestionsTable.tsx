@@ -3,7 +3,12 @@
 import React, { useEffect, useState } from "react";
 import questionService from "@/services/question.service";
 import subjectService from "@/services/subject.service";
+import classService from "@/services/class.service";
+import chapterService from "@/services/chapter.service";
 import { QuestionData } from "@/types/question.types";
+import { SubjectData } from "@/types/subject.types";
+import { ClassData } from "@/types/class.types";
+import { ChapterData } from "@/types/chapter.types";
 
 interface QuestionsTableProps {
   refreshTrigger?: number;
@@ -11,28 +16,58 @@ interface QuestionsTableProps {
 
 export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTableProps) {
   const [questions, setQuestions] = useState<QuestionData[]>([]);
+  const [subjects, setSubjects] = useState<SubjectData[]>([]);
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  const [chapters, setChapters] = useState<ChapterData[]>([]);
+  
   const [subjectsMap, setSubjectsMap] = useState<Record<string, string>>({});
+  const [classesMap, setClassesMap] = useState<Record<string, string>>({});
+  const [chaptersMap, setChaptersMap] = useState<Record<string, string>>({});
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
+  const [selectedClassFilter, setSelectedClassFilter] = useState("");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState("");
+  const [selectedChapterFilter, setSelectedChapterFilter] = useState("");
   const [selectedSessionFilter, setSelectedSessionFilter] = useState("");
 
-  const fetchQuestions = async () => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const fetchQuestionsAndMetadata = async () => {
     setLoading(true);
     setError("");
     try {
-      const [questionsData, subjectsData] = await Promise.all([
+      const [questionsData, subjectsData, classesData, chaptersData] = await Promise.all([
         questionService.getAll(),
         subjectService.getAll(),
+        classService.getAll(),
+        chapterService.getAll(),
       ]);
       setQuestions(questionsData);
+      setSubjects(subjectsData);
+      setClasses(classesData);
+      setChapters(chaptersData);
       
       const subMap: Record<string, string> = {};
       subjectsData.forEach((sub) => {
         subMap[sub.id] = sub.name;
       });
       setSubjectsMap(subMap);
+
+      const clMap: Record<string, string> = {};
+      classesData.forEach((cls) => {
+        clMap[cls.id] = cls.name;
+      });
+      setClassesMap(clMap);
+
+      const chMap: Record<string, string> = {};
+      chaptersData.forEach((chap) => {
+        chMap[chap.id] = `Ch ${chap.number}: ${chap.title}`;
+      });
+      setChaptersMap(chMap);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to load questions.");
     } finally {
@@ -41,14 +76,14 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
   };
 
   useEffect(() => {
-    fetchQuestions();
+    fetchQuestionsAndMetadata();
   }, [refreshTrigger]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this question?")) return;
     try {
       await questionService.delete(id);
-      fetchQuestions();
+      fetchQuestionsAndMetadata();
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to delete question.");
     }
@@ -73,11 +108,33 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
 
   const uniqueSessions = Array.from(new Set(questions.map((q) => q.session).filter(Boolean))) as string[];
 
+  // Filter dropdown menus based on selections
+  const filteredSubjectsForDropdown = selectedClassFilter
+    ? subjects.filter((sub) => String(sub.classId) === selectedClassFilter)
+    : subjects;
+
+  const filteredChaptersForDropdown = selectedSubjectFilter
+    ? chapters.filter((ch) => String(ch.subjectId) === selectedSubjectFilter)
+    : selectedClassFilter
+      ? chapters.filter((ch) => {
+          const sub = subjects.find(s => String(s.id) === String(ch.subjectId));
+          return sub && String(sub.classId) === selectedClassFilter;
+        })
+      : chapters;
+
   const filteredQuestions = questions.filter((item) => {
+    const matchesClass = !selectedClassFilter || String(item.classId) === selectedClassFilter;
     const matchesSubject = !selectedSubjectFilter || String(item.subjectId) === selectedSubjectFilter;
+    const matchesChapter = !selectedChapterFilter || (item.chapterId && String(item.chapterId) === selectedChapterFilter);
     const matchesSession = !selectedSessionFilter || item.session === selectedSessionFilter;
-    return matchesSubject && matchesSession;
+    return matchesClass && matchesSubject && matchesChapter && matchesSession;
   });
+
+  const totalPages = Math.ceil(filteredQuestions.length / pageSize);
+  const paginatedQuestions = filteredQuestions.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   if (questions.length === 0) {
     return (
@@ -91,25 +148,73 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
     <div style={styles.container}>
       <div style={styles.filterBar} className="card">
         <div style={styles.filterGroup}>
-          <label style={styles.filterLabel}>Filter by Subject</label>
+          <label style={styles.filterLabel}>Filter by Class</label>
           <select
-            value={selectedSubjectFilter}
-            onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+            value={selectedClassFilter}
+            onChange={(e) => {
+              setSelectedClassFilter(e.target.value);
+              setSelectedSubjectFilter("");
+              setSelectedChapterFilter("");
+              setCurrentPage(1); // Reset page on filter change
+            }}
             style={styles.filterSelect}
           >
-            <option value="">All Subjects</option>
-            {Object.entries(subjectsMap).map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
+            <option value="">All Classes</option>
+            {classes.map((cls) => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name}
               </option>
             ))}
           </select>
         </div>
+
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Filter by Subject</label>
+          <select
+            value={selectedSubjectFilter}
+            onChange={(e) => {
+              setSelectedSubjectFilter(e.target.value);
+              setSelectedChapterFilter("");
+              setCurrentPage(1); // Reset page on filter change
+            }}
+            style={styles.filterSelect}
+          >
+            <option value="">All Subjects</option>
+            {filteredSubjectsForDropdown.map((sub) => (
+              <option key={sub.id} value={sub.id}>
+                {sub.name} ({classesMap[sub.classId] || `Class #${sub.classId}`})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.filterGroup}>
+          <label style={styles.filterLabel}>Filter by Chapter</label>
+          <select
+            value={selectedChapterFilter}
+            onChange={(e) => {
+              setSelectedChapterFilter(e.target.value);
+              setCurrentPage(1); // Reset page on filter change
+            }}
+            style={styles.filterSelect}
+          >
+            <option value="">All Chapters</option>
+            {filteredChaptersForDropdown.map((chap) => (
+              <option key={chap.id} value={chap.id}>
+                Ch {chap.number}: {chap.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div style={styles.filterGroup}>
           <label style={styles.filterLabel}>Filter by Session</label>
           <select
             value={selectedSessionFilter}
-            onChange={(e) => setSelectedSessionFilter(e.target.value)}
+            onChange={(e) => {
+              setSelectedSessionFilter(e.target.value);
+              setCurrentPage(1); // Reset page on filter change
+            }}
             style={styles.filterSelect}
           >
             <option value="">All Sessions</option>
@@ -127,7 +232,9 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
           <thead>
             <tr style={styles.headerRow}>
               <th style={styles.th}>Question Prompt</th>
+              <th style={styles.th}>Class</th>
               <th style={styles.th}>Subject</th>
+              <th style={styles.th}>Chapter</th>
               <th style={styles.th}>Difficulty</th>
               <th style={styles.th}>Cognitive Level</th>
               <th style={styles.th}>Session</th>
@@ -135,45 +242,107 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
             </tr>
           </thead>
           <tbody>
-            {filteredQuestions.map((item) => (
-              <tr key={item.id} style={styles.row}>
-                <td style={{ ...styles.td, fontWeight: 500, maxWidth: "300px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                  {item.text}
-                </td>
-                <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
-                <td style={styles.td}>
-                  <span 
-                    style={{
-                      ...styles.badge,
-                      backgroundColor: 
-                        item.difficulty === "easy" ? "var(--success-light)" : 
-                        item.difficulty === "medium" ? "var(--warning-light)" : "var(--error-light)",
-                      color: 
-                        item.difficulty === "easy" ? "var(--success)" : 
-                        item.difficulty === "medium" ? "var(--warning)" : "var(--error)",
-                    }}
-                  >
-                    {item.difficulty}
-                  </span>
-                </td>
-                <td style={styles.td}>
-                  <span style={styles.cognitiveTag}>{item.cognitiveLevel}</span>
-                </td>
-                <td style={styles.td}>
-                  {item.session ? (
-                    <span style={styles.sessionTag}>{item.session}</span>
-                  ) : (
-                    <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>—</span>
-                  )}
-                </td>
-                <td style={styles.td}>
-                  <button style={styles.actionBtn}>Edit</button>
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
+            {paginatedQuestions.length === 0 ? (
+              <tr style={styles.row}>
+                <td colSpan={8} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                  No questions match the selected filters.
                 </td>
               </tr>
-            ))}
+            ) : (
+              paginatedQuestions.map((item) => (
+                <tr key={item.id} style={styles.row}>
+                  <td style={{ ...styles.td, fontWeight: 500, maxWidth: "250px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }} title={item.text}>
+                    {item.text}
+                  </td>
+                  <td style={styles.td}>{classesMap[item.classId ?? ""] || `Class #${item.classId}`}</td>
+                  <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
+                  <td style={styles.td}>{item.chapterId ? (chaptersMap[item.chapterId] || `Chapter #${item.chapterId}`) : <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>—</span>}</td>
+                  <td style={styles.td}>
+                    <span 
+                      style={{
+                        ...styles.badge,
+                        backgroundColor: 
+                          item.difficulty === "easy" ? "var(--success-light)" : 
+                          item.difficulty === "medium" ? "var(--warning-light)" : "var(--error-light)",
+                        color: 
+                          item.difficulty === "easy" ? "var(--success)" : 
+                          item.difficulty === "medium" ? "var(--warning)" : "var(--error)",
+                      }}
+                    >
+                      {item.difficulty}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={styles.cognitiveTag}>{item.cognitiveLevel}</span>
+                  </td>
+                  <td style={styles.td}>
+                    {item.session ? (
+                      <span style={styles.sessionTag}>{item.session}</span>
+                    ) : (
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>—</span>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    <button style={styles.actionBtn}>Edit</button>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination Bar */}
+      <div style={styles.paginationBar}>
+        <div style={styles.pageSizeSelectGroup}>
+          <span style={styles.paginationText}>Items per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            style={styles.pageSizeSelect}
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        <div style={styles.paginationNavigation}>
+          <span style={styles.paginationText}>
+            Showing {filteredQuestions.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
+            {Math.min(currentPage * pageSize, filteredQuestions.length)} of {filteredQuestions.length} questions
+          </span>
+          <div style={styles.paginationButtons}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === 1 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              &larr; Prev
+            </button>
+            <span style={styles.currentPageIndicator}>
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              style={{
+                ...styles.paginationBtn,
+                ...(currentPage === totalPages || totalPages === 0 ? styles.paginationBtnDisabled : {}),
+              }}
+            >
+              Next &rarr;
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -188,6 +357,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   filterBar: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "1.5rem",
     padding: "1rem 1.5rem",
     backgroundColor: "var(--bg-card)",
@@ -198,7 +368,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "0.3rem",
-    flex: 1,
+    flex: "1 1 200px",
     maxWidth: "250px",
   },
   filterLabel: {
@@ -215,6 +385,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     outline: "none",
     cursor: "pointer",
+    width: "100%",
   },
   sessionTag: {
     backgroundColor: "rgba(139, 92, 246, 0.1)",
@@ -290,5 +461,68 @@ const styles: Record<string, React.CSSProperties> = {
     background: "none",
     padding: 0,
     marginLeft: "1rem",
+  },
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "1rem 1.5rem",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    marginTop: "0.5rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  pageSizeSelectGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+  },
+  paginationText: {
+    fontSize: "0.85rem",
+    color: "var(--text-secondary)",
+  },
+  pageSizeSelect: {
+    padding: "0.3rem 0.5rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+  },
+  paginationNavigation: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1.5rem",
+    flexWrap: "wrap",
+  },
+  paginationButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+  },
+  paginationBtn: {
+    padding: "0.4rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface-hover)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  },
+  paginationBtnDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    backgroundColor: "var(--bg-app)",
+  },
+  currentPageIndicator: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
   },
 };
