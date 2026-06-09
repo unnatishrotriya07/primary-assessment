@@ -29,5 +29,8 @@ export const chapterService = {
   delete: (id: string): Promise<void> => {
     return api.delete<void>(`/chapters/${id}`);
   },
+  syncNcert: (id: string | number): Promise<ChapterData> => {
+    return api.post<ChapterData>(`/chapters/${id}/sync-ncert`);
+  },
 };
 export default chapterService;

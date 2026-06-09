@@ -4,5 +4,6 @@ export interface ChapterData {
   title: string;
   subjectId: string;
   content?: string;
+  textContent?: string;
   questionsCount?: number;
 }

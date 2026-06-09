@@ -29,6 +29,21 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [syncingMap, setSyncingMap] = useState<Record<string, boolean>>({});
+
+  const handleSyncNcert = async (id: string) => {
+    setSyncingMap((prev) => ({ ...prev, [id]: true }));
+    try {
+      const updatedChapter = await chapterService.syncNcert(id);
+      setChapters((prev) =>
+        prev.map((ch) => (ch.id === id ? { ...ch, textContent: updatedChapter.textContent } : ch))
+      );
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to sync NCERT content. Make sure a valid textbook mapping exists for this class/subject.");
+    } finally {
+      setSyncingMap((prev) => ({ ...prev, [id]: false }));
+    }
+  };
 
   const fetchChaptersAndMetadata = async () => {
     setLoading(true);
@@ -170,6 +185,7 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
               <th style={styles.th}>Title</th>
               <th style={styles.th}>Subject</th>
               <th style={styles.th}>Class</th>
+              <th style={styles.th}>NCERT Source</th>
               <th style={styles.th}>Questions Count</th>
               <th style={styles.th}>Actions</th>
             </tr>
@@ -177,7 +193,7 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
           <tbody>
             {paginatedChapters.length === 0 ? (
               <tr style={styles.row}>
-                <td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                <td colSpan={7} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
                   No chapters match the selected filters.
                 </td>
               </tr>
@@ -191,6 +207,28 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
                     <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
                     <td style={styles.td}>{sub ? sub.name : `Subject #${item.subjectId}`}</td>
                     <td style={styles.td}>{className || `Class #${sub?.classId}`}</td>
+                    <td style={styles.td}>
+                      <div style={styles.syncContainer}>
+                        {item.textContent ? (
+                          <span style={{ ...styles.badge, ...styles.syncedBadge }}>Synced</span>
+                        ) : (
+                          <span style={{ ...styles.badge, ...styles.notSyncedBadge }}>Not Synced</span>
+                        )}
+                        <button
+                          onClick={() => handleSyncNcert(item.id)}
+                          disabled={syncingMap[item.id]}
+                          style={{
+                            ...styles.syncBtn,
+                            ...(syncingMap[item.id] ? styles.syncBtnDisabled : {})
+                          }}
+                          title="Sync textbook content directly from official NCERT servers"
+                        >
+                          {syncingMap[item.id] ? (
+                            <span style={styles.spinnerIcon}></span>
+                          ) : item.textContent ? "Resync" : "Sync"}
+                        </button>
+                      </div>
+                    </td>
                     <td style={styles.td}>{item.questionsCount ?? 0} Items</td>
                     <td style={styles.td}>
                       <button style={styles.actionBtn}>Edit</button>
@@ -408,5 +446,54 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 600,
     color: "var(--text-primary)",
+  },
+  syncContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+  },
+  badge: {
+    display: "inline-flex",
+    padding: "0.2rem 0.6rem",
+    borderRadius: "9999px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    textTransform: "capitalize",
+  },
+  syncedBadge: {
+    backgroundColor: "var(--success-light, rgba(34, 197, 94, 0.1))",
+    color: "var(--success, rgb(34, 197, 94))",
+  },
+  notSyncedBadge: {
+    backgroundColor: "var(--bg-surface-hover, rgba(0, 0, 0, 0.05))",
+    color: "var(--text-secondary, rgb(115, 115, 115))",
+  },
+  syncBtn: {
+    padding: "0.25rem 0.6rem",
+    borderRadius: "var(--radius-sm, 4px)",
+    border: "1px solid var(--border-color, #e5e5e5)",
+    backgroundColor: "var(--bg-app, #ffffff)",
+    color: "var(--primary, #3b82f6)",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all var(--transition-fast, 0.2s)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "60px",
+    height: "24px",
+  },
+  syncBtnDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+  },
+  spinnerIcon: {
+    width: "12px",
+    height: "12px",
+    border: "2px solid var(--primary, #3b82f6)",
+    borderTopColor: "transparent",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
   },
 };
