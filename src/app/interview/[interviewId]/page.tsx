@@ -64,6 +64,22 @@ export default function InterviewPage({ params }: PageProps) {
     const [voicesLoaded, setVoicesLoaded] = useState(false);
     const hasRepeatedCurrentRef = useRef(false);
 
+    const micEnabledRef = useRef(micEnabled);
+    const isSpeakingRef = useRef(isSpeaking);
+    const isSubmittingRef = useRef(isSubmitting);
+
+    useEffect(() => {
+        micEnabledRef.current = micEnabled;
+    }, [micEnabled]);
+
+    useEffect(() => {
+        isSpeakingRef.current = isSpeaking;
+    }, [isSpeaking]);
+
+    useEffect(() => {
+        isSubmittingRef.current = isSubmitting;
+    }, [isSubmitting]);
+
     // Pre-load synthesis voices to prevent first question voice mismatch
     useEffect(() => {
         if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -141,11 +157,45 @@ export default function InterviewPage({ params }: PageProps) {
                 source.connect(analyser);
 
                 drawWaveform();
+
+                // If Buddy finished speaking before we got permission, start speech recognition now
+                if (!isSpeakingRef.current && !isSubmittingRef.current && micEnabledRef.current) {
+                    startSpeechRecognition();
+                }
             } catch (err) {
-                console.error("Error accessing camera/mic:", err);
-                setError("Camera or Microphone access denied. You can still complete the interview using keyboard fallback.");
-                setCameraEnabled(false);
-                setMicEnabled(false);
+                console.warn("First getUserMedia attempt failed (video + audio), trying audio-only fallback...", err);
+                try {
+                    const audioStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                    });
+                    activeStream = audioStream;
+                    setStream(audioStream);
+                    setCameraEnabled(false);
+                    setMicEnabled(true);
+
+                    // Web Audio API Visualizer Setup
+                    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                    const audioCtx = new AudioContextClass();
+                    audioContextRef.current = audioCtx;
+
+                    const source = audioCtx.createMediaStreamSource(audioStream);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 64;
+                    analyserRef.current = analyser;
+                    source.connect(analyser);
+
+                    drawWaveform();
+
+                    // If Buddy finished speaking before we got permission, start speech recognition now
+                    if (!isSpeakingRef.current && !isSubmittingRef.current) {
+                        startSpeechRecognition();
+                    }
+                } catch (fallbackErr) {
+                    console.error("Audio-only fallback getUserMedia failed:", fallbackErr);
+                    setError("Microphone access denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
+                    setCameraEnabled(false);
+                    setMicEnabled(false);
+                }
             }
         }
 
@@ -341,7 +391,7 @@ export default function InterviewPage({ params }: PageProps) {
 
     // ── Start STT Speech Recognition ─────────────────────────────────────────
     const startSpeechRecognition = () => {
-        if (isSpeaking || isSubmitting) return;
+        if (isSpeakingRef.current || isSubmittingRef.current || !micEnabledRef.current) return;
 
         const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SR) {
@@ -413,7 +463,7 @@ export default function InterviewPage({ params }: PageProps) {
 
                 const repeatPrompt = `Sure, let me repeat that. ${questions[currentIdx].q}`;
                 speakText(repeatPrompt, () => {
-                    if (micEnabled) {
+                    if (micEnabledRef.current) {
                         startSpeechRecognition();
                     }
                 });
@@ -442,7 +492,15 @@ export default function InterviewPage({ params }: PageProps) {
         };
 
         rec.onerror = (err: any) => {
-            if (err.error !== "no-speech") {
+            if (err.error === "not-allowed") {
+                console.error("Speech recognition permission denied:", err.error);
+                setError("Microphone permission denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
+                setMicEnabled(false);
+            } else if (err.error === "audio-capture") {
+                console.error("Speech recognition audio capture failed:", err.error);
+                setError("No microphone detected or microphone is busy. Please connect a mic or use the keyboard fallback.");
+                setMicEnabled(false);
+            } else if (err.error !== "no-speech") {
                 console.error("Speech recognition error:", err.error);
             } else {
                 console.log("Speech recognition info: no-speech (user is silent)");
@@ -453,10 +511,10 @@ export default function InterviewPage({ params }: PageProps) {
         rec.onend = () => {
             setIsRecording(false);
             // Auto-restart if mic is enabled, and we aren't speaking or submitting
-            if (micEnabled && !isSpeaking && !isSubmitting) {
+            if (micEnabledRef.current && !isSpeakingRef.current && !isSubmittingRef.current) {
                 setTimeout(() => {
-                    // Double check values to ensure state hasn't changed during the delay
-                    if (micEnabled && !isSpeaking && !isSubmitting) {
+                    // Double check values using refs to ensure state hasn't changed during the delay
+                    if (micEnabledRef.current && !isSpeakingRef.current && !isSubmittingRef.current) {
                         try { rec.start(); } catch (_) {}
                     }
                 }, 300);
@@ -464,7 +522,11 @@ export default function InterviewPage({ params }: PageProps) {
         };
 
         recognitionRef.current = rec;
-        rec.start();
+        try {
+            rec.start();
+        } catch (startErr) {
+            console.error("Failed to start SpeechRecognition:", startErr);
+        }
     };
 
     // ── Submit Answer ────────────────────────────────────────────────────────
