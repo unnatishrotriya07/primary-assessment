@@ -16,11 +16,11 @@ export default function SubjectsPage() {
   return (
     <div style={styles.container}>
       <div style={styles.headerRow}>
-        <PageHeader 
-          title="Subjects" 
+        <PageHeader
+          title="Subjects"
           description="View and structure school academic subjects linked to your curriculum."
         />
-        <Button onClick={() => setIsModalOpen(true)}>Add New Subject</Button>
+        <Button onClick={() => setIsModalOpen(true)}>Add Subject</Button>
       </div>
 
       <div style={styles.content}>
@@ -28,12 +28,12 @@ export default function SubjectsPage() {
       </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New Subject">
-        <SubjectForm 
+        <SubjectForm
           onSuccess={() => {
             setIsModalOpen(false);
             triggerRefresh();
-          }} 
-          onCancel={() => setIsModalOpen(false)} 
+          }}
+          onCancel={() => setIsModalOpen(false)}
         />
       </Modal>
     </div>

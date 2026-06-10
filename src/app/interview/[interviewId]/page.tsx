@@ -243,7 +243,12 @@ export default function InterviewPage({ params }: PageProps) {
             onEnd?.();
             return;
         }
-        window.speechSynthesis.cancel();
+
+        try {
+            window.speechSynthesis.cancel();
+        } catch (err) {
+            console.error("Error canceling speech synthesis:", err);
+        }
 
         setIsSpeaking(true);
         setIsRecording(false);
@@ -284,6 +289,19 @@ export default function InterviewPage({ params }: PageProps) {
             }
         }, 10000);
 
+        let fired = false;
+        let fallbackTimeout: any = null;
+
+        const onEndOnce = () => {
+            if (fired) return;
+            fired = true;
+            if (fallbackTimeout) clearTimeout(fallbackTimeout);
+            clearInterval(resumeInterval);
+            setIsSpeaking(false);
+            utteranceRef.current = null;
+            onEnd?.();
+        };
+
         utt.onstart = () => {
             setIsSpeaking(true);
             setIsRecording(false);
@@ -293,18 +311,27 @@ export default function InterviewPage({ params }: PageProps) {
             }
         };
         utt.onend = () => {
-            clearInterval(resumeInterval);
-            setIsSpeaking(false);
-            utteranceRef.current = null;
-            onEnd?.();
+            onEndOnce();
         };
         utt.onerror = () => {
-            clearInterval(resumeInterval);
-            setIsSpeaking(false);
-            utteranceRef.current = null;
-            onEnd?.();
+            onEndOnce();
         };
-        window.speechSynthesis.speak(utt);
+
+        // Safety fallback timeout: estimate duration based on 150 words per minute (400ms per word) + 2.5s buffer
+        const wordCount = text.split(/\s+/).length;
+        const estimatedDurationMs = Math.max(3000, (wordCount * 450) + 2500);
+
+        fallbackTimeout = setTimeout(() => {
+            console.warn(`SpeechSynthesis fallback timeout triggered for text: "${text}". Moving ahead.`);
+            onEndOnce();
+        }, estimatedDurationMs);
+
+        try {
+            window.speechSynthesis.speak(utt);
+        } catch (speakErr) {
+            console.error("SpeechSynthesis speak failed:", speakErr);
+            onEndOnce();
+        }
     }, []);
 
     // ── Add message to transcript state ──────────────────────────────────────
@@ -842,7 +869,7 @@ export default function InterviewPage({ params }: PageProps) {
                 <button
                     style={{ ...s.controlBtn, ...s.btnEndCall }}
                     onClick={handleManualNext}
-                    disabled={isSpeaking || isSubmitting || !typedText.trim()}
+                    disabled={isSubmitting || !typedText.trim()}
                     title="Submit Answer"
                 >
                     <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Next →</span>

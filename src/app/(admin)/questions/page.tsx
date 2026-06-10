@@ -6,12 +6,12 @@ export default function QuestionsPage() {
   return (
     <div style={styles.container}>
       <div style={styles.headerRow}>
-        <PageHeader 
-          title="Question Bank" 
+        <PageHeader
+          title="Question Bank"
           description="Browse, filter, and inspect existing assessment questions, or use AI to generate new ones."
         />
         <Link href="/questions/generate" style={styles.btnLink} className="interactive-element">
-          Generate with AI
+          Generate Questions
         </Link>
       </div>
 

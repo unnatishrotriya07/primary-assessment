@@ -16,7 +16,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   const [classesMap, setClassesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
+
   const [selectedClassFilter, setSelectedClassFilter] = useState("");
 
   // Pagination states
@@ -33,7 +33,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
       ]);
       setSubjects(subjectsData);
       setClasses(classesData);
-      
+
       const clMap: Record<string, string> = {};
       classesData.forEach((cls) => {
         clMap[cls.id] = cls.name;
@@ -90,7 +90,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   if (subjects.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
-        No subjects found. Click "Add New Subject" to create one.
+        No subjects found. Click "Add Subject" to create one.
       </div>
     );
   }
@@ -145,7 +145,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
                   <td style={styles.td}>{item.code}</td>
                   <td style={styles.td}>{item.chaptersCount ?? 0} Chapters</td>
                   <td style={styles.td}>
-                    <span 
+                    <span
                       style={{
                         ...styles.badge,
                         backgroundColor: item.status === "Active" ? "var(--success-light)" : "var(--bg-surface-hover)",
