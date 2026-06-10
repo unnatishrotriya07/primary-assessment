@@ -73,10 +73,10 @@ export default function Sidebar() {
 
   return (
     <aside style={styles.sidebar}>
-      <div style={styles.logoContainer}>
-        <span style={styles.logoDot}></span>
+      <Link href="/dashboard" style={styles.logoLink} className="interactive-element">
+        <img src="/logo.png" alt="Momentum Logo" style={styles.logoImg} />
         <h2 style={styles.logoText}>Momentum</h2>
-      </div>
+      </Link>
 
       <nav style={styles.nav}>
         {menuItems.map((item) => {
@@ -117,29 +117,32 @@ export default function Sidebar() {
 
 const styles: Record<string, React.CSSProperties> = {
   sidebar: {
-    width: "260px",
+    width: "220px",
     height: "100vh",
     position: "fixed",
     top: 0,
     left: 0,
-    backgroundColor: "var(--bg-surface)",
-    borderRight: "1px solid var(--border-color)",
-    padding: "2rem 1.5rem",
+    backgroundColor: "var(--glass-bg)",
+    borderRight: "1px solid var(--glass-border)",
+    backdropFilter: "var(--glass-backdrop)",
+    WebkitBackdropFilter: "var(--glass-backdrop)",
+    boxShadow: "var(--glass-shadow)",
+    padding: "2rem 1.2rem",
     display: "flex",
     flexDirection: "column",
     gap: "2.5rem",
     zIndex: 10,
   },
-  logoContainer: {
+  logoLink: {
     display: "flex",
     alignItems: "center",
     gap: "0.6rem",
+    textDecoration: "none",
   },
-  logoDot: {
-    width: "12px",
-    height: "12px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
+  logoImg: {
+    width: "32px",
+    height: "32px",
+    objectFit: "contain",
   },
   logoText: {
     fontSize: "1.4rem",

@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import ReportCard from "@/components/cards/ReportCard";
 import reportService from "@/services/report.service";
+import interviewService, { InterviewReport } from "@/services/interview.service";
 import { ReportData } from "@/types/report.types";
 
 interface PageProps {
@@ -13,21 +14,39 @@ interface PageProps {
 export default function ReportDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [interviews, setInterviews] = useState<InterviewReport[]>([]);
+  const [selectedInterviewId, setSelectedInterviewId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     reportService.getById(id)
       .then((data) => {
         setReport(data);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("Failed to load report", err);
-        setError("Could not load report details. Please try again.");
-        setLoading(false);
+      .catch(async (err) => {
+        console.log("No written report found, attempting to load interviews for assessment", id);
+        try {
+          const ivs = await interviewService.getByAssessment(parseInt(id, 10));
+          if (ivs && ivs.length > 0) {
+            setInterviews(ivs);
+            setSelectedInterviewId(ivs[0].id);
+          } else {
+            setError("Could not load report details. No student submissions found.");
+          }
+        } catch (ivErr) {
+          console.error("Failed to load interview reports", ivErr);
+          setError("Could not load report details. Please try again.");
+        } finally {
+          setLoading(false);
+        }
       });
   }, [id]);
+
+  const selectedIv = interviews.find(iv => iv.id === selectedInterviewId);
 
   return (
     <div style={styles.container}>
@@ -59,6 +78,57 @@ export default function ReportDetailPage({ params }: PageProps) {
             accuracy={report.accuracy}
             feedback={report.feedback}
           />
+        )}
+
+        {interviews.length > 0 && selectedIv && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {interviews.length > 1 && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "1rem",
+                backgroundColor: "var(--bg-glass)",
+                padding: "1rem 1.5rem",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-color)",
+                marginBottom: "0.5rem"
+              }}>
+                <label style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+                  Select Student Interview:
+                </label>
+                <select
+                  value={selectedInterviewId ?? ""}
+                  onChange={(e) => setSelectedInterviewId(Number(e.target.value))}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "var(--bg-app)",
+                    color: "var(--text-primary)",
+                    fontSize: "0.95rem",
+                    outline: "none"
+                  }}
+                >
+                  {interviews.map(iv => (
+                    <option key={iv.id} value={iv.id}>
+                      {iv.student_name} ({iv.student_class})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            <ReportCard 
+              reportId={selectedIv.id.toString()} 
+              studentName={selectedIv.student_name} 
+              score={selectedIv.overall_score ?? 0} 
+              grade={selectedIv.grade ?? "B"} 
+              duration="12 mins"
+              accuracy={selectedIv.overall_score ?? 0}
+              feedback={selectedIv.summary}
+              evaluatedAnswers={selectedIv.evaluated_answers}
+            />
+          </div>
         )}
       </div>
     </div>

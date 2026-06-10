@@ -3,6 +3,7 @@ export interface QuestionData {
   text: string;
   options: string[];
   correctAnswer?: string;
+  questionType?: string;
   difficulty: "easy" | "medium" | "hard";
   cognitiveLevel: string;
   subjectId: string | number;
@@ -12,3 +13,4 @@ export interface QuestionData {
   session?: string;
   createdAt?: string;
 }
+

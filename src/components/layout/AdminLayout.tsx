@@ -19,11 +19,11 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     minHeight: "100vh",
     display: "flex",
-    backgroundColor: "var(--bg-app)",
+    backgroundColor: "transparent",
   },
   mainWrapper: {
     flexGrow: 1,
-    marginLeft: "260px",
+    marginLeft: "220px",
     display: "flex",
     flexDirection: "column",
     minWidth: 0, // prevents flex item blowout

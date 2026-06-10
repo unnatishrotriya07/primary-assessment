@@ -4,10 +4,10 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <div style={styles.logoContainer}>
-          <span style={styles.logoDot}></span>
+        <Link href="/" style={styles.logoLink} className="interactive-element">
+          <img src="/logo.png" alt="Momentum Logo" style={styles.logoImg} />
           <span style={styles.logoText}>Momentum Student Portal</span>
-        </div>
+        </Link>
         <div style={styles.right}>
           <Link href="/" style={styles.exitLink} className="interactive-element">
             Exit Portal
@@ -31,27 +31,30 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "var(--bg-app)",
+    backgroundColor: "transparent",
   },
   header: {
     height: "65px",
-    backgroundColor: "var(--bg-surface)",
-    borderBottom: "1px solid var(--border-color)",
+    backgroundColor: "var(--glass-bg)",
+    borderBottom: "1px solid var(--glass-border)",
+    backdropFilter: "var(--glass-backdrop)",
+    WebkitBackdropFilter: "var(--glass-backdrop)",
+    boxShadow: "var(--glass-shadow)",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "0 2rem",
   },
-  logoContainer: {
+  logoLink: {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
+    textDecoration: "none",
   },
-  logoDot: {
-    width: "10px",
-    height: "10px",
-    borderRadius: "50%",
-    backgroundColor: "var(--secondary)",
+  logoImg: {
+    width: "24px",
+    height: "24px",
+    objectFit: "contain",
   },
   logoText: {
     fontSize: "1.1rem",

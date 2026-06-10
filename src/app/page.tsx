@@ -19,20 +19,7 @@ export default function Home() {
         </p>
 
         <div style={styles.grid}>
-          <div className="card" style={styles.selectionCard}>
-            <div style={styles.iconContainer}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <h3 style={styles.cardTitle}>Student Portal</h3>
-            <p style={styles.cardDescription}>Access your active assessments, view scores, and track your learning progress.</p>
-            <Link href="/login?role=student" style={{ ...styles.btn, ...styles.studentBtn }} className="interactive-element">
-              Enter Assessment
-            </Link>
-          </div>
-
-          <div className="card" style={styles.selectionCard}>
+          <div className="card" style={{ ...styles.selectionCard, maxWidth: "480px", margin: "0 auto", width: "100%" }}>
             <div style={styles.iconContainerAdmin}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

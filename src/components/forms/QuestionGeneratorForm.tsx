@@ -41,6 +41,7 @@ export default function QuestionGeneratorForm() {
   const [chapterId, setChapterId] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
   const [cognitiveLevel, setCognitiveLevel] = useState("applying");
+  const [questionType, setQuestionType] = useState("mixed");
   const [count, setCount] = useState("5");
   const [session, setSession] = useState("");
   const [isSessionModified, setIsSessionModified] = useState(false);
@@ -169,6 +170,7 @@ export default function QuestionGeneratorForm() {
         regenerate,
         previewOnly: true, // Always request preview first so the admin can verify
         session: finalSessionName,
+        questionType,
       });
       clearInterval(interval);
       setProgress(100);
@@ -224,6 +226,7 @@ export default function QuestionGeneratorForm() {
       text: "",
       options: ["", "", "", ""],
       correctAnswer: "",
+      questionType: "mcq",
       difficulty: difficulty as any,
       cognitiveLevel: cognitiveLevel,
       subjectId: subjectId,
@@ -274,6 +277,7 @@ export default function QuestionGeneratorForm() {
           text: q.text,
           options: q.options || [],
           correctAnswer: q.correctAnswer,
+          questionType: q.questionType || (q.options && q.options.length > 0 ? "mcq" : "tita"),
           difficulty: q.difficulty,
           cognitiveLevel: q.cognitiveLevel,
           classId: q.classId ? parseInt(String(q.classId), 10) : undefined,
@@ -335,7 +339,20 @@ export default function QuestionGeneratorForm() {
               return (
                 <div key={q.id || qIndex} className="glass-panel" style={styles.questionCard}>
                   <div style={styles.cardHeader}>
-                    <span style={styles.cardTitle}>Question {qIndex + 1}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
+                      <span style={styles.cardTitle}>Question {qIndex + 1}</span>
+                      <span style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "12px",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        backgroundColor: isMcq ? "rgba(59, 130, 246, 0.1)" : "rgba(16, 185, 129, 0.1)",
+                        color: isMcq ? "rgb(59, 130, 246)" : "rgb(16, 185, 129)",
+                        border: isMcq ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)",
+                      }}>
+                        {isMcq ? "MCQ" : "TITA (Descriptive)"}
+                      </span>
+                    </div>
                     <div style={styles.cardActions}>
                       <button
                         type="button"
@@ -348,6 +365,7 @@ export default function QuestionGeneratorForm() {
                                   ...item,
                                   options: isMcq ? [] : ["", "", "", ""],
                                   correctAnswer: "",
+                                  questionType: isMcq ? "tita" : "mcq",
                                 };
                               }
                               return item;
@@ -581,6 +599,19 @@ export default function QuestionGeneratorForm() {
                 <option value="analyzing">Analyzing (Deconstruct)</option>
                 <option value="evaluating">Evaluating (Critique)</option>
                 <option value="creating">Creating (Design)</option>
+              </select>
+            </div>
+
+            <div style={styles.selectGroup}>
+              <label style={styles.label}>Question Type</label>
+              <select
+                value={questionType}
+                onChange={(e) => setQuestionType(e.target.value)}
+                style={styles.select}
+              >
+                <option value="mixed">Mixed (MCQ & TITA)</option>
+                <option value="mcq">MCQ Only</option>
+                <option value="tita">TITA Only (Descriptive)</option>
               </select>
             </div>
           </div>

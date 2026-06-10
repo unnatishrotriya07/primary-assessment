@@ -9,16 +9,16 @@ interface PageProps {
 }
 
 const SKILL_CONFIG = [
-    { key: "score_communication", label: "Communication", color: "#667eea" },
-    { key: "score_numeracy", label: "Numeracy", color: "#11998e" },
-    { key: "score_creativity", label: "Creativity", color: "#f093fb" },
-    { key: "score_emotional_iq", label: "Emotional IQ", color: "#f5a623" },
+    { key: "score_communication", label: "Communication", color: "#C7C6F5" },
+    { key: "score_numeracy", label: "Numeracy", color: "#D8EAF7" },
+    { key: "score_creativity", label: "Creativity", color: "#F8E8E8" },
+    { key: "score_emotional_iq", label: "Emotional IQ", color: "#D9EFCB" },
 ] as const;
 
 const REC_COLOR: Record<string, string> = {
-    "Strongly Recommended": "#11998e",
-    "Recommended": "#667eea",
-    "Needs Review": "#f5a623",
+    "Strongly Recommended": "var(--success)",
+    "Recommended": "var(--primary)",
+    "Needs Review": "var(--warning)",
 };
 
 export default function InterviewResultPage({ params }: PageProps) {
@@ -61,15 +61,12 @@ export default function InterviewResultPage({ params }: PageProps) {
         return (
             <div style={s.center}>
                 <p style={{ color: "var(--danger)", marginBottom: "1rem" }}>{error}</p>
-                <button onClick={() => router.push("/")} style={s.btnSecondary}>
-                    Return to Portal
-                </button>
             </div>
         );
     }
 
     const score = Math.round(report.overall_score ?? 0);
-    const recColor = REC_COLOR[report.recommendation ?? ""] ?? "#667eea";
+    const recColor = REC_COLOR[report.recommendation ?? ""] ?? "var(--primary)";
 
     // SVG ring calculation
     const r = 50;
@@ -77,7 +74,7 @@ export default function InterviewResultPage({ params }: PageProps) {
     const dash = circ * (score / 100);
 
     return (
-        <div style={s.page}>
+        <div style={s.page} className="result-page-container">
 
             {/* Report header */}
             <div style={s.reportHeader}>
@@ -87,7 +84,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 <h2 style={s.reportTitle}>{report.grade} — Interview Complete!</h2>
                 <p style={s.reportSub}>Well done, {report.student_name}! 🎉</p>
                 {report.assessment_title && (
-                    <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
                         {report.assessment_title}
                     </p>
                 )}
@@ -102,14 +99,14 @@ export default function InterviewResultPage({ params }: PageProps) {
                         <circle
                             cx="60" cy="60" r={r}
                             fill="none"
-                            stroke="#667eea"
+                            stroke="var(--primary)"
                             strokeWidth="10"
                             strokeDasharray={`${dash} ${circ}`}
                             strokeLinecap="round"
                             transform="rotate(-90 60 60)"
                             style={{ transition: "stroke-dasharray 1.2s ease" }}
                         />
-                        <text x="60" y="56" textAnchor="middle" fontSize="22" fontWeight="700" fill="#667eea">
+                        <text x="60" y="56" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--text-primary)">
                             {score}
                         </text>
                         <text x="60" y="72" textAnchor="middle" fontSize="11" fill="#888">
@@ -121,7 +118,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 </div>
 
                 {/* Skill bars */}
-                <div style={s.skillGrid}>
+                <div style={s.skillGrid} className="result-skill-grid">
                     {SKILL_CONFIG.map(({ key, label, color }) => {
                         const val = Math.round((report[key as keyof InterviewReport] as number) ?? 0);
                         return (
@@ -156,15 +153,15 @@ export default function InterviewResultPage({ params }: PageProps) {
 
                 {/* Areas to grow */}
                 {report.improvements && (
-                    <div style={{ ...s.feedbackBox, borderLeftColor: "#f093fb" }}>
-                        <p style={{ ...s.feedbackTitle, color: "#b03ab0" }}>🌱 Areas to Grow</p>
+                    <div style={{ ...s.feedbackBox, borderLeftColor: "var(--warning)", background: "var(--warning-light)" }}>
+                        <p style={{ ...s.feedbackTitle, color: "var(--warning)" }}>🌱 Areas to Grow</p>
                         <p style={s.feedbackText}>{report.improvements}</p>
                     </div>
                 )}
 
                 {/* Admission recommendation */}
                 {report.recommendation && (
-                    <div style={{ ...s.feedbackBox, borderLeftColor: recColor, background: "#f8fff8" }}>
+                    <div style={{ ...s.feedbackBox, borderLeftColor: recColor, background: report.recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)" }}>
                         <p style={{ ...s.feedbackTitle, color: recColor }}>📋 Admission Note</p>
                         <p style={s.feedbackText}>
                             <strong>{report.recommendation}</strong>
@@ -173,9 +170,68 @@ export default function InterviewResultPage({ params }: PageProps) {
                     </div>
                 )}
 
-                <button style={s.doneBtn} onClick={() => router.push("/")}>
-                    Return to Portal
-                </button>
+                {/* Detailed Q&A Report */}
+                {report.evaluated_answers && report.evaluated_answers.length > 0 && (
+                    <div style={{ marginTop: "1.5rem" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "1rem" }}>
+                            Detailed Q&A Report
+                        </h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            {report.evaluated_answers.map((item, idx) => {
+                                return (
+                                    <div key={idx} style={{
+                                        border: "1px solid var(--border-color)",
+                                        borderRadius: "var(--radius-sm)",
+                                        padding: "1rem",
+                                        backgroundColor: "var(--bg-glass)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "0.5rem"
+                                    }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                                            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)" }}>
+                                                Question {idx + 1} ({item.questionType === "mcq" ? "MCQ" : "TITA"})
+                                            </span>
+                                            <span style={{
+                                                padding: "0.2rem 0.5rem",
+                                                borderRadius: "12px",
+                                                fontSize: "0.75rem",
+                                                fontWeight: 700,
+                                                backgroundColor: item.isCorrect ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                                                color: item.isCorrect ? "var(--success)" : "var(--error)",
+                                                border: item.isCorrect ? "1px solid rgba(16, 185, 129, 0.2)" : "1px solid rgba(239, 68, 68, 0.2)",
+                                            }}>
+                                                {item.isCorrect ? "Correct" : "Incorrect"}
+                                            </span>
+                                        </div>
+                                        <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                                            {item.question}
+                                        </p>
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.25rem", fontSize: "0.85rem" }}>
+                                            <div style={{ flex: "1 1 200px" }}>
+                                                <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Your Answer:</span>{" "}
+                                                <span style={{ color: item.isCorrect ? "var(--success)" : "var(--error)" }}>
+                                                    {item.studentAnswer || "(No answer)"}
+                                                </span>
+                                            </div>
+                                            <div style={{ flex: "1 1 200px" }}>
+                                                <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Expected Answer:</span>{" "}
+                                                <span style={{ color: "var(--text-primary)" }}>{item.expectedAnswer}</span>
+                                            </div>
+                                        </div>
+                                        {item.explanation && (
+                                            <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", borderTop: "1px dashed var(--border-color)", paddingTop: "0.5rem", marginTop: "0.25rem", fontStyle: "italic", margin: 0 }}>
+                                                <strong>Feedback:</strong> {item.explanation}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+
 
             </div>
         </div>
@@ -202,11 +258,11 @@ const s: Record<string, React.CSSProperties> = {
         gap: "0.5rem",
     },
     reportHeader: {
-        background: "linear-gradient(135deg, #11998e, #38ef7d)",
+        background: "linear-gradient(135deg, #C7C6F5, #D8EAF7)",
         borderRadius: "var(--radius-md) var(--radius-md) 0 0",
         padding: "2rem",
         textAlign: "center",
-        color: "#fff",
+        color: "var(--text-primary)",
     },
     reportEmoji: { fontSize: 48 },
     reportTitle: {
@@ -279,15 +335,15 @@ const s: Record<string, React.CSSProperties> = {
         color: "var(--text-secondary)",
     },
     feedbackBox: {
-        background: "#f8f8ff",
+        background: "var(--secondary-light)",
         borderRadius: "var(--radius-sm)",
         padding: "1rem",
-        borderLeft: "4px solid #667eea",
+        borderLeft: "4px solid var(--secondary)",
     },
     feedbackTitle: {
         fontSize: "0.8rem",
         fontWeight: 600,
-        color: "#667eea",
+        color: "var(--primary)",
         marginBottom: "0.35rem",
     },
     feedbackText: {
@@ -298,7 +354,7 @@ const s: Record<string, React.CSSProperties> = {
     doneBtn: {
         width: "100%",
         padding: "0.85rem",
-        background: "#667eea",
+        background: "var(--primary)",
         color: "#fff",
         border: "none",
         borderRadius: "var(--radius-sm)",

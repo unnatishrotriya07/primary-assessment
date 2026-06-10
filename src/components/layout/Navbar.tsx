@@ -39,8 +39,11 @@ export default function Navbar() {
 const styles: Record<string, React.CSSProperties> = {
   header: {
     height: "70px",
-    backgroundColor: "var(--bg-surface)",
-    borderBottom: "1px solid var(--border-color)",
+    backgroundColor: "var(--glass-bg)",
+    borderBottom: "1px solid var(--glass-border)",
+    backdropFilter: "var(--glass-backdrop)",
+    WebkitBackdropFilter: "var(--glass-backdrop)",
+    boxShadow: "var(--glass-shadow)",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",

@@ -5,35 +5,35 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  /* Color Palette - Premium Royal Indigo & Cyan */
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-light: rgba(99, 102, 241, 0.1);
-  --secondary: #0ea5e9;
-  --secondary-hover: #0284c7;
-  --secondary-light: rgba(14, 165, 233, 0.1);
+  /* Color Palette - Premium Soft Pastels */
+  --primary: #1F1F1F;
+  --primary-hover: #333333;
+  --primary-light: rgba(31, 31, 31, 0.08);
+  --secondary: #C7C6F5;
+  --secondary-hover: #b8b7eb;
+  --secondary-light: rgba(199, 198, 245, 0.2);
   
-  --success: #10b981;
-  --success-light: rgba(16, 185, 129, 0.1);
-  --warning: #f59e0b;
-  --warning-light: rgba(245, 158, 11, 0.1);
-  --error: #ef4444;
-  --error-light: rgba(239, 68, 68, 0.1);
+  --success: #4A8231;
+  --success-light: #D9EFCB;
+  --warning: #ad4b65;
+  --warning-light: #F8E8E8;
+  --error: #C94A4A;
+  --error-light: rgba(248, 232, 232, 0.6);
   
   /* Light Mode Theme */
-  --bg-app: #f8fafc;
+  --bg-app: #D8EAF7;
   --bg-surface: #ffffff;
-  --bg-surface-hover: #f1f5f9;
-  --border-color: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --bg-surface-hover: #f3f6fa;
+  --border-color: rgba(31, 31, 31, 0.08);
+  --text-primary: #222222;
+  --text-secondary: #555555;
+  --text-muted: #888888;
   
   /* Glassmorphism details */
-  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(255, 255, 255, 0.4);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
-  --glass-backdrop: blur(12px);
+  --glass-backdrop: blur(16px);
 
   /* Shadows & Borders */
   --radius-sm: 8px;
@@ -47,24 +47,8 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Media query for dark mode removed to keep the pastel theme consistent */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark Mode Theme - Sleek Midnight Blue */
-    --bg-app: #090d16;
-    --bg-surface: #111827;
-    --bg-surface-hover: #1f2937;
-    --border-color: #1f2937;
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --text-muted: #6b7280;
-    
-    /* Glassmorphic details for dark mode */
-    --glass-bg: rgba(17, 24, 39, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-  }
-}
 
 /* Base Resets */
 *, *::before, *::after {
@@ -75,15 +59,16 @@
 
 html, body {
   font-family: var(--font-sans);
-  background-color: var(--bg-app);
+  background: linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 50%, #F8E8E8 100%) no-repeat fixed;
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   overflow-x: hidden;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
+  transition: background var(--transition-normal), color var(--transition-normal);
 }
+
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
@@ -182,13 +167,13 @@ button, input, select, textarea {
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: linear-gradient(135deg, #7A79D2 0%, #87B6D6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .gradient-bg {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 100%);
 }
 
 .card {
@@ -216,4 +201,107 @@ button, input, select, textarea {
 
 .interactive-element:active {
   transform: scale(0.98);
+}
+
+/* Mobile Responsiveness Overrides */
+@media (max-width: 768px) {
+  /* Landing page */
+  main {
+    padding: 1rem !important;
+  }
+  .glass-panel {
+    padding: 1.5rem !important;
+  }
+  h1 {
+    font-size: 2rem !important;
+  }
+
+  /* Interview page adjustments */
+  .interview-page-container {
+    position: relative !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+  }
+  .interview-room-header {
+    padding: 0 1rem !important;
+  }
+  .interview-progress-chip {
+    font-size: 0.75rem !important;
+    padding: 0.3rem 0.6rem !important;
+  }
+  .interview-call-grid {
+    flex-direction: column !important;
+    padding: 1rem !important;
+    gap: 1rem !important;
+    height: calc(100vh - 140px) !important;
+    justify-content: flex-start !important;
+  }
+  .interview-ai-video-panel {
+    height: 60% !important;
+    max-height: none !important;
+    padding: 1rem !important;
+    border-radius: 16px !important;
+  }
+  .interview-ai-face-container {
+    width: 110px !important;
+    height: 110px !important;
+    margin-bottom: 1rem !important;
+  }
+  .interview-ai-avatar-circle {
+    width: 100px !important;
+    height: 100px !important;
+  }
+  .interview-ai-avatar-circle span {
+    font-size: 2.2rem !important;
+  }
+  .interview-question-subtitle-box {
+    padding: 0.5rem 1rem !important;
+    max-width: 95% !important;
+  }
+  .interview-question-text {
+    font-size: 0.95rem !important;
+  }
+  .interview-student-pip {
+    position: relative !important;
+    bottom: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    max-width: 280px !important;
+    height: 110px !important;
+    margin: 0 auto !important;
+    border-radius: 12px !important;
+  }
+  .interview-wave-canvas {
+    width: 100px !important;
+    height: 28px !important;
+  }
+  .interview-live-caption-overlay {
+    bottom: 90px !important;
+    max-width: 90% !important;
+    padding: 0.6rem 1.2rem !important;
+  }
+  .interview-live-caption-overlay p {
+    font-size: 0.95rem !important;
+  }
+
+  /* Keyboard Modal */
+  .interview-keyboard-panel-overlay div {
+    max-width: 90% !important;
+    padding: 1.5rem !important;
+  }
+
+  /* Result page adjustments */
+  .result-page-container {
+    padding: 1rem 0.5rem !important;
+  }
+  .result-page-container div[style*="reportHeader"] {
+    padding: 1.5rem 1rem !important;
+  }
+  .result-page-container div[style*="body"] {
+    padding: 1rem !important;
+  }
+  .result-skill-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+  }
 }

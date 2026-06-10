@@ -53,6 +53,14 @@ export interface InterviewReport {
     status: string;
     started_at?: string;
     completed_at?: string;
+    evaluated_answers?: {
+        question: string;
+        studentAnswer: string;
+        expectedAnswer: string;
+        questionType: string;
+        isCorrect: boolean;
+        explanation?: string;
+    }[];
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────

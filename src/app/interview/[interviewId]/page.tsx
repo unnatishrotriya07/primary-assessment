@@ -27,6 +27,10 @@ export default function InterviewPage({ params }: PageProps) {
     const router = useRouter();
 
     const [studentName, setStudentName] = useState("");
+    const [subjectName, setSubjectName] = useState("");
+    const [chapterNumber, setChapterNumber] = useState("");
+    const [chapterTitle, setChapterTitle] = useState("");
+    
     const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
@@ -47,7 +51,7 @@ export default function InterviewPage({ params }: PageProps) {
     const [liveCaption, setLiveCaption] = useState("");
     const [stream, setStream] = useState<MediaStream | null>(null);
 
-        // Refs
+    // Refs
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const recognitionRef = useRef<any>(null);
@@ -55,6 +59,33 @@ export default function InterviewPage({ params }: PageProps) {
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+    const silenceTimeoutRef = useRef<any>(null);
+    const submitRef = useRef<any>(null);
+    const [voicesLoaded, setVoicesLoaded] = useState(false);
+    const hasRepeatedCurrentRef = useRef(false);
+
+    // Pre-load synthesis voices to prevent first question voice mismatch
+    useEffect(() => {
+        if (typeof window === "undefined" || !window.speechSynthesis) return;
+        const loadVoices = () => {
+            const list = window.speechSynthesis.getVoices();
+            if (list.length > 0) {
+                setVoicesLoaded(true);
+            }
+        };
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }, []);
+
+
+    // Cleanup silence timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (silenceTimeoutRef.current) {
+                clearTimeout(silenceTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // ── Load questions from sessionStorage ───────────────────────────────────
     useEffect(() => {
@@ -65,6 +96,9 @@ export default function InterviewPage({ params }: PageProps) {
                 setStudentName(data.student_name || "Student");
                 const qs = data.questions || [];
                 setQuestions(qs);
+                setSubjectName(data.subject_name || "");
+                setChapterNumber(data.chapter_number || "");
+                setChapterTitle(data.chapter_title || "");
                 setPhase("lobby");
                 if (qs.length > 0) {
                     setTranscript([{ role: "ai", text: qs[0].q, question_category: qs[0].category }]);
@@ -177,8 +211,23 @@ export default function InterviewPage({ params }: PageProps) {
     useEffect(() => {
         if (phase !== "interview" || questions.length === 0) return;
         
+        hasRepeatedCurrentRef.current = false; // Reset repeat flag for new question
+
+        let textToSpeak = questions[currentIdx].q;
+        if (currentIdx === 0) {
+            // Get greeting time of day (morning, afternoon, evening)
+            const hour = new Date().getHours();
+            let timeOfDay = "day";
+            if (hour < 12) timeOfDay = "morning";
+            else if (hour < 17) timeOfDay = "afternoon";
+            else timeOfDay = "evening";
+
+            const greeting = `Hi! Good ${timeOfDay}. Let's start with your ${subjectName || "Subject"}${chapterNumber ? `, Chapter - ${chapterNumber}` : ""}${chapterTitle ? `, ${chapterTitle}` : ""}. `;
+            textToSpeak = greeting + textToSpeak;
+        }
+
         // Speak question
-        speakText(questions[currentIdx].q, () => {
+        speakText(textToSpeak, () => {
             // Once Buddy finishes speaking, automatically open mic if mic is enabled
             if (micEnabled) {
                 startSpeechRecognition();
@@ -186,7 +235,7 @@ export default function InterviewPage({ params }: PageProps) {
         });
         
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentIdx, phase, questions.length]);
+    }, [currentIdx, phase, questions.length, subjectName, chapterNumber, chapterTitle]);
 
     // ── Text to speech (TTS) ──────────────────────────────────────────────────
     const speakText = useCallback((text: string, onEnd?: () => void) => {
@@ -195,6 +244,13 @@ export default function InterviewPage({ params }: PageProps) {
             return;
         }
         window.speechSynthesis.cancel();
+
+        setIsSpeaking(true);
+        setIsRecording(false);
+        if (recognitionRef.current) {
+            recognitionRef.current.onend = null;
+            try { recognitionRef.current.stop(); } catch (_) {}
+        }
         
         if (utteranceRef.current) {
             utteranceRef.current.onstart = null;
@@ -211,7 +267,10 @@ export default function InterviewPage({ params }: PageProps) {
         
         const voices = window.speechSynthesis.getVoices();
         const voice =
-            voices.find((v) => v.lang.startsWith("en") && /female|woman|google/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /female|woman/i.test(v.name)) ||
             voices.find((v) => v.lang.startsWith("en")) ||
             voices[0];
         if (voice) utt.voice = voice;
@@ -230,7 +289,7 @@ export default function InterviewPage({ params }: PageProps) {
             setIsRecording(false);
             if (recognitionRef.current) {
                 recognitionRef.current.onend = null;
-                recognitionRef.current.stop();
+                try { recognitionRef.current.stop(); } catch (_) {}
             }
         };
         utt.onend = () => {
@@ -292,10 +351,75 @@ export default function InterviewPage({ params }: PageProps) {
             const currentSpeech = (finalTranscript + interimTranscript).trim();
             setLiveCaption(currentSpeech);
             setTypedText(currentSpeech);
+
+            // Repeat question detection: check if student asks to repeat
+            const lowerSpeech = currentSpeech.toLowerCase().trim();
+            const repeatTriggers = [
+                "repeat the question",
+                "repeat please",
+                "can you repeat",
+                "say that again",
+                "say again",
+                "speak again",
+                "repeat question",
+                "what was the question",
+                "pardon me",
+                "didn't hear you",
+                "did not hear"
+            ];
+            const isRepeatRequest = lowerSpeech === "repeat" || repeatTriggers.some(trigger => lowerSpeech.includes(trigger));
+
+            if (isRepeatRequest && !hasRepeatedCurrentRef.current) {
+                console.log("Repeat request detected. Repeating current question...");
+                hasRepeatedCurrentRef.current = true;
+                if (silenceTimeoutRef.current) {
+                    clearTimeout(silenceTimeoutRef.current);
+                }
+                if (recognitionRef.current) {
+                    recognitionRef.current.onend = null;
+                    recognitionRef.current.onresult = null;
+                    try { recognitionRef.current.stop(); } catch (_) {}
+                }
+                setIsRecording(false);
+                setLiveCaption("");
+                setTypedText("");
+
+                const repeatPrompt = `Sure, let me repeat that. ${questions[currentIdx].q}`;
+                speakText(repeatPrompt, () => {
+                    if (micEnabled) {
+                        startSpeechRecognition();
+                    }
+                });
+                return;
+            }
+
+            // Auto-next silence detection: submit after 2.2 seconds of silence
+            if (currentSpeech.length > 0) {
+                if (silenceTimeoutRef.current) {
+                    clearTimeout(silenceTimeoutRef.current);
+                }
+                silenceTimeoutRef.current = setTimeout(() => {
+                    console.log("Silence detected. Auto-submitting response:", currentSpeech);
+                    if (recognitionRef.current) {
+                        recognitionRef.current.onend = null;
+                        recognitionRef.current.onresult = null;
+                        try { recognitionRef.current.stop(); } catch (_) {}
+                    }
+                    setIsRecording(false);
+                    setLiveCaption("");
+                    if (submitRef.current) {
+                        submitRef.current(currentSpeech);
+                    }
+                }, 2200); // 2.2 seconds of silence
+            }
         };
 
         rec.onerror = (err: any) => {
-            console.error("Speech recognition error:", err.error);
+            if (err.error !== "no-speech") {
+                console.error("Speech recognition error:", err.error);
+            } else {
+                console.log("Speech recognition info: no-speech (user is silent)");
+            }
             setIsRecording(false);
         };
 
@@ -320,6 +444,11 @@ export default function InterviewPage({ params }: PageProps) {
     const handleSubmitAnswer = useCallback((overrideText?: string) => {
         const text = (overrideText ?? typedText).trim();
         if (!text || questions.length === 0) return;
+
+        // Clear silence timeout
+        if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+        }
 
         // Turn off keyboard input overlay if it was open
         setShowKeyboardInput(false);
@@ -367,6 +496,11 @@ export default function InterviewPage({ params }: PageProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [typedText, answers, currentIdx, questions, studentName, transcript]);
 
+    // Keep submitRef updated with latest handleSubmitAnswer to prevent stale closure bugs
+    useEffect(() => {
+        submitRef.current = handleSubmitAnswer;
+    }, [handleSubmitAnswer]);
+
     // ── Submit to Backend ────────────────────────────────────────────────────
     const submitInterview = async (finalAnswers: AnswerEntry[], finalTranscript: TranscriptEntry[]) => {
         setPhase("generating");
@@ -411,9 +545,12 @@ export default function InterviewPage({ params }: PageProps) {
 
             // Stop/Start recognition accordingly
             if (!audioTrack.enabled) {
+                if (silenceTimeoutRef.current) {
+                    clearTimeout(silenceTimeoutRef.current);
+                }
                 if (recognitionRef.current) {
                     recognitionRef.current.onend = null;
-                    recognitionRef.current.stop();
+                    try { recognitionRef.current.stop(); } catch (_) {}
                 }
                 setIsRecording(false);
             } else if (!isSpeaking && !isSubmitting) {
@@ -425,6 +562,11 @@ export default function InterviewPage({ params }: PageProps) {
     const handleManualNext = useCallback(() => {
         if (isSpeaking || isSubmitting) return;
         
+        // Clear silence timeout
+        if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+        }
+
         // Stop recognition
         if (recognitionRef.current) {
             recognitionRef.current.onend = null;
@@ -459,11 +601,11 @@ export default function InterviewPage({ params }: PageProps) {
                     </div>
                     <h2 style={s.lobbyTitle}>Welcome to the Interview Lobby</h2>
                     <p style={s.lobbySubtitle}>
-                        Hi <strong style={{ color: "#22d3ee" }}>{studentName}</strong>, Buddy is ready to talk with you!
+                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, Buddy is ready to talk with you for <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
                     </p>
                     <div style={s.lobbyInstructions}>
-                        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "#f1f5f9" }}>Tips before you start:</p>
-                        <ul style={{ paddingLeft: "1.2rem", margin: 0, textAlign: "left", fontSize: "0.9rem", color: "#94a3b8", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "var(--text-primary)" }}>Tips before you start:</p>
+                        <ul style={{ paddingLeft: "1.2rem", margin: 0, textAlign: "left", fontSize: "0.9rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                             <li>Make sure you are in a quiet room so Buddy can hear you.</li>
                             <li>Buddy will read each question aloud. Listen carefully!</li>
                             <li>Speak clearly into your microphone when you answer.</li>
@@ -472,7 +614,7 @@ export default function InterviewPage({ params }: PageProps) {
                     <button
                         onClick={() => setPhase("interview")}
                         style={s.lobbyStartBtn}
-                        className="interactive-element gradient-bg"
+                        className="interactive-element"
                     >
                         Start Interview
                     </button>
@@ -715,8 +857,8 @@ const s: Record<string, React.CSSProperties> = {
     pageContainer: {
         width: "100vw",
         height: "100vh",
-        backgroundColor: "#090d16",
-        color: "#f8fafc",
+        backgroundColor: "transparent",
+        color: "var(--text-primary)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -731,9 +873,9 @@ const s: Record<string, React.CSSProperties> = {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+        borderBottom: "1px solid var(--border-color)",
         zIndex: 10,
-        backgroundColor: "rgba(9, 13, 22, 0.8)",
+        backgroundColor: "var(--bg-surface)",
         backdropFilter: "blur(8px)",
     },
     logoArea: {
@@ -745,24 +887,24 @@ const s: Record<string, React.CSSProperties> = {
         width: "10px",
         height: "10px",
         borderRadius: "50%",
-        backgroundColor: "#22d3ee",
-        boxShadow: "0 0 10px #22d3ee",
+        backgroundColor: "var(--secondary)",
+        boxShadow: "0 0 10px var(--secondary)",
         animation: "pulse 1.8s infinite",
     },
     logoText: {
         fontSize: "0.95rem",
         fontWeight: 700,
         letterSpacing: "0.03em",
-        color: "#e2e8f0",
+        color: "var(--text-primary)",
     },
     progressChip: {
         padding: "0.4rem 0.8rem",
         borderRadius: "9999px",
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
+        backgroundColor: "var(--primary-light)",
+        border: "1px solid var(--border-color)",
         fontSize: "0.8rem",
         fontWeight: 600,
-        color: "#cbd5e1",
+        color: "var(--primary)",
     },
     callGrid: {
         flex: 1,
@@ -779,9 +921,9 @@ const s: Record<string, React.CSSProperties> = {
         height: "80%",
         maxHeight: "560px",
         borderRadius: "24px",
-        backgroundColor: "rgba(15, 23, 42, 0.6)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-        boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+        backgroundColor: "var(--glass-bg)",
+        border: "1px solid var(--glass-border)",
+        boxShadow: "var(--glass-shadow)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -803,9 +945,9 @@ const s: Record<string, React.CSSProperties> = {
         width: "120px",
         height: "120px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, #0891b2, #4f46e5)",
-        border: "3px solid rgba(255, 255, 255, 0.15)",
-        boxShadow: "0 10px 30px rgba(79, 70, 229, 0.4)",
+        background: "linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 100%)",
+        border: "3px solid var(--glass-border)",
+        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.4)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -819,7 +961,7 @@ const s: Record<string, React.CSSProperties> = {
         width: "150px",
         height: "150px",
         borderRadius: "50%",
-        border: "2px solid #22d3ee",
+        border: "2px solid var(--secondary)",
         opacity: 0,
         zIndex: 1,
         transition: "all 0.3s ease",
@@ -831,12 +973,12 @@ const s: Record<string, React.CSSProperties> = {
     statusPill: {
         padding: "0.35rem 0.9rem",
         borderRadius: "9999px",
-        backgroundColor: "rgba(9, 13, 22, 0.7)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
+        backgroundColor: "var(--primary-light)",
+        border: "1px solid var(--border-color)",
         fontSize: "0.8rem",
         fontWeight: 600,
         letterSpacing: "0.02em",
-        color: "#94a3b8",
+        color: "var(--text-secondary)",
         marginBottom: "1rem",
     },
     questionSubtitleBox: {
@@ -845,14 +987,14 @@ const s: Record<string, React.CSSProperties> = {
         textAlign: "center",
         padding: "1rem 1.5rem",
         borderRadius: "16px",
-        backgroundColor: "rgba(9, 13, 22, 0.75)",
-        border: "1px solid rgba(255, 255, 255, 0.05)",
+        backgroundColor: "var(--bg-surface)",
+        border: "1px solid var(--border-color)",
     },
     questionText: {
         fontSize: "1.25rem",
         fontWeight: 600,
         lineHeight: 1.5,
-        color: "#f1f5f9",
+        color: "var(--text-primary)",
         margin: 0,
     },
     studentPip: {
@@ -863,9 +1005,9 @@ const s: Record<string, React.CSSProperties> = {
         height: "120px",
         borderRadius: "16px",
         overflow: "hidden",
-        border: "2px solid rgba(255, 255, 255, 0.15)",
-        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
-        backgroundColor: "#1e293b",
+        border: "2px solid var(--border-color)",
+        boxShadow: "var(--shadow-sm)",
+        backgroundColor: "var(--bg-surface)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -883,23 +1025,23 @@ const s: Record<string, React.CSSProperties> = {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "radial-gradient(circle, #334155, #1e293b)",
+        background: "var(--bg-app)",
     },
     placeholderInitials: {
         fontSize: "2rem",
         fontWeight: 700,
-        color: "#94a3b8",
+        color: "var(--text-secondary)",
     },
     studentLabel: {
         position: "absolute",
         bottom: "0.5rem",
         left: "0.5rem",
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
+        backgroundColor: "var(--primary)",
         padding: "0.2rem 0.5rem",
         borderRadius: "6px",
         fontSize: "0.7rem",
         fontWeight: 600,
-        color: "#f1f5f9",
+        color: "#ffffff",
     },
     waveCanvas: {
         position: "absolute",
@@ -914,11 +1056,11 @@ const s: Record<string, React.CSSProperties> = {
         bottom: "120px",
         left: "50%",
         transform: "translateX(-50%)",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
+        backgroundColor: "var(--glass-bg)",
         padding: "0.75rem 2rem",
         borderRadius: "9999px",
-        border: "1px solid rgba(34, 211, 238, 0.3)",
-        boxShadow: "0 10px 30px rgba(34, 211, 238, 0.15)",
+        border: "1px solid var(--glass-border)",
+        boxShadow: "var(--glass-shadow)",
         zIndex: 8,
         maxWidth: "80%",
         textAlign: "center",
@@ -926,7 +1068,7 @@ const s: Record<string, React.CSSProperties> = {
     captionText: {
         fontSize: "1.1rem",
         fontWeight: 500,
-        color: "#22d3ee",
+        color: "var(--text-primary)",
         margin: 0,
         fontStyle: "italic",
     },
@@ -937,8 +1079,8 @@ const s: Record<string, React.CSSProperties> = {
         alignItems: "center",
         gap: "1.25rem",
         zIndex: 10,
-        backgroundColor: "#090d16",
-        borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+        backgroundColor: "var(--bg-surface)",
+        borderTop: "1px solid var(--border-color)",
     },
     controlBtn: {
         width: "48px",
@@ -949,39 +1091,39 @@ const s: Record<string, React.CSSProperties> = {
         alignItems: "center",
         justifyContent: "center",
         cursor: "pointer",
-        color: "#ffffff",
+        color: "var(--text-primary)",
         transition: "all 0.25s ease",
     },
     btnActive: {
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
-        border: "1px solid rgba(255, 255, 255, 0.15)",
-        color: "#f8fafc",
+        backgroundColor: "var(--secondary-light)",
+        border: "1px solid var(--border-color)",
+        color: "var(--text-primary)",
     },
     btnMuted: {
         backgroundColor: "#ef4444",
         boxShadow: "0 0 10px rgba(239, 68, 68, 0.4)",
     },
     btnKeyboard: {
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
-        border: "1px solid rgba(255, 255, 255, 0.15)",
+        backgroundColor: "var(--secondary-light)",
+        border: "1px solid var(--border-color)",
     },
     btnEndCall: {
         width: "90px",
         borderRadius: "24px",
-        backgroundColor: "#0284c7",
-        boxShadow: "0 4px 14px rgba(2, 132, 199, 0.4)",
+        backgroundColor: "var(--primary)",
+        boxShadow: "var(--shadow-sm)",
         color: "#ffffff",
     },
     centerScreen: {
         width: "100vw",
         height: "100vh",
-        backgroundColor: "#090d16",
+        backgroundColor: "transparent",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
-        color: "#f8fafc",
+        color: "var(--text-primary)",
         position: "fixed",
         top: 0,
         left: 0,
@@ -1000,7 +1142,7 @@ const s: Record<string, React.CSSProperties> = {
         width: "100%",
         height: "100%",
         borderRadius: "50%",
-        border: "3px solid #22d3ee",
+        border: "3px solid var(--secondary)",
         animation: "ripple 1.5s infinite ease-out",
     },
     rippleCenter: {
@@ -1023,8 +1165,8 @@ const s: Record<string, React.CSSProperties> = {
     btnControlClose: {
         padding: "0.6rem 1.5rem",
         borderRadius: "8px",
-        border: "1px solid rgba(255, 255, 255, 0.15)",
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        border: "none",
+        backgroundColor: "var(--primary)",
         color: "#ffffff",
         cursor: "pointer",
         fontWeight: 600,
@@ -1034,12 +1176,12 @@ const s: Record<string, React.CSSProperties> = {
         top: "20px",
         left: "50%",
         transform: "translateX(-50%)",
-        backgroundColor: "#ef4444",
+        backgroundColor: "var(--error)",
         color: "#ffffff",
         padding: "0.6rem 1.5rem",
         borderRadius: "8px",
         zIndex: 1000,
-        boxShadow: "0 10px 20px rgba(0, 0, 0, 0.3)",
+        boxShadow: "var(--shadow-sm)",
         fontSize: "0.9rem",
         fontWeight: 600,
     },
@@ -1049,7 +1191,7 @@ const s: Record<string, React.CSSProperties> = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
+        backgroundColor: "rgba(15, 23, 42, 0.6)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1057,31 +1199,31 @@ const s: Record<string, React.CSSProperties> = {
         backdropFilter: "blur(4px)",
     },
     keyboardModal: {
-        backgroundColor: "#0f172a",
-        border: "1px solid rgba(255, 255, 255, 0.15)",
+        backgroundColor: "var(--bg-surface)",
+        border: "1px solid var(--border-color)",
         borderRadius: "20px",
         width: "90%",
         maxWidth: "500px",
         padding: "1.5rem",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--shadow-lg)",
     },
     modalHeader: {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         marginBottom: "1rem",
-        color: "#f1f5f9",
+        color: "var(--text-primary)",
     },
     modalCloseBtn: {
         background: "none",
         border: "none",
-        color: "#94a3b8",
+        color: "var(--text-muted)",
         fontSize: "1.1rem",
         cursor: "pointer",
     },
     modalInstruction: {
         fontSize: "0.85rem",
-        color: "#94a3b8",
+        color: "var(--text-secondary)",
         marginBottom: "1.25rem",
         lineHeight: 1.4,
     },
@@ -1091,16 +1233,16 @@ const s: Record<string, React.CSSProperties> = {
     },
     modalInput: {
         flex: 1,
-        backgroundColor: "#1e293b",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
+        backgroundColor: "var(--bg-app)",
+        border: "1px solid var(--border-color)",
         borderRadius: "10px",
         padding: "0.75rem 1rem",
-        color: "#ffffff",
+        color: "var(--text-primary)",
         outline: "none",
         fontSize: "0.95rem",
     },
     modalSendBtn: {
-        backgroundColor: "#0284c7",
+        backgroundColor: "var(--primary)",
         border: "none",
         borderRadius: "10px",
         padding: "0 1.25rem",
@@ -1113,10 +1255,10 @@ const s: Record<string, React.CSSProperties> = {
         width: "90%",
         maxWidth: "500px",
         padding: "2.5rem",
-        backgroundColor: "rgba(15, 23, 42, 0.6)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
+        backgroundColor: "var(--glass-bg)",
+        border: "1px solid var(--glass-border)",
         borderRadius: "24px",
-        boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+        boxShadow: "var(--glass-shadow)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -1126,9 +1268,9 @@ const s: Record<string, React.CSSProperties> = {
         width: "100px",
         height: "100px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, #0891b2, #4f46e5)",
-        border: "3px solid rgba(255, 255, 255, 0.15)",
-        boxShadow: "0 10px 30px rgba(79, 70, 229, 0.4)",
+        background: "linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 100%)",
+        border: "3px solid var(--glass-border)",
+        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.4)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1139,23 +1281,23 @@ const s: Record<string, React.CSSProperties> = {
         fontSize: "1.6rem",
         fontWeight: 700,
         marginBottom: "0.5rem",
-        color: "#f8fafc",
+        color: "var(--text-primary)",
     },
     lobbySubtitle: {
         fontSize: "1rem",
-        color: "#cbd5e1",
+        color: "var(--text-secondary)",
         marginBottom: "1.5rem",
         textAlign: "center",
     },
     lobbyInstructions: {
-        backgroundColor: "rgba(9, 13, 22, 0.5)",
-        border: "1px solid rgba(255, 255, 255, 0.05)",
+        backgroundColor: "var(--primary-light)",
+        border: "1px solid var(--border-color)",
         borderRadius: "16px",
         padding: "1.2rem",
         width: "100%",
         textAlign: "left",
         marginBottom: "2rem",
-        color: "#94a3b8",
+        color: "var(--text-secondary)",
     },
     lobbyStartBtn: {
         width: "100%",
@@ -1166,7 +1308,8 @@ const s: Record<string, React.CSSProperties> = {
         fontWeight: 700,
         fontSize: "1.05rem",
         cursor: "pointer",
-        boxShadow: "0 10px 25px rgba(79, 70, 229, 0.45)",
+        boxShadow: "var(--shadow-sm)",
         transition: "all 0.25s ease",
+        backgroundColor: "var(--primary)",
     },
 };

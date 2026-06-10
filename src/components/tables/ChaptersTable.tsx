@@ -473,7 +473,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-sm, 4px)",
     border: "1px solid var(--border-color, #e5e5e5)",
     backgroundColor: "var(--bg-app, #ffffff)",
-    color: "var(--primary, #3b82f6)",
+    color: "var(--primary)",
     fontSize: "0.75rem",
     fontWeight: 600,
     cursor: "pointer",
@@ -491,7 +491,7 @@ const styles: Record<string, React.CSSProperties> = {
   spinnerIcon: {
     width: "12px",
     height: "12px",
-    border: "2px solid var(--primary, #3b82f6)",
+    border: "2px solid var(--primary)",
     borderTopColor: "transparent",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",

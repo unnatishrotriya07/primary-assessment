@@ -11,6 +11,7 @@ export interface AIQuestionParams {
   regenerate?: boolean;
   previewOnly?: boolean;
   session?: string;
+  questionType?: string;
 }
 
 export interface QuestionBatchSave {
