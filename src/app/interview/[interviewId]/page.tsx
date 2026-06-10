@@ -63,6 +63,7 @@ export default function InterviewPage({ params }: PageProps) {
     const submitRef = useRef<any>(null);
     const [voicesLoaded, setVoicesLoaded] = useState(false);
     const hasRepeatedCurrentRef = useRef(false);
+    const silenceCountRef = useRef(0);
 
     const micEnabledRef = useRef(micEnabled);
     const isSpeakingRef = useRef(isSpeaking);
@@ -79,6 +80,21 @@ export default function InterviewPage({ params }: PageProps) {
     useEffect(() => {
         isSubmittingRef.current = isSubmitting;
     }, [isSubmitting]);
+
+    const updateIsSpeaking = (val: boolean) => {
+        setIsSpeaking(val);
+        isSpeakingRef.current = val;
+    };
+
+    const updateMicEnabled = (val: boolean) => {
+        setMicEnabled(val);
+        micEnabledRef.current = val;
+    };
+
+    const updateIsSubmitting = (val: boolean) => {
+        setIsSubmitting(val);
+        isSubmittingRef.current = val;
+    };
 
     // Pre-load synthesis voices to prevent first question voice mismatch
     useEffect(() => {
@@ -171,7 +187,7 @@ export default function InterviewPage({ params }: PageProps) {
                     activeStream = audioStream;
                     setStream(audioStream);
                     setCameraEnabled(false);
-                    setMicEnabled(true);
+                    updateMicEnabled(true);
 
                     // Web Audio API Visualizer Setup
                     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -194,7 +210,7 @@ export default function InterviewPage({ params }: PageProps) {
                     console.error("Audio-only fallback getUserMedia failed:", fallbackErr);
                     setError("Microphone access denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
                     setCameraEnabled(false);
-                    setMicEnabled(false);
+                    updateMicEnabled(false);
                 }
             }
         }
@@ -279,7 +295,7 @@ export default function InterviewPage({ params }: PageProps) {
         // Speak question
         speakText(textToSpeak, () => {
             // Once Buddy finishes speaking, automatically open mic if mic is enabled
-            if (micEnabled) {
+            if (micEnabledRef.current) {
                 startSpeechRecognition();
             }
         });
@@ -295,12 +311,13 @@ export default function InterviewPage({ params }: PageProps) {
         }
 
         try {
+            window.speechSynthesis.resume();
             window.speechSynthesis.cancel();
         } catch (err) {
             console.error("Error canceling speech synthesis:", err);
         }
 
-        setIsSpeaking(true);
+        updateIsSpeaking(true);
         setIsRecording(false);
         if (recognitionRef.current) {
             recognitionRef.current.onend = null;
@@ -347,13 +364,13 @@ export default function InterviewPage({ params }: PageProps) {
             fired = true;
             if (fallbackTimeout) clearTimeout(fallbackTimeout);
             clearInterval(resumeInterval);
-            setIsSpeaking(false);
+            updateIsSpeaking(false);
             utteranceRef.current = null;
             onEnd?.();
         };
 
         utt.onstart = () => {
-            setIsSpeaking(true);
+            updateIsSpeaking(true);
             setIsRecording(false);
             if (recognitionRef.current) {
                 recognitionRef.current.onend = null;
@@ -429,6 +446,11 @@ export default function InterviewPage({ params }: PageProps) {
             setLiveCaption(currentSpeech);
             setTypedText(currentSpeech);
 
+            if (currentSpeech.length > 0) {
+                silenceCountRef.current = 0;
+                setError("");
+            }
+
             // Repeat question detection: check if student asks to repeat
             const lowerSpeech = currentSpeech.toLowerCase().trim();
             const repeatTriggers = [
@@ -495,15 +517,17 @@ export default function InterviewPage({ params }: PageProps) {
             if (err.error === "not-allowed") {
                 console.error("Speech recognition permission denied:", err.error);
                 setError("Microphone permission denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
-                setMicEnabled(false);
             } else if (err.error === "audio-capture") {
                 console.error("Speech recognition audio capture failed:", err.error);
                 setError("No microphone detected or microphone is busy. Please connect a mic or use the keyboard fallback.");
-                setMicEnabled(false);
-            } else if (err.error !== "no-speech") {
-                console.error("Speech recognition error:", err.error);
-            } else {
+            } else if (err.error === "no-speech") {
                 console.log("Speech recognition info: no-speech (user is silent)");
+                silenceCountRef.current += 1;
+                if (silenceCountRef.current >= 3) {
+                    setError("We are having trouble hearing you. Please check if your system microphone is muted or set incorrectly in System Settings, or use the keyboard fallback.");
+                }
+            } else {
+                console.error("Speech recognition error:", err.error);
             }
             setIsRecording(false);
         };
@@ -534,6 +558,8 @@ export default function InterviewPage({ params }: PageProps) {
         const text = (overrideText ?? typedText).trim();
         if (!text || questions.length === 0) return;
 
+        silenceCountRef.current = 0;
+
         // Clear silence timeout
         if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current);
@@ -562,7 +588,7 @@ export default function InterviewPage({ params }: PageProps) {
         const isLast = currentIdx === questions.length - 1;
 
         if (isLast) {
-            setIsSubmitting(true);
+            updateIsSubmitting(true);
             const goodbye = `Thank you ${studentName}! That was wonderful. Let me prepare your report now.`;
             addMsg("ai", goodbye);
 
@@ -593,7 +619,7 @@ export default function InterviewPage({ params }: PageProps) {
     // ── Submit to Backend ────────────────────────────────────────────────────
     const submitInterview = async (finalAnswers: AnswerEntry[], finalTranscript: TranscriptEntry[]) => {
         setPhase("generating");
-        setIsSubmitting(true);
+        updateIsSubmitting(true);
 
         // Stop all camera and mic tracks
         if (stream) {
@@ -611,7 +637,7 @@ export default function InterviewPage({ params }: PageProps) {
         } catch (e: any) {
             setError("Failed to submit interview. Please try again.");
             setPhase("interview");
-            setIsSubmitting(false);
+            updateIsSubmitting(false);
         }
     };
 
@@ -630,7 +656,7 @@ export default function InterviewPage({ params }: PageProps) {
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
             audioTrack.enabled = !audioTrack.enabled;
-            setMicEnabled(audioTrack.enabled);
+            updateMicEnabled(audioTrack.enabled);
 
             // Stop/Start recognition accordingly
             if (!audioTrack.enabled) {

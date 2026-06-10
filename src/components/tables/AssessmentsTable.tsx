@@ -81,63 +81,65 @@ export default function AssessmentsTable() {
   }
 
   return (
-    <div style={styles.tableWrapper} className="card">
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.headerRow}>
-            <th style={styles.th}>Assessment Title</th>
-            <th style={styles.th}>Subject</th>
-            <th style={styles.th}>Assigned Class</th>
-            <th style={styles.th}>Date</th>
-            <th style={styles.th}>Status</th>
-            <th style={styles.th}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {assessments.map((item) => (
-            <tr key={item.id} style={styles.row}>
-              <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
-              <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
-              <td style={styles.td}>{classesMap[item.classId] || `Class #${item.classId}`}</td>
-              <td style={styles.td}>{item.date || "N/A"}</td>
-              <td style={styles.td}>
-                <span 
-                  style={{
-                    ...styles.badge,
-                    backgroundColor: 
-                      item.status === "Active" ? "var(--warning-light)" : 
-                      item.status === "Completed" ? "var(--success-light)" : "var(--bg-surface-hover)",
-                    color: 
-                      item.status === "Active" ? "var(--warning)" : 
-                      item.status === "Completed" ? "var(--success)" : "var(--text-secondary)",
-                  }}
-                >
-                  {item.status}
-                </span>
-              </td>
-              <td style={styles.td}>
-                <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
-                  {item.status === "Completed" ? (
-                    <Link href={`/reports/${item.id}`} style={styles.actionBtn}>
-                      View Report
-                    </Link>
-                  ) : (
-                    <>
-                      <button 
-                        onClick={() => handleAssignClick(item)}
-                        style={styles.assignBtn}
-                      >
-                        Assign Student
-                      </button>
-                      <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>| No report</span>
-                    </>
-                  )}
-                </div>
-              </td>
+    <>
+      <div style={styles.tableWrapper} className="card">
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.headerRow}>
+              <th style={styles.th}>Assessment Title</th>
+              <th style={styles.th}>Subject</th>
+              <th style={styles.th}>Assigned Class</th>
+              <th style={styles.th}>Date</th>
+              <th style={styles.th}>Status</th>
+              <th style={styles.th}>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {assessments.map((item) => (
+              <tr key={item.id} style={styles.row}>
+                <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
+                <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
+                <td style={styles.td}>{classesMap[item.classId] || `Class #${item.classId}`}</td>
+                <td style={styles.td}>{item.date || "N/A"}</td>
+                <td style={styles.td}>
+                  <span 
+                    style={{
+                      ...styles.badge,
+                      backgroundColor: 
+                        item.status === "Active" ? "var(--warning-light)" : 
+                        item.status === "Completed" ? "var(--success-light)" : "var(--bg-surface-hover)",
+                      color: 
+                        item.status === "Active" ? "var(--warning)" : 
+                        item.status === "Completed" ? "var(--success)" : "var(--text-secondary)",
+                    }}
+                  >
+                    {item.status}
+                  </span>
+                </td>
+                <td style={styles.td}>
+                  <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
+                    {item.status === "Completed" ? (
+                      <Link href={`/reports/${item.id}`} style={styles.actionBtn}>
+                        View Report
+                      </Link>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={() => handleAssignClick(item)}
+                          style={styles.assignBtn}
+                        >
+                          Assign Student
+                        </button>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>| No report</span>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <AssignAssessmentModal
         isOpen={isAssignModalOpen}
@@ -145,7 +147,7 @@ export default function AssessmentsTable() {
         assessment={selectedAssessment}
         classNamePrefill={selectedAssessment ? (classesMap[selectedAssessment.classId] || "") : ""}
       />
-    </div>
+    </>
   );
 }
 
