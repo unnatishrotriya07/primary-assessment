@@ -156,8 +156,43 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
                     </span>
                   </td>
                   <td style={styles.td}>
-                    <button style={styles.actionBtn}>Edit</button>
-                    <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)}>Delete</button>
+                    <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                      <button style={styles.actionBtn} title="Edit">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>
+                      <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          <line x1="10" x2="10" y1="11" y2="17" />
+                          <line x1="14" x2="14" y1="11" y2="17" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -298,22 +333,27 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionBtn: {
     color: "var(--primary)",
-    fontWeight: 600,
     cursor: "pointer",
-    fontSize: "0.9rem",
     border: "none",
     background: "none",
-    padding: 0,
+    padding: "0.3rem",
+    borderRadius: "var(--radius-sm)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "background-color 0.2s",
   },
   deleteBtn: {
     color: "var(--error)",
-    fontWeight: 600,
     cursor: "pointer",
-    fontSize: "0.9rem",
     border: "none",
     background: "none",
-    padding: 0,
-    marginLeft: "1rem",
+    padding: "0.3rem",
+    borderRadius: "var(--radius-sm)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "background-color 0.2s",
   },
   paginationBar: {
     display: "flex",

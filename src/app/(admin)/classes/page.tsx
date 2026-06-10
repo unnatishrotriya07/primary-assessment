@@ -15,13 +15,15 @@ export default function ClassesPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow}>
-        <PageHeader 
-          title="Classes" 
-          description="Manage school grades, sections, and view total student assignments."
-        />
-        <Button onClick={() => setIsModalOpen(true)}>Add New Class</Button>
-      </div>
+      <PageHeader 
+        title="Classes" 
+        description="Manage school grades, sections, and view total student assignments."
+        action={
+          <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
+            Add Class
+          </Button>
+        }
+      />
 
       <div style={styles.content}>
         <ClassesTable refreshTrigger={refreshTrigger} />

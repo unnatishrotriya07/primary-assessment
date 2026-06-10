@@ -5,15 +5,15 @@ import QuestionsTable from "@/components/tables/QuestionsTable";
 export default function QuestionsPage() {
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow}>
-        <PageHeader
-          title="Question Bank"
-          description="Browse, filter, and inspect existing assessment questions, or use AI to generate new ones."
-        />
-        <Link href="/questions/generate" style={styles.btnLink} className="interactive-element">
-          Generate Questions
-        </Link>
-      </div>
+      <PageHeader
+        title="Question Bank"
+        description="Browse, filter, and inspect existing assessment questions, or use AI to generate new ones."
+        action={
+          <Link href="/questions/generate" style={{ ...styles.btnLink, whiteSpace: "nowrap" }} className="interactive-element">
+            Generate Questions
+          </Link>
+        }
+      />
 
       <div style={styles.content}>
         <QuestionsTable />

@@ -15,13 +15,15 @@ export default function ChaptersPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow}>
-        <PageHeader 
-          title="Chapters" 
-          description="Manage curriculum chapters, topics, and assign them to specific subjects."
-        />
-        <Button onClick={() => setIsModalOpen(true)}>Add New Chapter</Button>
-      </div>
+      <PageHeader 
+        title="Chapters" 
+        description="Manage curriculum chapters, topics, and assign them to specific subjects."
+        action={
+          <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
+            Add Chapter
+          </Button>
+        }
+      />
 
       <div style={styles.content}>
         <ChaptersTable refreshTrigger={refreshTrigger} />

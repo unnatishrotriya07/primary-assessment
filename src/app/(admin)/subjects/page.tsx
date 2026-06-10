@@ -15,13 +15,15 @@ export default function SubjectsPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow}>
-        <PageHeader
-          title="Subjects"
-          description="View and structure school academic subjects linked to your curriculum."
-        />
-        <Button onClick={() => setIsModalOpen(true)}>Add Subject</Button>
-      </div>
+      <PageHeader
+        title="Subjects"
+        description="View and structure school academic subjects linked to your curriculum."
+        action={
+          <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
+            Add Subject
+          </Button>
+        }
+      />
 
       <div style={styles.content}>
         <SubjectsTable refreshTrigger={refreshTrigger} />

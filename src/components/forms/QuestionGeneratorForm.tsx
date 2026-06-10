@@ -587,22 +587,6 @@ export default function QuestionGeneratorForm() {
             </div>
 
             <div style={styles.selectGroup}>
-              <label style={styles.label}>Cognitive Level (Bloom's Taxonomy)</label>
-              <select
-                value={cognitiveLevel}
-                onChange={(e) => setCognitiveLevel(e.target.value)}
-                style={styles.select}
-              >
-                <option value="remembering">Remembering (Recall)</option>
-                <option value="understanding">Understanding (Explain)</option>
-                <option value="applying">Applying (Solve Problems)</option>
-                <option value="analyzing">Analyzing (Deconstruct)</option>
-                <option value="evaluating">Evaluating (Critique)</option>
-                <option value="creating">Creating (Design)</option>
-              </select>
-            </div>
-
-            <div style={styles.selectGroup}>
               <label style={styles.label}>Question Type</label>
               <select
                 value={questionType}
