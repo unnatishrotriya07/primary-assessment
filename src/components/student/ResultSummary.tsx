@@ -53,10 +53,6 @@ export default function ResultSummary({
         <h4 style={styles.feedbackTitle}>Feedback & Guidance</h4>
         <p style={styles.feedbackText}>{feedback}</p>
       </div>
-
-      <Button variant="primary" onClick={() => window.location.href = "/"} style={{width: "100%", marginTop: "1rem"}}>
-        Back to Portal
-      </Button>
     </div>
   );
 }

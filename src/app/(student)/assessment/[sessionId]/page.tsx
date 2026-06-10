@@ -110,15 +110,6 @@ export default function AssessmentSessionPage({ params }: PageProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div className="spinner" style={{ marginBottom: "1rem" }}></div>
-        <p>Loading assessment questions...</p>
-      </div>
-    );
-  }
-
   if (error && questions.length === 0) {
     return (
       <div style={styles.errorContainer}>
@@ -151,35 +142,44 @@ export default function AssessmentSessionPage({ params }: PageProps) {
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 
-      <div style={styles.trackerContainer}>
-        <ProgressTracker current={currentIdx + 1} total={totalQuestions} answersCount={Object.keys(answers).length} />
-      </div>
+      {loading ? (
+        <div style={styles.skeletonContainer}>
+          <div className="spinner" style={{ margin: "2rem auto" }}></div>
+          <p style={{ textAlign: "center", color: "var(--text-secondary)" }}>Loading assessment questions...</p>
+        </div>
+      ) : (
+        <>
+          <div style={styles.trackerContainer}>
+            <ProgressTracker current={currentIdx + 1} total={totalQuestions} answersCount={Object.keys(answers).length} />
+          </div>
 
-      <div style={styles.cardContainer}>
-        <QuestionCard 
-          questionNum={currentIdx + 1} 
-          text={currentQuestion?.text || ""} 
-        />
-      </div>
+          <div style={styles.cardContainer}>
+            <QuestionCard 
+              questionNum={currentIdx + 1} 
+              text={currentQuestion?.text || ""} 
+            />
+          </div>
 
-      <div style={styles.formContainer}>
-        <StudentAnswerForm 
-          options={currentQuestion?.options || []}
-          selectedOption={answers[currentQuestion?.id?.toString()] || ""}
-          onSelect={handleSelectOption}
-        />
-      </div>
+          <div style={styles.formContainer}>
+            <StudentAnswerForm 
+              options={currentQuestion?.options || []}
+              selectedOption={answers[currentQuestion?.id?.toString()] || ""}
+              onSelect={handleSelectOption}
+            />
+          </div>
 
-      <div style={styles.stepperContainer}>
-        <QuestionStepper 
-          current={currentIdx} 
-          total={totalQuestions} 
-          onNext={handleNext} 
-          onPrev={handlePrev}
-          isSubmitted={submitting}
-          onSubmit={handleSubmit}
-        />
-      </div>
+          <div style={styles.stepperContainer}>
+            <QuestionStepper 
+              current={currentIdx} 
+              total={totalQuestions} 
+              onNext={handleNext} 
+              onPrev={handlePrev}
+              isSubmitted={submitting}
+              onSubmit={handleSubmit}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -200,6 +200,18 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     minHeight: "50vh",
     color: "var(--text-secondary)",
+  },
+  skeletonContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "250px",
+    backgroundColor: "var(--glass-bg)",
+    border: "1px solid var(--glass-border)",
+    borderRadius: "var(--radius-md)",
+    padding: "2rem",
+    boxShadow: "var(--glass-shadow)",
   },
   errorContainer: {
     maxWidth: "500px",

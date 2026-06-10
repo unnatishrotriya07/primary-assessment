@@ -9,6 +9,21 @@ interface StudentAnswerFormProps {
 }
 
 export default function StudentAnswerForm({ options, selectedOption, onSelect }: StudentAnswerFormProps) {
+  if (!options || options.length === 0) {
+    return (
+      <div style={styles.container}>
+        <label style={styles.inputLabel}>Type your answer below:</label>
+        <textarea
+          value={selectedOption}
+          onChange={(e) => onSelect(e.target.value)}
+          placeholder="Type your response here..."
+          className="student-answer-textarea interactive-element"
+          rows={5}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       {options.map((option, idx) => {
@@ -50,6 +65,14 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "1rem",
     width: "100%",
+  },
+  inputLabel: {
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: "0.25rem",
   },
   optionCard: {
     display: "flex",

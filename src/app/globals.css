@@ -305,3 +305,27 @@ button, input, select, textarea {
     gap: 0.5rem !important;
   }
 }
+
+/* Student Assessment TITA Input */
+.student-answer-textarea {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.student-answer-textarea:focus {
+  border-color: var(--secondary-hover);
+  box-shadow: 0 0 0 3px var(--secondary-light);
+  background-color: var(--bg-surface-hover);
+}
+
