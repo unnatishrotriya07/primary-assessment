@@ -154,39 +154,6 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
     }
   }, [selectedGroupQuestions, isDetailModalOpen]);
 
-  if (loading) {
-    return (
-      <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
-        <div className="spinner" style={{ marginBottom: "1rem" }}></div>
-        Loading questions...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: "2rem", color: "var(--error)", backgroundColor: "var(--error-light)", borderRadius: "var(--radius-md)", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
-        {error}
-      </div>
-    );
-  }
-
-  const uniqueSessions = Array.from(new Set(questions.map((q) => q.session).filter(Boolean))) as string[];
-
-  // Filter dropdown menus based on selections
-  const filteredSubjectsForDropdown = selectedClassFilter
-    ? subjects.filter((sub) => String(sub.classId) === selectedClassFilter)
-    : subjects;
-
-  const filteredChaptersForDropdown = selectedSubjectFilter
-    ? chapters.filter((ch) => String(ch.subjectId) === selectedSubjectFilter)
-    : selectedClassFilter
-      ? chapters.filter((ch) => {
-          const sub = subjects.find(s => String(s.id) === String(ch.subjectId));
-          return sub && String(sub.classId) === selectedClassFilter;
-        })
-      : chapters;
-
   const filteredQuestions = questions.filter((item) => {
     const matchesClass = !selectedClassFilter || String(item.classId) === selectedClassFilter;
     const matchesSubject = !selectedSubjectFilter || String(item.subjectId) === selectedSubjectFilter;
@@ -219,6 +186,39 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
+  if (loading) {
+    return (
+      <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
+        <div className="spinner" style={{ marginBottom: "1rem" }}></div>
+        Loading questions...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "2rem", color: "var(--error)", backgroundColor: "var(--error-light)", borderRadius: "var(--radius-md)", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
+        {error}
+      </div>
+    );
+  }
+
+  const uniqueSessions = Array.from(new Set(questions.map((q) => q.session).filter(Boolean))) as string[];
+
+  // Filter dropdown menus based on selections
+  const filteredSubjectsForDropdown = selectedClassFilter
+    ? subjects.filter((sub) => String(sub.classId) === selectedClassFilter)
+    : subjects;
+
+  const filteredChaptersForDropdown = selectedSubjectFilter
+    ? chapters.filter((ch) => String(ch.subjectId) === selectedSubjectFilter)
+    : selectedClassFilter
+      ? chapters.filter((ch) => {
+          const sub = subjects.find(s => String(s.id) === String(ch.subjectId));
+          return sub && String(sub.classId) === selectedClassFilter;
+        })
+      : chapters;
 
   if (questions.length === 0) {
     return (
