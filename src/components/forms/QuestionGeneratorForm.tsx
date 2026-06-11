@@ -12,6 +12,7 @@ import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
 import { QuestionData } from "@/types/question.types";
 import CreateAndAssignModal from "./CreateAndAssignModal";
+import { extractErrorMessage } from "@/utils/helpers";
 
 const generateDefaultSessionName = (subjectName?: string, chapterNumber?: string, chapterTitle?: string) => {
   const now = new Date();
@@ -178,7 +179,7 @@ export default function QuestionGeneratorForm() {
       setIsReviewMode(true);
     } catch (err: any) {
       clearInterval(interval);
-      setError(err.response?.data?.detail || "Failed to generate AI questions.");
+      setError(extractErrorMessage(err, "Failed to generate AI questions."));
     } finally {
       setGenerating(false);
     }
@@ -300,7 +301,7 @@ export default function QuestionGeneratorForm() {
       setIsSessionModified(false);
       setIsAssignModalOpen(true);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to save questions to database.");
+      setError(extractErrorMessage(err, "Failed to save questions to database."));
     } finally {
       setPublishing(false);
     }
@@ -415,7 +416,7 @@ export default function QuestionGeneratorForm() {
                   {isMcq ? (
                     <div style={styles.optionsSection}>
                       <label style={styles.fieldLabel}>Options (Multiple Choice)</label>
-                      <div style={styles.optionsGrid}>
+                      <div className="options-grid-responsive">
                         {q.options.map((opt, oIndex) => (
                           <div key={oIndex} style={styles.optionInputWrapper}>
                             <span style={styles.optionIndicator}>
@@ -517,7 +518,7 @@ export default function QuestionGeneratorForm() {
         <form onSubmit={handleGenerate} style={styles.form}>
           {error && <div style={styles.errorBanner}>{error}</div>}
 
-          <div style={styles.row}>
+          <div className="form-row-responsive">
             <div style={styles.selectGroup}>
               <label style={styles.label}>Class</label>
               <select
@@ -572,7 +573,7 @@ export default function QuestionGeneratorForm() {
             </div>
           </div>
 
-          <div style={styles.row}>
+          <div className="form-row-responsive">
             <div style={styles.selectGroup}>
               <label style={styles.label}>Difficulty Level</label>
               <select
@@ -600,7 +601,7 @@ export default function QuestionGeneratorForm() {
             </div>
           </div>
 
-          <div style={styles.row}>
+          <div className="form-row-responsive">
             <div style={styles.selectGroup}>
               <Input
                 label="Number of Questions"
@@ -708,11 +709,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1.5rem",
-  },
-  row: {
-    display: "flex",
-    gap: "1.5rem",
-    flexWrap: "wrap",
   },
   selectGroup: {
     display: "flex",
@@ -913,11 +909,6 @@ const styles: Record<string, React.CSSProperties> = {
   optionsSection: {
     display: "flex",
     flexDirection: "column",
-    gap: "1rem",
-  },
-  optionsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "1rem",
   },
   optionInputWrapper: {

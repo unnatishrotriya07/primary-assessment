@@ -13,6 +13,7 @@ import { ClassData } from "@/types/class.types";
 import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
 import { QuestionData } from "@/types/question.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface CreateAssessmentModalProps {
   isOpen: boolean;
@@ -193,7 +194,7 @@ export default function CreateAssessmentModal({
           setSelectedQuestionIds(prev => prev.filter(id => resIds.includes(id)));
         } catch (err: any) {
           if (!active) return;
-          setError(err.response?.data?.detail || "Failed to load questions from database.");
+          setError(extractErrorMessage(err, "Failed to load questions from database."));
         } finally {
           if (active) {
             setLoadingQuestions(false);
@@ -336,7 +337,7 @@ export default function CreateAssessmentModal({
         onSuccess();
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create and assign assessment.");
+      setError(extractErrorMessage(err, "Failed to create and assign assessment."));
     } finally {
       setLoading(false);
     }

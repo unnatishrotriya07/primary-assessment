@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import assessmentService, { StudentAssessmentVerifyResponse } from "@/services/assessment.service";
 import interviewService from "@/services/interview.service";
 import Button from "@/components/common/Button";
+import { extractErrorMessage } from "@/utils/helpers";
 
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -90,7 +91,7 @@ function VerifyContent() {
     } catch (err: any) {
       setAuthStep("list");
       setGoogleError(
-        err.response?.data?.detail || "Verification failed. The link may have been used or expired."
+        extractErrorMessage(err, "Verification failed. The link may have been used or expired.")
       );
       setAuthenticating(false);
     }

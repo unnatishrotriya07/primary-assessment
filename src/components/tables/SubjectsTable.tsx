@@ -5,6 +5,7 @@ import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
 import { SubjectData } from "@/types/subject.types";
 import { ClassData } from "@/types/class.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface SubjectsTableProps {
   refreshTrigger?: number;
@@ -16,6 +17,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   const [classesMap, setClassesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [selectedClassFilter, setSelectedClassFilter] = useState("");
 
@@ -40,7 +42,7 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
       });
       setClassesMap(clMap);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to load subjects.");
+      setError(extractErrorMessage(err, "Failed to load subjects."));
     } finally {
       setLoading(false);
     }
@@ -49,6 +51,20 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   useEffect(() => {
     fetchSubjectsAndClasses();
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user_session");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === "admin" && !parsed.tenantId) {
+            setIsSuperAdmin(true);
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this subject?")) return;
@@ -84,20 +100,20 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
   const totalPages = Math.ceil(filteredSubjects.length / pageSize);
   const paginatedSubjects = filteredSubjects.slice(
     (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    (currentPage) * pageSize
   );
 
   if (subjects.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
-        No subjects found. Click "Add Subject" to create one.
+        No subjects found. {isSuperAdmin ? 'Click "Add Subject" to create one.' : ''}
       </div>
     );
   }
 
   return (
     <div style={styles.container}>
-      <div style={styles.filterBar} className="card">
+      <div className="table-filter-bar card">
         <div style={styles.filterGroup}>
           <label style={styles.filterLabel}>Filter by Class</label>
           <select
@@ -127,13 +143,13 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
               <th style={styles.th}>Code</th>
               <th style={styles.th}>Chapters</th>
               <th style={styles.th}>Status</th>
-              <th style={styles.th}>Actions</th>
+              {isSuperAdmin && <th style={styles.th}>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {paginatedSubjects.length === 0 ? (
               <tr style={styles.row}>
-                <td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                <td colSpan={isSuperAdmin ? 6 : 5} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
                   No subjects match the selected filters.
                 </td>
               </tr>
@@ -155,45 +171,47 @@ export default function SubjectsTable({ refreshTrigger = 0 }: SubjectsTableProps
                       {item.status}
                     </span>
                   </td>
-                  <td style={styles.td}>
-                    <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                      <button style={styles.actionBtn} title="Edit">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M12 20h9" />
-                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                        </svg>
-                      </button>
-                      <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          <line x1="10" x2="10" y1="11" y2="17" />
-                          <line x1="14" x2="14" y1="11" y2="17" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+                  {isSuperAdmin && (
+                    <td style={styles.td}>
+                      <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                        <button style={styles.actionBtn} title="Edit">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                        </button>
+                        <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                            <line x1="10" x2="10" y1="11" y2="17" />
+                            <line x1="14" x2="14" y1="11" y2="17" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -262,14 +280,6 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "1.2rem",
     width: "100%",
-  },
-  filterBar: {
-    display: "flex",
-    gap: "1.5rem",
-    padding: "1rem 1.5rem",
-    backgroundColor: "var(--bg-card)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
   },
   filterGroup: {
     display: "flex",

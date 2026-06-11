@@ -5,6 +5,9 @@ export const authService = {
   login: (credentials: LoginCredentials): Promise<AuthResponse> => {
     return api.post<AuthResponse>("/auth/login", credentials);
   },
+  signup: (data: any): Promise<AuthResponse["user"]> => {
+    return api.post<AuthResponse["user"]>("/auth/signup", data);
+  },
   logout: (): Promise<void> => {
     return api.post<void>("/auth/logout");
   },

@@ -30,9 +30,14 @@ export default function Home() {
             </div>
             <h3 style={styles.cardTitle}>Admin & Teacher Console</h3>
             <p style={styles.cardDescription}>Manage classes, subjects, generate AI questions, and view performance reports.</p>
-            <Link href="/login?role=admin" style={{ ...styles.btn, ...styles.adminBtn }} className="interactive-element">
-              Console Login
-            </Link>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", width: "100%" }}>
+              <Link href="/login?role=admin" style={{ ...styles.btn, ...styles.adminBtn }} className="interactive-element">
+                Console Login
+              </Link>
+              <Link href="/signup" style={{ ...styles.btn, ...styles.studentBtn, backgroundColor: "transparent", color: "var(--primary)", border: "1px solid var(--primary)", boxShadow: "none" }} className="interactive-element">
+                Register a School Tenant
+              </Link>
+            </div>
           </div>
         </div>
       </div>

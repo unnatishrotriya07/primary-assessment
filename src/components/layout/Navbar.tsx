@@ -1,12 +1,50 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { STORAGE_KEYS } from "@/utils/constants";
 
-export default function Navbar() {
+interface NavbarProps {
+  onMenuToggle?: () => void;
+}
+
+export default function Navbar({ onMenuToggle }: NavbarProps) {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(STORAGE_KEYS.USER);
+      if (stored) {
+        try {
+          setUser(JSON.parse(stored));
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  const getRoleTitle = () => {
+    if (!user) return "Loading...";
+    if (user.role === "admin" && !user.tenantId) return "Super Administrator";
+    if (user.role === "admin") return "School Admin";
+    if (user.role === "director") return "School Director";
+    if (user.role === "teacher") return "Teacher";
+    return user.role;
+  };
+
+  const displayName = user?.name || "Admin Account";
+  const displayRole = getRoleTitle();
+  const avatarChar = displayName.charAt(0).toUpperCase();
+
   return (
-    <header style={styles.header}>
+    <header className="navbar-header">
       <div style={styles.left}>
-        <div style={styles.searchContainer}>
+        <button onClick={onMenuToggle} className="mobile-menu-toggle-btn" aria-label="Toggle Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+        </button>
+        <div style={styles.searchContainer} className="navbar-search-container">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: "var(--text-muted)"}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
@@ -25,10 +63,10 @@ export default function Navbar() {
         <div style={styles.divider} />
 
         <div style={styles.profile}>
-          <div style={styles.avatar}>A</div>
+          <div style={styles.avatar}>{avatarChar}</div>
           <div style={styles.profileInfo}>
-            <span style={styles.name}>Admin Account</span>
-            <span style={styles.role}>Super Administrator</span>
+            <span style={styles.name}>{displayName}</span>
+            <span style={styles.role}>{displayRole}</span>
           </div>
         </div>
       </div>

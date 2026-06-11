@@ -27,3 +27,45 @@ export function debounce<T extends (...args: any[]) => void>(func: T, wait: numb
     timeout = setTimeout(() => func(...args), wait);
   };
 }
+
+/**
+ * Safely extracts a string error message from a backend error response (including FastAPI 422 validations).
+ */
+export function extractErrorMessage(err: any, fallback: string = "An unexpected error occurred."): string {
+  if (!err) return fallback;
+  
+  const responseData = err.response?.data;
+  if (responseData) {
+    const detail = responseData.detail;
+    if (detail) {
+      if (typeof detail === "string") {
+        return detail;
+      }
+      if (Array.isArray(detail)) {
+        return detail
+          .map((d: any) => {
+            const locStr = d.loc ? d.loc.filter((l: any) => l !== "body").join(".") : "";
+            const prefix = locStr ? `${locStr}: ` : "";
+            return `${prefix}${d.msg || d.type || "Invalid input"}`;
+          })
+          .join("; ");
+      }
+      if (typeof detail === "object") {
+        return JSON.stringify(detail);
+      }
+    }
+    
+    const message = responseData.message || responseData.error;
+    if (typeof message === "string") return message;
+  }
+  
+  if (err.message && typeof err.message === "string") {
+    return err.message;
+  }
+  
+  if (typeof err === "string") {
+    return err;
+  }
+  
+  return fallback;
+}

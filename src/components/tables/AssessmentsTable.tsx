@@ -9,6 +9,7 @@ import { AssessmentData } from "@/types/assessment.types";
 import AssignAssessmentModal from "../forms/AssignAssessmentModal";
 import ViewAssignmentsModal from "../forms/ViewAssignmentsModal";
 import StudentReportModal from "../forms/StudentReportModal";
+import { extractErrorMessage } from "@/utils/helpers";
 
 export default function AssessmentsTable() {
   const [assessments, setAssessments] = useState<AssessmentData[]>([]);
@@ -53,7 +54,7 @@ export default function AssessmentsTable() {
       });
       setClassesMap(clsMap);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to load assessments.");
+      setError(extractErrorMessage(err, "Failed to load assessments."));
     } finally {
       setLoading(false);
     }

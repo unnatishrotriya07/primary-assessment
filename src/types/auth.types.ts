@@ -2,7 +2,10 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "student";
+  role: string;
+  tenantId?: string;
+  schoolName?: string;
+  allowedFeatures?: string[];
 }
 
 export interface LoginCredentials {

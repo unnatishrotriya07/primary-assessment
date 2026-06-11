@@ -6,6 +6,7 @@ import Input from "../common/Input";
 import Button from "../common/Button";
 import assessmentService, { StudentAssessmentResponse } from "@/services/assessment.service";
 import { AssessmentData } from "@/types/assessment.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface AssignAssessmentModalProps {
   isOpen: boolean;
@@ -103,7 +104,7 @@ export default function AssignAssessmentModal({
       });
       setSuccessData(res);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to assign assessment.");
+      setError(extractErrorMessage(err, "Failed to assign assessment."));
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import ClassesTable from "@/components/tables/ClassesTable";
 import Modal from "@/components/common/Modal";
@@ -10,8 +10,23 @@ import Button from "@/components/common/Button";
 export default function ClassesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const triggerRefresh = () => setRefreshTrigger((prev) => prev + 1);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user_session");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === "admin" && !parsed.tenantId) {
+            setIsSuperAdmin(true);
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   return (
     <div style={styles.container}>
@@ -19,9 +34,11 @@ export default function ClassesPage() {
         title="Classes" 
         description="Manage school grades, sections, and view total student assignments."
         action={
-          <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
-            Add Class
-          </Button>
+          isSuperAdmin ? (
+            <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
+              Add Class
+            </Button>
+          ) : undefined
         }
       />
 

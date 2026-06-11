@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import ChaptersTable from "@/components/tables/ChaptersTable";
 import Modal from "@/components/common/Modal";
@@ -10,8 +10,23 @@ import Button from "@/components/common/Button";
 export default function ChaptersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const triggerRefresh = () => setRefreshTrigger((prev) => prev + 1);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user_session");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === "admin" && !parsed.tenantId) {
+            setIsSuperAdmin(true);
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   return (
     <div style={styles.container}>
@@ -19,9 +34,11 @@ export default function ChaptersPage() {
         title="Chapters" 
         description="Manage curriculum chapters, topics, and assign them to specific subjects."
         action={
-          <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
-            Add Chapter
-          </Button>
+          isSuperAdmin ? (
+            <Button style={{ whiteSpace: "nowrap" }} onClick={() => setIsModalOpen(true)}>
+              Add Chapter
+            </Button>
+          ) : undefined
         }
       />
 

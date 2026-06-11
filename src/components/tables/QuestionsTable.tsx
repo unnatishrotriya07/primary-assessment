@@ -10,6 +10,7 @@ import { SubjectData } from "@/types/subject.types";
 import { ClassData } from "@/types/class.types";
 import { ChapterData } from "@/types/chapter.types";
 import Modal from "@/components/common/Modal";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface SessionGroup {
   sessionKey: string;
@@ -104,7 +105,7 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
       });
       setChaptersMap(chMap);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to load questions.");
+      setError(extractErrorMessage(err, "Failed to load questions."));
     } finally {
       setLoading(false);
     }
@@ -230,7 +231,7 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
 
   return (
     <div style={styles.container}>
-      <div style={styles.filterBar} className="card">
+      <div className="table-filter-bar card">
         <div style={styles.filterGroup}>
           <label style={styles.filterLabel}>Filter by Class</label>
           <select
@@ -582,15 +583,6 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "1.2rem",
     width: "100%",
-  },
-  filterBar: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "1.5rem",
-    padding: "1rem 1.5rem",
-    backgroundColor: "var(--bg-card)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
   },
   filterGroup: {
     display: "flex",

@@ -6,6 +6,7 @@ import Button from "../common/Button";
 import subjectService from "@/services/subject.service";
 import chapterService from "@/services/chapter.service";
 import { SubjectData } from "@/types/subject.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface ChapterFormProps {
   onSuccess: () => void;
@@ -35,7 +36,7 @@ export default function ChapterForm({ onSuccess, onCancel }: ChapterFormProps) {
       setContent(res.text || "");
       setUploadSuccess(`Successfully extracted text from ${file.name}!`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to extract text from file. Please ensure it is a valid PDF or plain text file.");
+      setError(extractErrorMessage(err, "Failed to extract text from file. Please ensure it is a valid PDF or plain text file."));
     } finally {
       setParsingFile(false);
       e.target.value = "";
@@ -67,7 +68,7 @@ export default function ChapterForm({ onSuccess, onCancel }: ChapterFormProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create chapter.");
+      setError(extractErrorMessage(err, "Failed to create chapter."));
     } finally {
       setLoading(false);
     }
@@ -84,7 +85,7 @@ export default function ChapterForm({ onSuccess, onCancel }: ChapterFormProps) {
         required
       />
 
-      <div style={styles.row}>
+      <div className="form-row-responsive">
         <Input
           label="Chapter Number"
           placeholder="e.g. 3"
@@ -169,10 +170,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 500,
     border: "1px solid rgba(239, 68, 68, 0.2)",
-  },
-  row: {
-    display: "flex",
-    gap: "1rem",
   },
   selectGroup: {
     display: "flex",

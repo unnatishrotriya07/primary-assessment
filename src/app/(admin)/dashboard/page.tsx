@@ -67,7 +67,7 @@ export default function AdminDashboard() {
         <StatCard title="Assessments Conducted" value={stats.assessments_conducted} type="primary" />
       </div>
 
-      <div style={styles.sectionGrid}>
+      <div className="dashboard-section-grid">
         <div className="card" style={styles.largeCard}>
           <h3>Recent Performance Trends</h3>
           <div style={styles.performanceStats}>
@@ -153,12 +153,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "1.5rem",
-  },
-  sectionGrid: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr",
-    gap: "1.5rem",
-    marginTop: "1rem",
   },
   largeCard: {
     minHeight: "300px",

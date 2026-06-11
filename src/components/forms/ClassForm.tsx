@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Input from "../common/Input";
 import Button from "../common/Button";
 import classService from "@/services/class.service";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface ClassFormProps {
   onSuccess: () => void;
@@ -29,7 +30,7 @@ export default function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create class.");
+      setError(extractErrorMessage(err, "Failed to create class."));
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
         required
       />
 
-      <div style={styles.row}>
+      <div className="form-row-responsive">
         <Input
           label="Grade Level"
           placeholder="e.g. 5"
@@ -89,10 +90,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 500,
     border: "1px solid rgba(239, 68, 68, 0.2)",
-  },
-  row: {
-    display: "flex",
-    gap: "1rem",
   },
   actions: {
     display: "flex",

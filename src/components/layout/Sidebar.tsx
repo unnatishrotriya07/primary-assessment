@@ -1,10 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { STORAGE_KEYS } from "@/utils/constants";
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+  const handleLinkClick = () => {
+    if (onClose) onClose();
+  };
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(STORAGE_KEYS.USER);
+      if (stored) {
+        try {
+          setUser(JSON.parse(stored));
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onClose) onClose();
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    router.push("/login");
+  };
 
   const menuItems = [
     {
@@ -71,20 +103,56 @@ export default function Sidebar() {
     },
   ];
 
+  // Filter items based on user allowed features
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (!user) return true; // Show all until user loaded
+    
+    // Super-Admin can access everything
+    if (user.role === "admin" && !user.tenantId) return true;
+    
+    // Map path to feature key
+    const featureKey = item.path.replace("/", "");
+    return user.allowedFeatures?.includes(featureKey);
+  });
+
+  // Add Team Settings for Super-Admin and Director roles
+  const showTeamSettings = user && ((user.role === "admin" && !user.tenantId) || user.role === "director");
+  
+  const finalMenuItems = [...filteredMenuItems];
+  if (showTeamSettings) {
+    finalMenuItems.push({
+      name: "Team Settings",
+      path: "/team",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    });
+  }
+
+  const schoolDisplayName = user?.schoolName || "Momentum";
+
   return (
-    <aside style={styles.sidebar}>
-      <Link href="/dashboard" style={styles.logoLink} className="interactive-element">
-        <img src="/logo.png" alt="Momentum Logo" style={styles.logoImg} />
-        <h2 style={styles.logoText}>Momentum</h2>
+    <aside className={`sidebar-aside ${isOpen ? "open" : ""}`}>
+      <Link href="/dashboard" style={styles.logoLink} className="interactive-element" onClick={handleLinkClick}>
+        <img src="/logo.png" alt="School Logo" style={styles.logoImg} />
+        <h2 style={styles.logoText} title={schoolDisplayName}>
+          {schoolDisplayName.length > 12 ? schoolDisplayName.substring(0, 10) + "..." : schoolDisplayName}
+        </h2>
       </Link>
 
       <nav style={styles.nav}>
-        {menuItems.map((item) => {
+        {finalMenuItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(item.path + "/");
           return (
             <Link
               key={item.name}
               href={item.path}
+              onClick={handleLinkClick}
               style={{
                 ...styles.navLink,
                 backgroundColor: isActive ? "var(--primary-light)" : "transparent",
@@ -104,12 +172,12 @@ export default function Sidebar() {
 
       <div style={styles.footer}>
         <div style={styles.divider} />
-        <Link href="/" style={styles.logoutBtn} className="interactive-element">
+        <button onClick={handleLogout} style={styles.logoutBtn} className="interactive-element">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
           </svg>
           Logout
-        </Link>
+        </button>
       </div>
     </aside>
   );
@@ -145,9 +213,10 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: "contain",
   },
   logoText: {
-    fontSize: "1.4rem",
+    fontSize: "1.2rem",
     fontWeight: 800,
     fontFamily: "var(--font-heading)",
+    color: "var(--text-primary)",
   },
   nav: {
     display: "flex",
@@ -183,5 +252,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.95rem",
     textDecoration: "none",
     fontWeight: 600,
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left",
   },
 };

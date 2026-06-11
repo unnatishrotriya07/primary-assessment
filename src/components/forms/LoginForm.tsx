@@ -6,6 +6,7 @@ import Input from "../common/Input";
 import Button from "../common/Button";
 import authService from "@/services/auth.service";
 import { STORAGE_KEYS } from "@/utils/constants";
+import { extractErrorMessage } from "@/utils/helpers";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -29,9 +30,10 @@ export default function LoginForm() {
         const response = await authService.login({ email, password });
         localStorage.setItem(STORAGE_KEYS.TOKEN, response.token);
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+        document.cookie = `token=${response.token}; path=/; max-age=86400; SameSite=Lax`;
         router.push("/dashboard");
       } catch (err: any) {
-        setError(err.response?.data?.detail || "Invalid email or password.");
+        setError(extractErrorMessage(err, "Invalid email or password."));
       } finally {
         setLoading(false);
       }

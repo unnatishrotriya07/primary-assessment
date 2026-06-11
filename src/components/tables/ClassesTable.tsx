@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import classService from "@/services/class.service";
 import { ClassData } from "@/types/class.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface ClassesTableProps {
   refreshTrigger?: number;
@@ -12,6 +13,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const fetchClasses = async () => {
     setLoading(true);
@@ -20,7 +22,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
       const data = await classService.getAll();
       setClasses(data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to load classes.");
+      setError(extractErrorMessage(err, "Failed to load classes."));
     } finally {
       setLoading(false);
     }
@@ -29,6 +31,20 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
   useEffect(() => {
     fetchClasses();
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user_session");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === "admin" && !parsed.tenantId) {
+            setIsSuperAdmin(true);
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this class?")) return;
@@ -60,7 +76,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
   if (classes.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
-        No classes found. Click "Add Class" to create one.
+        No classes found. {isSuperAdmin ? 'Click "Add Class" to create one.' : ''}
       </div>
     );
   }
@@ -74,7 +90,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
             <th style={styles.th}>Grade</th>
             <th style={styles.th}>Section</th>
             <th style={styles.th}>Students</th>
-            <th style={styles.th}>Actions</th>
+            {isSuperAdmin && <th style={styles.th}>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -86,45 +102,47 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
                 <span style={styles.sectionBadge}>{item.section}</span>
               </td>
               <td style={styles.td}>{item.studentsCount ?? 0}</td>
-              <td style={styles.td}>
-                <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                  <button style={styles.actionBtn} title="Edit">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  </button>
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" x2="10" y1="11" y2="17" />
-                      <line x1="14" x2="14" y1="11" y2="17" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
+              {isSuperAdmin && (
+                <td style={styles.td}>
+                  <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                    <button style={styles.actionBtn} title="Edit">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" x2="10" y1="11" y2="17" />
+                        <line x1="14" x2="14" y1="11" y2="17" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

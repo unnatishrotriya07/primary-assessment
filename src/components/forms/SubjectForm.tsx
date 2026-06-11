@@ -4,6 +4,7 @@ import Button from "../common/Button";
 import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
 import { ClassData } from "@/types/class.types";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface SubjectFormProps {
   onSuccess: () => void;
@@ -43,7 +44,7 @@ export default function SubjectForm({ onSuccess, onCancel }: SubjectFormProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create subject.");
+      setError(extractErrorMessage(err, "Failed to create subject."));
     } finally {
       setLoading(false);
     }

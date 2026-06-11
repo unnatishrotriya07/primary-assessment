@@ -5,6 +5,7 @@ import Modal from "../common/Modal";
 import Input from "../common/Input";
 import Button from "../common/Button";
 import assessmentService, { StudentAssessmentResponse } from "@/services/assessment.service";
+import { extractErrorMessage } from "@/utils/helpers";
 
 interface CreateAndAssignModalProps {
   isOpen: boolean;
@@ -126,7 +127,7 @@ export default function CreateAndAssignModal({
 
       setSuccessData(res);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create and assign assessment.");
+      setError(extractErrorMessage(err, "Failed to create and assign assessment."));
     } finally {
       setLoading(false);
     }
