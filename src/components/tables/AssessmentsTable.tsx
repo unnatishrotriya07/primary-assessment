@@ -7,6 +7,8 @@ import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
 import { AssessmentData } from "@/types/assessment.types";
 import AssignAssessmentModal from "../forms/AssignAssessmentModal";
+import ViewAssignmentsModal from "../forms/ViewAssignmentsModal";
+import StudentReportModal from "../forms/StudentReportModal";
 
 export default function AssessmentsTable() {
   const [assessments, setAssessments] = useState<AssessmentData[]>([]);
@@ -16,6 +18,12 @@ export default function AssessmentsTable() {
   const [error, setError] = useState("");
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentData | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+
+  // View assignments state
+  const [selectedAssessmentForView, setSelectedAssessmentForView] = useState<AssessmentData | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedInterviewId, setSelectedInterviewId] = useState<number | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const handleAssignClick = (assessment: AssessmentData) => {
     setSelectedAssessment(assessment);
@@ -89,6 +97,7 @@ export default function AssessmentsTable() {
               <th style={styles.th}>Assessment Title</th>
               <th style={styles.th}>Subject</th>
               <th style={styles.th}>Assigned Class</th>
+              <th style={styles.th}>Assigned Students</th>
               <th style={styles.th}>Date</th>
               <th style={styles.th}>Status</th>
               <th style={styles.th}>Actions</th>
@@ -100,6 +109,17 @@ export default function AssessmentsTable() {
                 <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
                 <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
                 <td style={styles.td}>{classesMap[item.classId] || `Class #${item.classId}`}</td>
+                <td style={styles.td}>
+                  <button
+                    onClick={() => {
+                      setSelectedAssessmentForView(item);
+                      setIsViewModalOpen(true);
+                    }}
+                    style={styles.assignedBadgeBtn}
+                  >
+                    {item.assignedStudents?.length || 0} Assigned
+                  </button>
+                </td>
                 <td style={styles.td}>{item.date || "N/A"}</td>
                 <td style={styles.td}>
                   <span 
@@ -143,9 +163,32 @@ export default function AssessmentsTable() {
 
       <AssignAssessmentModal
         isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
+        onClose={() => {
+          setIsAssignModalOpen(false);
+          fetchAssessments();
+        }}
         assessment={selectedAssessment}
         classNamePrefill={selectedAssessment ? (classesMap[selectedAssessment.classId] || "") : ""}
+      />
+
+      <ViewAssignmentsModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        assessment={selectedAssessmentForView}
+        onViewReport={(interviewId) => {
+          setSelectedInterviewId(interviewId);
+          setIsViewModalOpen(false);
+          setIsReportModalOpen(true);
+        }}
+      />
+
+      <StudentReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setIsViewModalOpen(true);
+        }}
+        interviewId={selectedInterviewId}
       />
     </>
   );
@@ -196,6 +239,17 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: "0.9rem",
     textDecoration: "none",
+  },
+  assignedBadgeBtn: {
+    backgroundColor: "var(--primary-light)",
+    color: "var(--primary)",
+    border: "1px solid rgba(99, 102, 241, 0.15)",
+    borderRadius: "12px",
+    padding: "0.25rem 0.6rem",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all 0.2s",
   },
   assignBtn: {
     color: "var(--primary)",

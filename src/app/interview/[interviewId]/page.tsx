@@ -526,6 +526,9 @@ export default function InterviewPage({ params }: PageProps) {
                 if (silenceCountRef.current >= 3) {
                     setError("We are having trouble hearing you. Please check if your system microphone is muted or set incorrectly in System Settings, or use the keyboard fallback.");
                 }
+            } else if (err.error === "network") {
+                console.error("Speech recognition network error:", err.error);
+                setError("Speech recognition service connection error. Please verify your internet connection or use the keyboard fallback.");
             } else {
                 console.error("Speech recognition error:", err.error);
             }

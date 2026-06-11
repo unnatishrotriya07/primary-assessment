@@ -16,7 +16,30 @@ interface ReportCardProps {
     isCorrect: boolean;
     explanation?: string;
   }[];
+  // Extended fields for detailed admin/student reports
+  scoreCommunication?: number;
+  scoreNumeracy?: number;
+  scoreCreativity?: number;
+  scoreEmotionalIq?: number;
+  strengths?: string;
+  improvements?: string;
+  recommendation?: string;
+  adminNote?: string;
+  summary?: string;
 }
+
+const SKILL_CONFIG = [
+  { key: "scoreCommunication", label: "Communication", color: "#C7C6F5" },
+  { key: "scoreNumeracy", label: "Numeracy", color: "#D8EAF7" },
+  { key: "scoreCreativity", label: "Creativity", color: "#F8E8E8" },
+  { key: "scoreEmotionalIq", label: "Emotional IQ", color: "#D9EFCB" },
+] as const;
+
+const REC_COLOR: Record<string, string> = {
+  "Strongly Recommended": "var(--success)",
+  "Recommended": "var(--primary)",
+  "Needs Review": "var(--warning)",
+};
 
 export default function ReportCard({
   reportId,
@@ -27,8 +50,202 @@ export default function ReportCard({
   accuracy,
   feedback,
   evaluatedAnswers,
+  scoreCommunication,
+  scoreNumeracy,
+  scoreCreativity,
+  scoreEmotionalIq,
+  strengths,
+  improvements,
+  recommendation,
+  adminNote,
+  summary,
 }: ReportCardProps) {
   const [showQA, setShowQA] = useState(false);
+  
+  // Decide whether to render the basic report card or the premium detailed report card
+  const isDetailed = scoreCommunication !== undefined;
+  
+  if (isDetailed) {
+    const scoreVal = Math.round(score);
+    const recColor = recommendation ? (REC_COLOR[recommendation] ?? "var(--primary)") : "var(--primary)";
+    const r = 50;
+    const circ = 2 * Math.PI * r;
+    const dash = circ * (scoreVal / 100);
+
+    return (
+      <div className="card" style={styles.card}>
+        <div style={styles.reportHeader}>
+          <div style={styles.reportEmoji}>
+            {scoreVal >= 80 ? "🏆" : scoreVal >= 60 ? "🌟" : "👍"}
+          </div>
+          <h2 style={styles.reportTitle}>{grade} — Interview Complete!</h2>
+          <p style={styles.reportSub}>Assessed Student: {studentName} 🎉</p>
+          <span style={styles.id}>Report Reference: #{reportId}</span>
+        </div>
+
+        <div style={styles.body}>
+          <div style={styles.ringWrap}>
+            <svg width="120" height="120" viewBox="0 0 120 120" style={{ margin: "0 auto" }}>
+              <circle cx="60" cy="60" r={r} fill="none" stroke="#f0f0f0" strokeWidth="10" />
+              <circle
+                cx="60"
+                cy="60"
+                r={r}
+                fill="none"
+                stroke="var(--primary)"
+                strokeWidth="10"
+                strokeDasharray={`${dash} ${circ}`}
+                strokeLinecap="round"
+                transform="rotate(-90 60 60)"
+                style={{ transition: "stroke-dasharray 1.2s ease" }}
+              />
+              <text x="60" y="56" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--text-primary)">
+                {scoreVal}
+              </text>
+              <text x="60" y="72" textAnchor="middle" fontSize="11" fill="#888">
+                / 100
+              </text>
+            </svg>
+            <p style={styles.ringLabel}>Overall Score</p>
+          </div>
+
+          {/* Skills progress grid */}
+          <div style={styles.skillGrid}>
+            {SKILL_CONFIG.map(({ key, label, color }) => {
+              const val = Math.round((({
+                scoreCommunication,
+                scoreNumeracy,
+                scoreCreativity,
+                scoreEmotionalIq
+              })[key] as number) ?? 0);
+              return (
+                <div key={key} style={styles.skillCard}>
+                  <p style={styles.skillLabel}>{label}</p>
+                  <div style={styles.barTrack}>
+                    <div style={{ ...styles.barFill, width: `${val}%`, background: color }} />
+                  </div>
+                  <p style={styles.skillScore}>
+                    {val}<span style={styles.skillOf}>/100</span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Summary */}
+          {summary && (
+            <div style={styles.feedbackBox}>
+              <p style={styles.feedbackTitle}>📝 Summary</p>
+              <p style={styles.feedbackText}>{summary}</p>
+            </div>
+          )}
+
+          {/* Strengths */}
+          {strengths && (
+            <div style={styles.feedbackBox}>
+              <p style={styles.feedbackTitle}>✨ Strengths</p>
+              <p style={styles.feedbackText}>{strengths}</p>
+            </div>
+          )}
+
+          {/* Areas to Grow */}
+          {improvements && (
+            <div style={{ ...styles.feedbackBox, borderLeftColor: "var(--warning)", background: "var(--warning-light)" }}>
+              <p style={{ ...styles.feedbackTitle, color: "var(--warning)" }}>🌱 Areas to Grow</p>
+              <p style={styles.feedbackText}>{improvements}</p>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          {recommendation && (
+            <div
+              style={{
+                ...styles.feedbackBox,
+                borderLeftColor: recColor,
+                background: recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)",
+              }}
+            >
+              <p style={{ ...styles.feedbackTitle, color: recColor }}>📋 Admission Note</p>
+              <p style={styles.feedbackText}>
+                <strong>{recommendation}</strong>
+                {adminNote && ` — ${adminNote}`}
+              </p>
+            </div>
+          )}
+
+          {/* Collapsible Q&A Review */}
+          {evaluatedAnswers && evaluatedAnswers.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <button
+                onClick={() => setShowQA(!showQA)}
+                style={styles.collapseBtn}
+              >
+                {showQA ? "Hide Detailed Q&A Review" : "View Detailed Q&A Review"}
+              </button>
+              
+              {showQA && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.2rem" }}>
+                  {evaluatedAnswers.map((item, idx) => (
+                    <div key={idx} style={styles.qaCard}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)" }}>
+                          Question {idx + 1} ({item.questionType === "mcq" ? "MCQ" : "TITA"})
+                        </span>
+                        <span
+                          style={{
+                            padding: "0.2rem 0.5rem",
+                            borderRadius: "12px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            backgroundColor: item.isCorrect ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                            color: item.isCorrect ? "var(--success)" : "var(--error)",
+                            border: item.isCorrect ? "1px solid rgba(16, 185, 129, 0.2)" : "1px solid rgba(239, 68, 68, 0.2)",
+                          }}
+                        >
+                          {item.isCorrect ? "Correct" : "Incorrect"}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                        {item.question}
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.25rem", fontSize: "0.85rem" }}>
+                        <div style={{ flex: "1 1 200px" }}>
+                          <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Student Answer:</span>{" "}
+                          <span style={{ color: item.isCorrect ? "var(--success)" : "var(--error)" }}>
+                            {item.studentAnswer || "(No answer)"}
+                          </span>
+                        </div>
+                        <div style={{ flex: "1 1 200px" }}>
+                          <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Expected Answer:</span>{" "}
+                          <span style={{ color: "var(--text-primary)" }}>{item.expectedAnswer}</span>
+                        </div>
+                      </div>
+                      {item.explanation && (
+                        <p style={styles.explanationText}>
+                          <strong>Feedback:</strong> {item.explanation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div style={styles.footer}>
+          <div style={styles.metaItem}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Completion Duration: {duration}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Basic report card fallback
   return (
     <div className="card" style={styles.card}>
       <div style={styles.header}>
@@ -63,8 +280,8 @@ export default function ReportCard({
       </div>
 
       {feedback && (
-        <div style={styles.feedbackBox}>
-          <h4 style={styles.feedbackTitle}>AI Feedback & Guidance</h4>
+        <div style={styles.feedbackBoxFallback}>
+          <h4 style={styles.feedbackTitleFallback}>AI Feedback & Guidance</h4>
           <p style={styles.feedbackText}>{feedback}</p>
         </div>
       )}
@@ -73,22 +290,7 @@ export default function ReportCard({
         <div style={{ marginTop: "0.5rem" }}>
           <button
             onClick={() => setShowQA(!showQA)}
-            style={{
-              padding: "0.6rem 1.2rem",
-              backgroundColor: "var(--primary-light)",
-              color: "var(--primary)",
-              border: "1px solid rgba(99, 102, 241, 0.2)",
-              borderRadius: "var(--radius-sm)",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              width: "100%",
-              justifyContent: "center",
-              fontSize: "0.9rem",
-              transition: "all 0.2s"
-            }}
+            style={styles.collapseBtn}
           >
             {showQA ? "Hide Detailed Q&A Review" : "View Detailed Q&A Review"}
           </button>
@@ -96,16 +298,7 @@ export default function ReportCard({
           {showQA && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.2rem" }}>
               {evaluatedAnswers.map((item, idx) => (
-                <div key={idx} style={{
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "1rem",
-                  backgroundColor: "var(--bg-glass)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                  textAlign: "left"
-                }}>
+                <div key={idx} style={styles.qaCard}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
                     <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--primary)" }}>
                       Question {idx + 1} ({item.questionType === "mcq" ? "MCQ" : "TITA"})
@@ -138,7 +331,7 @@ export default function ReportCard({
                     </div>
                   </div>
                   {item.explanation && (
-                    <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", borderTop: "1px dashed var(--border-color)", paddingTop: "0.5rem", marginTop: "0.25rem", fontStyle: "italic", margin: 0 }}>
+                    <p style={styles.explanationText}>
                       <strong>Feedback:</strong> {item.explanation}
                     </p>
                   )}
@@ -172,6 +365,74 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
+  },
+  reportHeader: {
+    background: "linear-gradient(135deg, #C7C6F5, #D8EAF7)",
+    borderRadius: "var(--radius-md)",
+    padding: "1.5rem",
+    textAlign: "center",
+    color: "var(--text-primary)",
+    marginBottom: "0.5rem",
+  },
+  reportEmoji: { fontSize: 36 },
+  reportTitle: {
+    fontSize: "1.2rem",
+    fontWeight: 700,
+    marginTop: "0.4rem",
+  },
+  reportSub: {
+    opacity: 0.85,
+    fontSize: "0.85rem",
+    marginTop: "0.2rem",
+  },
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.2rem",
+  },
+  ringWrap: {
+    textAlign: "center",
+  },
+  ringLabel: {
+    fontSize: "0.75rem",
+    color: "var(--text-secondary)",
+    marginTop: "0.25rem",
+  },
+  skillGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "0.75rem",
+  },
+  skillCard: {
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    padding: "0.85rem",
+  },
+  skillLabel: {
+    fontSize: "0.75rem",
+    color: "var(--text-secondary)",
+    marginBottom: "0.4rem",
+  },
+  barTrack: {
+    height: 6,
+    background: "#f0f0f0",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: "0.4rem",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  skillScore: {
+    fontSize: "1rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+  },
+  skillOf: {
+    fontSize: "0.75rem",
+    fontWeight: 400,
+    color: "var(--text-secondary)",
   },
   studentName: {
     fontSize: "1.3rem",
@@ -229,8 +490,72 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "9999px",
     overflow: "hidden",
   },
-  barFill: {
-    height: "100%",
+  feedbackBox: {
+    background: "var(--secondary-light)",
+    borderRadius: "var(--radius-sm)",
+    padding: "0.85rem 1rem",
+    borderLeft: "4px solid var(--secondary)",
+    textAlign: "left",
+  },
+  feedbackTitle: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "var(--primary)",
+    marginBottom: "0.3rem",
+  },
+  feedbackText: {
+    fontSize: "0.85rem",
+    color: "var(--text-primary)",
+    lineHeight: 1.5,
+  },
+  feedbackBoxFallback: {
+    backgroundColor: "var(--bg-app)",
+    border: "1px solid var(--border-color)",
+    padding: "1.2rem",
+    borderRadius: "var(--radius-md)",
+    textAlign: "left",
+    width: "100%",
+  },
+  feedbackTitleFallback: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: "var(--primary)",
+    marginBottom: "0.4rem",
+  },
+  collapseBtn: {
+    padding: "0.6rem 1.2rem",
+    backgroundColor: "var(--primary-light)",
+    color: "var(--primary)",
+    border: "1px solid rgba(99, 102, 241, 0.2)",
+    borderRadius: "var(--radius-sm)",
+    fontWeight: 600,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    width: "100%",
+    justifyContent: "center",
+    fontSize: "0.9rem",
+    transition: "all 0.2s"
+  },
+  qaCard: {
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    padding: "0.85rem 1rem",
+    backgroundColor: "var(--bg-glass)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.4rem",
+    textAlign: "left"
+  },
+  explanationText: {
+    fontSize: "0.8rem",
+    color: "var(--text-secondary)",
+    borderTop: "1px dashed var(--border-color)",
+    paddingTop: "0.4rem",
+    marginTop: "0.2rem",
+    fontStyle: "italic",
+    margin: 0,
   },
   footer: {
     display: "flex",
@@ -243,24 +568,5 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "0.4rem",
     fontSize: "0.85rem",
     color: "var(--text-secondary)",
-  },
-  feedbackBox: {
-    backgroundColor: "var(--bg-app)",
-    border: "1px solid var(--border-color)",
-    padding: "1.2rem",
-    borderRadius: "var(--radius-md)",
-    textAlign: "left",
-    width: "100%",
-  },
-  feedbackTitle: {
-    fontSize: "0.95rem",
-    fontWeight: 700,
-    color: "var(--primary)",
-    marginBottom: "0.4rem",
-  },
-  feedbackText: {
-    fontSize: "0.9rem",
-    color: "var(--text-secondary)",
-    lineHeight: 1.5,
   },
 };

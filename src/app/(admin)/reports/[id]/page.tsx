@@ -127,6 +127,15 @@ export default function ReportDetailPage({ params }: PageProps) {
               accuracy={selectedIv.overall_score ?? 0}
               feedback={selectedIv.summary}
               evaluatedAnswers={selectedIv.evaluated_answers}
+              scoreCommunication={selectedIv.score_communication}
+              scoreNumeracy={selectedIv.score_numeracy}
+              scoreCreativity={selectedIv.score_creativity}
+              scoreEmotionalIq={selectedIv.score_emotional_iq}
+              strengths={selectedIv.strengths}
+              improvements={selectedIv.improvements}
+              recommendation={selectedIv.recommendation}
+              adminNote={selectedIv.admin_note}
+              summary={selectedIv.summary}
             />
           </div>
         )}
