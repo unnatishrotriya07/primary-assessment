@@ -16,6 +16,7 @@ const APP_FEATURES = [
   { key: "questions", label: "Question Bank" },
   { key: "assessments", label: "Assessments" },
   { key: "reports", label: "Reports" },
+  { key: "students", label: "Students" },
 ];
 
 export default function TeamSettings() {

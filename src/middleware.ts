@@ -28,7 +28,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/questions") ||
     pathname.startsWith("/assessments") ||
     pathname.startsWith("/reports") ||
-    pathname.startsWith("/team");
+    pathname.startsWith("/team") ||
+    pathname.startsWith("/students");
 
   const isStudentRoute = pathname.startsWith("/assessment") ||
     pathname.startsWith("/result");
@@ -65,6 +66,7 @@ export function middleware(request: NextRequest) {
         else if (pathname.startsWith("/questions")) matchedFeature = "questions";
         else if (pathname.startsWith("/assessments")) matchedFeature = "assessments";
         else if (pathname.startsWith("/reports")) matchedFeature = "reports";
+        else if (pathname.startsWith("/students")) matchedFeature = "students";
 
         if (matchedFeature) {
           const allowedFeatures = user.allowed_features || [];
@@ -90,6 +92,7 @@ export const config = {
     "/assessments/:path*",
     "/reports/:path*",
     "/team/:path*",
+    "/students/:path*",
     "/assessment/:path*",
     "/result/:path*",
   ],

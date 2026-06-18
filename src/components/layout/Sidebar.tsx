@@ -24,7 +24,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       if (stored) {
         try {
           setUser(JSON.parse(stored));
-        } catch (e) {}
+        } catch (e) { }
       }
     }
   }, []);
@@ -46,6 +46,18 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" />
           <rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
+        </svg>
+      ),
+    },
+    {
+      name: "Students",
+      path: "/students",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M9 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+          <circle cx="17" cy="11" r="3" />
         </svg>
       ),
     },
@@ -106,10 +118,10 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   // Filter items based on user allowed features
   const filteredMenuItems = menuItems.filter((item) => {
     if (!user) return true; // Show all until user loaded
-    
+
     // Super-Admin can access everything
     if (user.role === "admin" && !user.tenantId) return true;
-    
+
     // Map path to feature key
     const featureKey = item.path.replace("/", "");
     return user.allowedFeatures?.includes(featureKey);
@@ -117,7 +129,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   // Add Team Settings for Super-Admin and Director roles
   const showTeamSettings = user && ((user.role === "admin" && !user.tenantId) || user.role === "director");
-  
+
   const finalMenuItems = [...filteredMenuItems];
   if (showTeamSettings) {
     finalMenuItems.push({

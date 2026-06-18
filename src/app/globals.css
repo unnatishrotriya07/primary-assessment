@@ -525,3 +525,11 @@ button, input, select, textarea {
   }
 }
 
+.clickable-row-hover {
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.clickable-row-hover:hover {
+  background-color: var(--bg-surface-hover) !important;
+}
+
