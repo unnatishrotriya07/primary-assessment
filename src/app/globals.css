@@ -381,7 +381,7 @@ button, input, select, textarea {
   box-shadow: var(--glass-shadow);
   display: flex;
   align-items: center;
-  justifyContent: space-between;
+  justify-content: space-between;
   padding: 0 2rem;
   position: sticky;
   top: 0;

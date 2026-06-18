@@ -20,18 +20,18 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get("token")?.value;
   const { pathname } = request.nextUrl;
 
-  // Protect admin dashboards and student testing routes
-  const isDashboardRoute = pathname.startsWith("/dashboard") || 
-                            pathname.startsWith("/classes") || 
-                            pathname.startsWith("/subjects") ||
-                            pathname.startsWith("/chapters") ||
-                            pathname.startsWith("/questions") ||
-                            pathname.startsWith("/assessments") ||
-                            pathname.startsWith("/reports") ||
-                            pathname.startsWith("/team");
-                            
-  const isStudentRoute = pathname.startsWith("/assessment") || 
-                         pathname.startsWith("/result");
+  // Protect Dashboards and student testing routes
+  const isDashboardRoute = pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/classes") ||
+    pathname.startsWith("/subjects") ||
+    pathname.startsWith("/chapters") ||
+    pathname.startsWith("/questions") ||
+    pathname.startsWith("/assessments") ||
+    pathname.startsWith("/reports") ||
+    pathname.startsWith("/team");
+
+  const isStudentRoute = pathname.startsWith("/assessment") ||
+    pathname.startsWith("/result");
 
   // If attempting to access dashboard pages without a token, redirect to login
   if (isDashboardRoute && !token) {
@@ -41,7 +41,7 @@ export function middleware(request: NextRequest) {
 
   if (token) {
     const user = getUserFromToken(token);
-    
+
     if (user) {
       // 1. Team Settings access: only Super-Admin (role == admin, tenant == null) or Director (role == director)
       if (pathname.startsWith("/team")) {

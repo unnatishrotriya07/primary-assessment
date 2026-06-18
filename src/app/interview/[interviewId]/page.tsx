@@ -786,9 +786,9 @@ export default function InterviewPage({ params }: PageProps) {
             </div>
 
             {/* Main Stage Grid */}
-            <div style={s.callGrid}>
+            <div style={s.callGrid} className="interview-call-grid">
                 {/* AI Panel (Large View) */}
-                <div style={s.aiVideoPanel}>
+                <div style={s.aiVideoPanel} className="interview-ai-video-panel">
                     <div style={s.aiFaceContainer}>
                         {/* Glowing backdrop rings */}
                         <div style={{
@@ -812,7 +812,7 @@ export default function InterviewPage({ params }: PageProps) {
                 </div>
 
                 {/* Picture in Picture Student Video */}
-                <div style={s.studentPip}>
+                <div style={s.studentPip} className="interview-student-pip">
                     {cameraEnabled ? (
                         <video
                             ref={videoRef}
@@ -840,6 +840,7 @@ export default function InterviewPage({ params }: PageProps) {
                         width={120}
                         height={36}
                         style={s.waveCanvas}
+                        className="interview-wave-canvas"
                     />
                 </div>
             </div>
@@ -1026,16 +1027,19 @@ const s: Record<string, React.CSSProperties> = {
     },
     callGrid: {
         flex: 1,
-        position: "relative",
         display: "flex",
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
+        gap: "1.5rem",
         padding: "1.5rem",
         boxSizing: "border-box",
+        width: "100%",
+        maxWidth: "1200px",
+        margin: "0 auto",
     },
     aiVideoPanel: {
-        width: "100%",
-        maxWidth: "960px",
+        flex: 1,
         height: "80%",
         maxHeight: "560px",
         borderRadius: "24px",
@@ -1116,20 +1120,20 @@ const s: Record<string, React.CSSProperties> = {
         margin: 0,
     },
     studentPip: {
-        position: "absolute",
-        bottom: "2.5rem",
-        right: "2.5rem",
-        width: "160px",
-        height: "120px",
-        borderRadius: "16px",
-        overflow: "hidden",
-        border: "2px solid var(--border-color)",
-        boxShadow: "var(--shadow-sm)",
-        backgroundColor: "var(--bg-surface)",
+        flex: 1,
+        height: "80%",
+        maxHeight: "560px",
+        borderRadius: "24px",
+        backgroundColor: "var(--glass-bg)",
+        border: "1px solid var(--glass-border)",
+        boxShadow: "var(--glass-shadow)",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 5,
+        position: "relative",
+        overflow: "hidden",
+        backdropFilter: "blur(12px)",
         transition: "all 0.3s ease",
     },
     pipVideo: {
@@ -1143,31 +1147,42 @@ const s: Record<string, React.CSSProperties> = {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--bg-app)",
+        background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-hover) 100%)",
     },
     placeholderInitials: {
-        fontSize: "2rem",
+        width: "120px",
+        height: "120px",
+        borderRadius: "50%",
+        background: "linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary) 100%)",
+        border: "3px solid var(--glass-border)",
+        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "3rem",
         fontWeight: 700,
-        color: "var(--text-secondary)",
+        color: "var(--primary)",
     },
     studentLabel: {
         position: "absolute",
-        bottom: "0.5rem",
-        left: "0.5rem",
+        bottom: "1rem",
+        left: "1rem",
         backgroundColor: "var(--primary)",
-        padding: "0.2rem 0.5rem",
-        borderRadius: "6px",
-        fontSize: "0.7rem",
+        padding: "0.4rem 0.8rem",
+        borderRadius: "8px",
+        fontSize: "0.85rem",
         fontWeight: 600,
         color: "#ffffff",
+        zIndex: 3,
     },
     waveCanvas: {
         position: "absolute",
-        bottom: "0.5rem",
-        right: "0.5rem",
-        width: "60px",
-        height: "18px",
+        bottom: "1rem",
+        right: "1rem",
+        width: "80px",
+        height: "24px",
         pointerEvents: "none",
+        zIndex: 3,
     },
     liveCaptionOverlay: {
         position: "absolute",

@@ -28,8 +28,8 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div style={styles.container}>
-        <PageHeader 
-          title="Admin Dashboard" 
+        <PageHeader
+          title="Dashboard"
           description="Overview of assessments, classes, student engagement and performance."
         />
         <div style={styles.loadingState}>
@@ -42,8 +42,8 @@ export default function AdminDashboard() {
   if (error || !stats) {
     return (
       <div style={styles.container}>
-        <PageHeader 
-          title="Admin Dashboard" 
+        <PageHeader
+          title="Dashboard"
           description="Overview of assessments, classes, student engagement and performance."
         />
         <div style={styles.errorState}>
@@ -55,16 +55,16 @@ export default function AdminDashboard() {
 
   return (
     <div style={styles.container}>
-      <PageHeader 
-        title="Admin Dashboard" 
+      <PageHeader
+        title="Dashboard"
         description="Overview of assessments, classes, student engagement and performance."
       />
-      
+
       <div style={styles.grid}>
-        <StatCard title="Total Classes" value={stats.total_classes} type="info" />
-        <StatCard title="Active Students" value={stats.active_students} type="success" />
-        <StatCard title="Generated Questions" value={stats.generated_questions} type="warning" />
-        <StatCard title="Assessments Conducted" value={stats.assessments_conducted} type="primary" />
+        <StatCard title="Total Classes" value={stats.total_classes} />
+        <StatCard title="Active Students" value={stats.active_students} />
+        <StatCard title="Generated Questions" value={stats.generated_questions} />
+        <StatCard title="Assessments Conducted" value={stats.assessments_conducted} />
       </div>
 
       <div className="dashboard-section-grid">
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
               <span style={styles.perfValue}>{stats.average_accuracy}%</span>
             </div>
           </div>
-          
+
           <h4 style={{ marginTop: "2rem", marginBottom: "1rem" }}>Recent Student Submissions</h4>
           <div style={{ overflowX: "auto" }}>
             {stats.recent_activity && stats.recent_activity.length > 0 ? (
