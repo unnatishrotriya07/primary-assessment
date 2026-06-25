@@ -44,7 +44,7 @@ export function middleware(request: NextRequest) {
     const user = getUserFromToken(token);
 
     if (user) {
-      // 1. Team Settings access: only Super-Admin (role == admin, tenant == null) or Director (role == director)
+      // 1. Team access: only Super-Admin (role == admin, tenant == null) or Director (role == director)
       if (pathname.startsWith("/team")) {
         const isSuperAdmin = user.role === "admin" && !user.tenant_id;
         const isDirector = user.role === "director";
@@ -55,16 +55,22 @@ export function middleware(request: NextRequest) {
       }
 
       // 2. Feature-based permission checking (for Director/Teacher roles)
-      // Note: Super-Admin (role == admin, tenant == null) has global bypass
+      // Note: Super-Admin (role == admin, tenant == null) and Director roles have global tenant bypass
       const isSuperAdmin = user.role === "admin" && !user.tenant_id;
-      if (!isSuperAdmin) {
+      const isDirector = user.role === "director";
+      if (!isSuperAdmin && !isDirector) {
         let matchedFeature = "";
         if (pathname.startsWith("/dashboard")) matchedFeature = "dashboard";
         else if (pathname.startsWith("/classes")) matchedFeature = "classes";
         else if (pathname.startsWith("/subjects")) matchedFeature = "subjects";
         else if (pathname.startsWith("/chapters")) matchedFeature = "chapters";
         else if (pathname.startsWith("/questions")) matchedFeature = "questions";
-        else if (pathname.startsWith("/assessments")) matchedFeature = "assessments";
+        else if (pathname.startsWith("/assessments")) {
+          const allowedFeatures = user.allowed_features || [];
+          if (!allowedFeatures.includes("assessments") && !allowedFeatures.includes("questions")) {
+            matchedFeature = "assessments";
+          }
+        }
         else if (pathname.startsWith("/reports")) matchedFeature = "reports";
         else if (pathname.startsWith("/students")) matchedFeature = "students";
 

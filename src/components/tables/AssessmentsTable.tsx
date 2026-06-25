@@ -19,6 +19,7 @@ export default function AssessmentsTable() {
   const [error, setError] = useState("");
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentData | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [copiedAsmtId, setCopiedAsmtId] = useState<string | null>(null);
 
   // View assignments state
   const [selectedAssessmentForView, setSelectedAssessmentForView] = useState<AssessmentData | null>(null);
@@ -29,6 +30,17 @@ export default function AssessmentsTable() {
   const handleAssignClick = (assessment: AssessmentData) => {
     setSelectedAssessment(assessment);
     setIsAssignModalOpen(true);
+  };
+
+  const handleCopyShareableLink = async (assessmentId: string) => {
+    try {
+      const shareableLink = `${window.location.origin}/assessment/join?id=${assessmentId}`;
+      await navigator.clipboard.writeText(shareableLink);
+      setCopiedAsmtId(assessmentId);
+      setTimeout(() => setCopiedAsmtId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy shareable link", err);
+    }
   };
 
   const fetchAssessments = async () => {
@@ -151,7 +163,16 @@ export default function AssessmentsTable() {
                         >
                           Assign Student
                         </button>
-                        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>| No report</span>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>|</span>
+                        <button 
+                          onClick={() => handleCopyShareableLink(item.id)}
+                          style={{
+                            ...styles.shareBtn,
+                            color: copiedAsmtId === item.id ? "var(--success)" : "var(--primary)"
+                          }}
+                        >
+                          {copiedAsmtId === item.id ? "Copied Link!" : "Copy Shareable Link"}
+                        </button>
                       </>
                     )}
                   </div>
@@ -244,7 +265,7 @@ const styles: Record<string, React.CSSProperties> = {
   assignedBadgeBtn: {
     backgroundColor: "var(--primary-light)",
     color: "var(--primary)",
-    border: "1px solid rgba(99, 102, 241, 0.15)",
+    border: "1px solid rgba(139, 124, 251, 0.15)",
     borderRadius: "12px",
     padding: "0.25rem 0.6rem",
     fontSize: "0.82rem",
@@ -254,6 +275,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   assignBtn: {
     color: "var(--primary)",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "0.9rem",
+    backgroundColor: "transparent",
+    border: "none",
+    padding: 0,
+    textDecoration: "none",
+    transition: "color var(--transition-fast)",
+  },
+  shareBtn: {
     fontWeight: 600,
     cursor: "pointer",
     fontSize: "0.9rem",

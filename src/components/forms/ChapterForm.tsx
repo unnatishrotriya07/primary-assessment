@@ -11,12 +11,13 @@ import { extractErrorMessage } from "@/utils/helpers";
 interface ChapterFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  defaultSubjectId?: string;
 }
 
-export default function ChapterForm({ onSuccess, onCancel }: ChapterFormProps) {
+export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: ChapterFormProps) {
   const [title, setTitle] = useState("");
   const [number, setNumber] = useState("");
-  const [subjectId, setSubjectId] = useState("");
+  const [subjectId, setSubjectId] = useState(defaultSubjectId || "");
   const [content, setContent] = useState("");
   const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [loading, setLoading] = useState(false);

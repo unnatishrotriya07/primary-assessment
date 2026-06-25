@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { STORAGE_KEYS } from "@/utils/constants";
 
 interface NavbarProps {
@@ -8,7 +10,11 @@ interface NavbarProps {
 }
 
 export default function Navbar({ onMenuToggle }: NavbarProps) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -21,6 +27,27 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
     }
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDropdownOpen(false);
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    router.push("/login");
+  };
+
   const getRoleTitle = () => {
     if (!user) return "Loading...";
     if (user.role === "admin" && !user.tenantId) return "Super Administrator";
@@ -30,140 +57,103 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
     return user.role;
   };
 
+  const isUserAdmin = user?.role === "admin";
+  const displayNameText = isUserAdmin ? "Momentum" : (user?.schoolName || "Momentum Academy");
   const displayName = user?.name || "Admin Account";
   const displayRole = getRoleTitle();
   const avatarChar = displayName.charAt(0).toUpperCase();
 
   return (
     <header className="navbar-header">
-      <div style={styles.left}>
-        <button onClick={onMenuToggle} className="mobile-menu-toggle-btn" aria-label="Toggle Menu">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="18" x2="20" y2="18" />
+      {/* Left side: Mobile Toggle, Brand Logo & Brand Name */}
+      <div className="navbar-left">
+        {/* Mobile grid menu button toggle */}
+        <button 
+          onClick={onMenuToggle} 
+          className="navbar-grid-btn interactive-element" 
+          aria-label="Toggle Menu"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
           </svg>
         </button>
-        <div style={styles.searchContainer} className="navbar-search-container">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: "var(--text-muted)"}}>
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input type="text" placeholder="Quick search..." style={styles.searchInput} />
-        </div>
+
+        {/* Brand Logo & Brand Name (Product or School Name role-based) */}
+        <Link href="/dashboard" className="navbar-logo-link interactive-element">
+          <img src="/logo.png" alt="School Logo" className="navbar-logo-img" />
+          <span className="navbar-logo-text" title={displayNameText}>
+            {displayNameText.length > 24 ? displayNameText.substring(0, 22) + "..." : displayNameText}
+          </span>
+        </Link>
       </div>
 
-      <div style={styles.right}>
-        <button style={styles.iconBtn}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      {/* Right side: Chat, Notification, and Profile dropdown avatar */}
+      <div className="navbar-right">
+        {/* Chat / Mail Icon button */}
+        <button className="navbar-icon-btn interactive-element" aria-label="Chat">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          <span style={styles.badge} />
         </button>
 
-        <div style={styles.divider} />
+        {/* Notifications Bell button */}
+        <button className="navbar-icon-btn interactive-element" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          <span className="navbar-badge" />
+        </button>
 
-        <div style={styles.profile}>
-          <div style={styles.avatar}>{avatarChar}</div>
-          <div style={styles.profileInfo}>
-            <span style={styles.name}>{displayName}</span>
-            <span style={styles.role}>{displayRole}</span>
-          </div>
+        {/* User Profile Dropper */}
+        <div className="navbar-profile-btn-container" ref={dropdownRef}>
+          <button 
+            className="navbar-profile-avatar-btn interactive-element" 
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            aria-expanded={dropdownOpen}
+            aria-haspopup="true"
+          >
+            <div className="navbar-profile-avatar">{avatarChar}</div>
+          </button>
+
+          {dropdownOpen && (
+            <div className="navbar-profile-dropdown" role="menu">
+              {/* User details header inside dropdown */}
+              <div className="navbar-profile-dropdown-header">
+                <span className="navbar-profile-dropdown-name">{displayName}</span>
+                <span className="navbar-profile-dropdown-role">{displayRole}</span>
+              </div>
+              
+              <Link 
+                href="/dashboard" 
+                className="navbar-dropdown-item" 
+                onClick={() => setDropdownOpen(false)}
+                role="menuitem"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" />
+                  <rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
+                </svg>
+                Dashboard
+              </Link>
+              
+              <div 
+                className="navbar-dropdown-item logout" 
+                onClick={handleLogout}
+                role="menuitem"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Logout
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  header: {
-    height: "70px",
-    backgroundColor: "var(--glass-bg)",
-    borderBottom: "1px solid var(--glass-border)",
-    backdropFilter: "var(--glass-backdrop)",
-    WebkitBackdropFilter: "var(--glass-backdrop)",
-    boxShadow: "var(--glass-shadow)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 2rem",
-    position: "sticky",
-    top: 0,
-    zIndex: 5,
-  },
-  left: {
-    display: "flex",
-    alignItems: "center",
-  },
-  searchContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    backgroundColor: "var(--bg-app)",
-    border: "1px solid var(--border-color)",
-    padding: "0.5rem 1rem",
-    borderRadius: "var(--radius-sm)",
-    width: "280px",
-  },
-  searchInput: {
-    width: "100%",
-    fontSize: "0.9rem",
-    color: "var(--text-primary)",
-  },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1.2rem",
-  },
-  iconBtn: {
-    position: "relative",
-    cursor: "pointer",
-    color: "var(--text-secondary)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badge: {
-    position: "absolute",
-    top: "1px",
-    right: "1px",
-    width: "7px",
-    height: "7px",
-    borderRadius: "50%",
-    backgroundColor: "var(--error)",
-  },
-  divider: {
-    width: "1px",
-    height: "24px",
-    backgroundColor: "var(--border-color)",
-  },
-  profile: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.8rem",
-  },
-  avatar: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-    color: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    fontSize: "0.95rem",
-  },
-  profileInfo: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  name: {
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    lineHeight: 1.2,
-  },
-  role: {
-    fontSize: "0.75rem",
-    color: "var(--text-secondary)",
-  },
-};

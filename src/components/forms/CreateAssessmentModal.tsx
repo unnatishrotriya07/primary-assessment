@@ -9,10 +9,12 @@ import subjectService from "@/services/subject.service";
 import chapterService from "@/services/chapter.service";
 import questionService from "@/services/question.service";
 import assessmentService, { StudentAssessmentResponse } from "@/services/assessment.service";
+import studentService from "@/services/student.service";
 import { ClassData } from "@/types/class.types";
 import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
 import { QuestionData } from "@/types/question.types";
+import { StudentData } from "@/types/student.types";
 import { extractErrorMessage } from "@/utils/helpers";
 
 interface CreateAssessmentModalProps {
@@ -40,6 +42,7 @@ export default function CreateAssessmentModal({
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [selectedChapterId, setSelectedChapterId] = useState<string>("");
   const [selectedSession, setSelectedSession] = useState<string>("");
+  const [questionsToAsk, setQuestionsToAsk] = useState<number>(5);
 
   // Questions state
   const [questions, setQuestions] = useState<QuestionData[]>([]);
@@ -47,19 +50,23 @@ export default function CreateAssessmentModal({
   const [questionsSearch, setQuestionsSearch] = useState<string>("");
   const [loadingQuestions, setLoadingQuestions] = useState<boolean>(false);
 
+  // Students state
+  const [students, setStudents] = useState<StudentData[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [studentsSearch, setStudentsSearch] = useState<string>("");
+  const [loadingStudents, setLoadingStudents] = useState<boolean>(false);
+
   // Student Details state
   const [assessmentTitle, setAssessmentTitle] = useState("");
-  const [studentName, setStudentName] = useState("");
   const [studentClass, setStudentClass] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [studentEmail, setStudentEmail] = useState("");
-  const [contact, setContact] = useState("");
 
   // Submission/Error/Success states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successData, setSuccessData] = useState<StudentAssessmentResponse | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [successData, setSuccessData] = useState<StudentAssessmentResponse[] | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedClassLink, setCopiedClassLink] = useState(false);
 
   // Fetch classes when modal opens
   useEffect(() => {
@@ -73,15 +80,17 @@ export default function CreateAssessmentModal({
       setSelectedQuestionIds([]);
       setQuestionsSearch("");
       setAssessmentTitle("");
-      setStudentName("");
       setStudentClass("");
-      setDateOfBirth("");
-      setStudentEmail("");
-      setContact("");
+      setStudents([]);
+      setSelectedStudentIds([]);
+      setStudentsSearch("");
       setError("");
       setSuccessData(null);
-      setCopied(false);
+      setCopiedId(null);
+      setCopiedAll(false);
+      setCopiedClassLink(false);
       setSelectedSession("");
+      setQuestionsToAsk(5);
 
       const fetchClasses = async () => {
         try {
@@ -140,6 +149,37 @@ export default function CreateAssessmentModal({
       active = false;
     };
   }, [selectedClassId, classes]);
+
+  // Fetch students when class selection changes
+  useEffect(() => {
+    let active = true;
+    if (selectedClassId) {
+      const fetchStudents = async () => {
+        setLoadingStudents(true);
+        try {
+          const res = await studentService.getByClass(selectedClassId);
+          if (active) {
+            setStudents(res);
+            // Default select all students
+            setSelectedStudentIds(res.map(s => Number(s.id)));
+          }
+        } catch (err) {
+          console.error("Failed to fetch students", err);
+        } finally {
+          if (active) {
+            setLoadingStudents(false);
+          }
+        }
+      };
+      fetchStudents();
+    } else {
+      setStudents([]);
+      setSelectedStudentIds([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [selectedClassId]);
 
   // Fetch chapters when subject selection changes
   useEffect(() => {
@@ -262,19 +302,27 @@ export default function CreateAssessmentModal({
     setAssessmentTitle(`${subjectPrefix} - Custom Quiz (${selectedQuestionIds.length} Qs)`);
   };
 
-  const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const numericValue = e.target.value.replace(/[^0-9]/g, "");
-    setContact(numericValue);
+  const handleCopyLink = async (link: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy link", err);
+    }
   };
 
-  const handleCopyLink = async () => {
+  const handleCopyAllLinks = async () => {
     if (!successData) return;
     try {
-      await navigator.clipboard.writeText(successData.assessmentLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const allLinks = successData
+        .map(sa => `${sa.studentName}: ${sa.assessmentLink}`)
+        .join("\n");
+      await navigator.clipboard.writeText(allLinks);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
     } catch (err) {
-      console.error("Failed to copy", err);
+      console.error("Failed to copy all links", err);
     }
   };
 
@@ -286,24 +334,8 @@ export default function CreateAssessmentModal({
       setError("Assessment Title is required.");
       return;
     }
-    if (!(studentName || "").trim()) {
-      setError("Student Name is required.");
-      return;
-    }
-    if (!(studentClass || "").trim()) {
-      setError("Class is required.");
-      return;
-    }
-    if (!dateOfBirth) {
-      setError("Date of Birth is required.");
-      return;
-    }
-    if (!(studentEmail || "").trim()) {
-      setError("Student Email is required.");
-      return;
-    }
-    if ((contact || "").length < 7 || (contact || "").length > 15) {
-      setError("Contact number must be between 7 and 15 digits.");
+    if (selectedStudentIds.length === 0) {
+      setError("Please select at least one student to assign the assessment.");
       return;
     }
 
@@ -319,16 +351,13 @@ export default function CreateAssessmentModal({
         date: todayStr,
         questionsCount: selectedQuestionIds.length,
         questionIds: selectedQuestionIds,
+        questionsToAsk: questionsToAsk,
       });
 
-      // 2. Assign to Student
-      const res = await assessmentService.assignAssessment({
+      // 2. Assign to multiple Students in bulk
+      const res = await assessmentService.assignAssessmentBulk({
         assessmentId: Number(createdAssessment.id),
-        studentName,
-        studentClass,
-        dateOfBirth,
-        studentEmail,
-        contact,
+        studentIds: selectedStudentIds,
       });
 
       setSuccessData(res);
@@ -349,10 +378,10 @@ export default function CreateAssessmentModal({
       onClose={onClose}
       title={
         step === "curriculum" ? "Step 1: Select Questions" :
-        step === "student" ? "Step 2: Student Assignment Details" :
+        step === "student" ? "Step 2: Select Students & Configure Title" :
         "Assessment Assigned Successfully"
       }
-      size={step === "curriculum" ? "large" : "medium"}
+      size={step === "curriculum" || step === "student" ? "large" : "medium"}
     >
       {step === "curriculum" && (
         <div style={styles.container}>
@@ -546,7 +575,7 @@ export default function CreateAssessmentModal({
               Cancel
             </Button>
             <Button onClick={handleNextStep} disabled={selectedQuestionIds.length === 0}>
-              Next: Assign Student
+              Next: Select Students
             </Button>
           </div>
         </div>
@@ -567,70 +596,156 @@ export default function CreateAssessmentModal({
             disabled={loading}
           />
 
+          <Input
+            label="Questions to Ask Each Student (5 to 10)"
+            type="number"
+            min={5}
+            max={10}
+            value={questionsToAsk}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!isNaN(val)) {
+                setQuestionsToAsk(val);
+              }
+            }}
+            required
+            disabled={loading}
+          />
+
           <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "-0.5rem" }}>
             This custom assessment includes <strong>{selectedQuestionIds.length} manually selected questions</strong>.
           </div>
 
-          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>Student Details</div>
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Select Students ({selectedStudentIds.length} Selected)
+          </div>
 
-          <Input
-            label="Student Name"
-            placeholder="Enter student's full name"
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            required
-            disabled={loading}
-          />
-
-          <div style={styles.row}>
-            <Input
-              label="Class"
-              placeholder="e.g. Grade 5A"
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              required
-              disabled={loading}
+          <div style={styles.studentControlsRow}>
+            <input
+              type="text"
+              placeholder="Search students by name, email, or scholar ID..."
+              value={studentsSearch}
+              onChange={(e) => setStudentsSearch(e.target.value)}
+              style={styles.studentSearchInput}
             />
-
-            <div style={styles.dobWrapper}>
-              <label style={styles.dobLabel}>Date of Birth</label>
-              <input
-                type="date"
-                style={styles.dateInput}
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                required
-                disabled={loading}
-              />
+            <div style={styles.studentBatchActions}>
+              <button
+                type="button"
+                onClick={() => {
+                  const filteredIds = students
+                    .filter(s => {
+                      const query = studentsSearch.toLowerCase();
+                      return (
+                        s.name.toLowerCase().includes(query) ||
+                        s.email.toLowerCase().includes(query) ||
+                        s.scholarNumber.toLowerCase().includes(query)
+                      );
+                    })
+                    .map(s => Number(s.id));
+                  setSelectedStudentIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+                }}
+                style={styles.textLinkButton}
+              >
+                Select All Matching
+              </button>
+              <span style={{ color: "var(--border-color)" }}>|</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const filteredIds = students
+                    .filter(s => {
+                      const query = studentsSearch.toLowerCase();
+                      return (
+                        s.name.toLowerCase().includes(query) ||
+                        s.email.toLowerCase().includes(query) ||
+                        s.scholarNumber.toLowerCase().includes(query)
+                      );
+                    })
+                    .map(s => Number(s.id));
+                  setSelectedStudentIds(prev => prev.filter(id => !filteredIds.includes(id)));
+                }}
+                style={styles.textLinkButton}
+              >
+                Deselect All Matching
+              </button>
             </div>
           </div>
 
-          <Input
-            label="Student Email"
-            type="email"
-            placeholder="student@example.com"
-            value={studentEmail}
-            onChange={(e) => setStudentEmail(e.target.value)}
-            required
-            disabled={loading}
-          />
-
-          <Input
-            label="Contact Number (Digits only)"
-            type="tel"
-            placeholder="e.g. 9876543210"
-            value={contact}
-            onChange={handleContactChange}
-            required
-            disabled={loading}
-          />
+          <div style={styles.studentListContainer}>
+            {loadingStudents ? (
+              <div style={styles.emptyState}>
+                <div className="spinner" style={{ marginBottom: "1rem" }}></div>
+                Loading student records...
+              </div>
+            ) : students.length === 0 ? (
+              <div style={styles.emptyState}>
+                No students found in this class. Please upload students first.
+              </div>
+            ) : (
+              <div style={styles.studentGrid}>
+                {students
+                  .filter(s => {
+                    const query = studentsSearch.toLowerCase();
+                    return (
+                      s.name.toLowerCase().includes(query) ||
+                      s.email.toLowerCase().includes(query) ||
+                      s.scholarNumber.toLowerCase().includes(query)
+                    );
+                  })
+                  .map(s => {
+                    const isChecked = selectedStudentIds.includes(Number(s.id));
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => {
+                          const idNum = Number(s.id);
+                          setSelectedStudentIds(prev =>
+                            prev.includes(idNum)
+                              ? prev.filter(id => id !== idNum)
+                              : [...prev, idNum]
+                          );
+                        }}
+                        style={{
+                          ...styles.studentCard,
+                          borderColor: isChecked ? "var(--primary)" : "var(--border-color)",
+                          backgroundColor: isChecked ? "var(--primary-light)" : "var(--bg-card)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}} // handled by card onClick
+                          style={styles.checkbox}
+                        />
+                        {s.pictureUrl ? (
+                          <img
+                            src={s.pictureUrl}
+                            alt={s.name}
+                            style={styles.studentAvatar}
+                          />
+                        ) : (
+                          <div style={styles.studentAvatarInitials}>
+                            {s.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                          </div>
+                        )}
+                        <div style={styles.studentCardInfo}>
+                          <div style={styles.studentName}>{s.name}</div>
+                          <div style={styles.studentEmail}>{s.email}</div>
+                          <div style={styles.studentScholar}>Scholar ID: {s.scholarNumber}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
 
           <div style={styles.actions}>
             <Button variant="secondary" onClick={() => setStep("curriculum")} type="button" disabled={loading}>
               Back to Selection
             </Button>
-            <Button type="submit" loading={loading}>
-              Create & Assign Assessment
+            <Button type="submit" loading={loading} disabled={selectedStudentIds.length === 0}>
+              Create & Assign ({selectedStudentIds.length})
             </Button>
           </div>
         </form>
@@ -640,57 +755,103 @@ export default function CreateAssessmentModal({
         <div style={styles.successContainer} className="animate-fade-in">
           <div style={styles.successHeader}>
             <div style={styles.successIcon}>✓</div>
-            <h4 style={styles.successTitle}>Assessment Assigned!</h4>
+            <h4 style={styles.successTitle}>Assessment Assigned Successfully!</h4>
             <p style={styles.successSubtitle}>
-              An invitation email has been simulated and sent to the student.
+              Simulated invitation emails have been generated and dispatched to {successData.length} students.
             </p>
           </div>
 
-          <div style={styles.detailsGrid}>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Student</span>
-              <span style={styles.detailValue}>{successData.studentName}</span>
+          <div style={styles.bulkAssignSummary}>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Class</span>
+              <span style={styles.summaryValue}>{successData[0]?.studentClass || studentClass}</span>
             </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Class</span>
-              <span style={styles.detailValue}>{successData.studentClass}</span>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Assigned Students</span>
+              <span style={styles.summaryValue}>{successData.length}</span>
             </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Date of Birth</span>
-              <span style={styles.detailValue}>{successData.dateOfBirth}</span>
-            </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Email</span>
-              <span style={styles.detailValue}>{successData.studentEmail}</span>
-            </div>
-            <div style={{ ...styles.detailItem, gridColumn: "span 2" }}>
-              <span style={styles.detailLabel}>Contact Number</span>
-              <span style={styles.detailValue}>{successData.contact}</span>
-            </div>
-          </div>
-
-          <div style={styles.linkContainer}>
-            <label style={styles.fieldLabel}>Assessment Link (Expires in 24 hours)</label>
-            <div style={styles.linkInputWrapper}>
-              <input
-                type="text"
-                readOnly
-                value={successData.assessmentLink}
-                style={styles.linkInput}
-              />
+            <div style={{ ...styles.summaryItem, gridColumn: "span 2" }}>
               <Button
-                onClick={handleCopyLink}
-                variant={copied ? "success" : "primary"}
-                style={{ borderRadius: "0 var(--radius-sm) var(--radius-sm) 0", minWidth: "90px" }}
+                onClick={handleCopyAllLinks}
+                variant={copiedAll ? "success" : "primary"}
+                style={{ width: "100%", fontSize: "0.85rem", height: "38px" }}
               >
-                {copied ? "Copied!" : "Copy"}
+                {copiedAll ? "All Links Copied!" : "📋 Copy All Invitation Links"}
               </Button>
             </div>
           </div>
 
-          <div style={styles.emailPreviewContainer}>
-            <label style={styles.fieldLabel}>Simulated Email Preview</label>
-            <pre style={styles.emailPreview}>{successData.emailContent}</pre>
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Class Shareable Link (All Students)
+          </div>
+          <div style={styles.shareableLinkWrapper}>
+            <input
+              type="text"
+              readOnly
+              value={`${typeof window !== "undefined" ? window.location.origin : ""}/assessment/join?id=${successData[0]?.assessmentId}`}
+              style={styles.shareableLinkInput}
+            />
+            <Button
+              onClick={async () => {
+                try {
+                  const link = `${window.location.origin}/assessment/join?id=${successData[0]?.assessmentId}`;
+                  await navigator.clipboard.writeText(link);
+                  setCopiedClassLink(true);
+                  setTimeout(() => setCopiedClassLink(false), 2000);
+                } catch (err) {
+                  console.error("Failed to copy link", err);
+                }
+              }}
+              variant={copiedClassLink ? "success" : "primary"}
+              style={{ borderRadius: "0 var(--radius-sm) var(--radius-sm) 0", minWidth: "90px", height: "43px" }}
+              type="button"
+            >
+              {copiedClassLink ? "Copied!" : "Copy Link"}
+            </Button>
+          </div>
+
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Student Access Links
+          </div>
+
+          <div style={styles.linksTableContainer}>
+            <table style={styles.linksTable}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Student Name</th>
+                  <th style={styles.th}>Email Address</th>
+                  <th style={styles.th}>Assessment URL / Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {successData.map((sa) => {
+                  const isCopied = copiedId === String(sa.id);
+                  return (
+                    <tr key={sa.id} style={styles.tableRow}>
+                      <td style={styles.td}><strong>{sa.studentName}</strong></td>
+                      <td style={styles.td}>{sa.studentEmail}</td>
+                      <td style={styles.td}>
+                        <div style={styles.rowCopyWrapper}>
+                          <input
+                            type="text"
+                            readOnly
+                            value={sa.assessmentLink}
+                            style={styles.tableLinkInput}
+                          />
+                          <Button
+                            onClick={() => handleCopyLink(sa.assessmentLink, String(sa.id))}
+                            variant={isCopied ? "success" : "primary"}
+                            style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", minWidth: "65px", height: "28px" }}
+                          >
+                            {isCopied ? "Copied!" : "Copy"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           <div style={styles.successActions}>
@@ -1014,5 +1175,186 @@ const styles: Record<string, React.CSSProperties> = {
   successActions: {
     marginTop: "0.5rem",
     width: "100%",
+  },
+  studentControlsRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "1rem",
+    width: "100%",
+  },
+  studentSearchInput: {
+    padding: "0.6rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.9rem",
+    outline: "none",
+    flex: 1,
+  },
+  studentBatchActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+  },
+  studentListContainer: {
+    maxHeight: "320px",
+    overflowY: "auto",
+    width: "100%",
+    paddingRight: "0.2rem",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    padding: "1rem",
+    backgroundColor: "var(--bg-card)",
+  },
+  studentGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: "1rem",
+    width: "100%",
+  },
+  studentCard: {
+    display: "flex",
+    gap: "0.8rem",
+    alignItems: "center",
+    padding: "0.8rem 1rem",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  },
+  studentAvatar: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+  studentAvatarInitials: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    backgroundColor: "var(--primary-light)",
+    color: "var(--primary)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "0.9rem",
+    fontWeight: 700,
+  },
+  studentCardInfo: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.15rem",
+    flex: 1,
+    minWidth: 0,
+  },
+  studentName: {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  studentEmail: {
+    fontSize: "0.75rem",
+    color: "var(--text-secondary)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  studentScholar: {
+    fontSize: "0.75rem",
+    color: "var(--text-muted)",
+  },
+  bulkAssignSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: "0.8rem",
+    backgroundColor: "var(--bg-surface-hover)",
+    padding: "1rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    width: "100%",
+    alignItems: "center",
+  },
+  summaryItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.15rem",
+  },
+  summaryLabel: {
+    fontSize: "0.75rem",
+    color: "var(--text-muted)",
+    textTransform: "uppercase",
+    fontWeight: 600,
+  },
+  summaryValue: {
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+  },
+  linksTableContainer: {
+    maxHeight: "250px",
+    overflowY: "auto",
+    width: "100%",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+  },
+  linksTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.85rem",
+    textAlign: "left",
+  },
+  th: {
+    padding: "0.6rem 0.8rem",
+    backgroundColor: "var(--bg-surface-hover)",
+    borderBottom: "1px solid var(--border-color)",
+    color: "var(--text-secondary)",
+    fontWeight: 600,
+  },
+  td: {
+    padding: "0.6rem 0.8rem",
+    borderBottom: "1px solid var(--border-color)",
+    verticalAlign: "middle",
+  },
+  tableRow: {
+    transition: "background-color var(--transition-fast)",
+    backgroundColor: "var(--bg-card)",
+  },
+  rowCopyWrapper: {
+    display: "flex",
+    gap: "0.4rem",
+    alignItems: "center",
+    width: "100%",
+  },
+  tableLinkInput: {
+    flex: 1,
+    padding: "0.3rem 0.5rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-secondary)",
+    fontSize: "0.75rem",
+    outline: "none",
+    textOverflow: "ellipsis",
+  },
+  shareableLinkWrapper: {
+    display: "flex",
+    width: "100%",
+    marginBottom: "1rem",
+  },
+  shareableLinkInput: {
+    flex: 1,
+    padding: "0.7rem 1rem",
+    border: "1px solid var(--border-color)",
+    borderRight: "none",
+    borderRadius: "var(--radius-sm) 0 0 var(--radius-sm)",
+    backgroundColor: "var(--bg-app)",
+    color: "var(--text-primary)",
+    fontSize: "0.9rem",
+    outline: "none",
   },
 };

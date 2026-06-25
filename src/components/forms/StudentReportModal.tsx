@@ -12,10 +12,10 @@ interface StudentReportModalProps {
 }
 
 const SKILL_CONFIG = [
-  { key: "score_communication", label: "Communication", color: "#C7C6F5" },
-  { key: "score_numeracy", label: "Numeracy", color: "#D8EAF7" },
-  { key: "score_creativity", label: "Creativity", color: "#F8E8E8" },
-  { key: "score_emotional_iq", label: "Emotional IQ", color: "#D9EFCB" },
+  { key: "score_communication", label: "Communication", color: "var(--primary)" },
+  { key: "score_numeracy", label: "Numeracy", color: "var(--secondary)" },
+  { key: "score_creativity", label: "Creativity", color: "var(--accent)" },
+  { key: "score_emotional_iq", label: "Emotional IQ", color: "var(--success)" },
 ] as const;
 
 const REC_COLOR: Record<string, string> = {
@@ -271,7 +271,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
   },
   reportHeader: {
-    background: "linear-gradient(135deg, #C7C6F5, #D8EAF7)",
+    background: "linear-gradient(135deg, var(--primary-light), var(--secondary-light))",
     borderRadius: "var(--radius-md)",
     padding: "1.5rem",
     textAlign: "center",

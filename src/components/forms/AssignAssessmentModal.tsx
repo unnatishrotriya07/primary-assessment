@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Modal from "../common/Modal";
-import Input from "../common/Input";
 import Button from "../common/Button";
 import assessmentService, { StudentAssessmentResponse } from "@/services/assessment.service";
+import studentService from "@/services/student.service";
 import { AssessmentData } from "@/types/assessment.types";
+import { StudentData } from "@/types/student.types";
 import { extractErrorMessage } from "@/utils/helpers";
 
 interface AssignAssessmentModalProps {
@@ -21,47 +22,77 @@ export default function AssignAssessmentModal({
   assessment,
   classNamePrefill = "",
 }: AssignAssessmentModalProps) {
-  const [studentName, setStudentName] = useState("");
-  const [studentClass, setStudentClass] = useState(classNamePrefill || "");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [studentEmail, setStudentEmail] = useState("");
-  const [contact, setContact] = useState("");
+  const [students, setStudents] = useState<StudentData[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [studentsSearch, setStudentsSearch] = useState("");
+  const [loadingStudents, setLoadingStudents] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successData, setSuccessData] = useState<StudentAssessmentResponse | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [successData, setSuccessData] = useState<StudentAssessmentResponse[] | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedClassLink, setCopiedClassLink] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Sync class prefill when modal opens or assessment changes
-  React.useEffect(() => {
-    if (isOpen) {
-      setStudentClass(classNamePrefill || "");
-      setStudentName("");
-      setDateOfBirth("");
-      setStudentEmail("");
-      setContact("");
+  // Sync and fetch student roster when modal opens
+  useEffect(() => {
+    let active = true;
+    if (isOpen && assessment && assessment.classId) {
+      setSelectedStudentIds([]);
+      setStudentsSearch("");
       setError("");
       setSuccessData(null);
-      setCopied(false);
+      setCopiedAll(false);
+      setCopiedClassLink(false);
+      setCopiedId(null);
+
+      const fetchStudents = async () => {
+        setLoadingStudents(true);
+        try {
+          const res = await studentService.getByClass(String(assessment.classId));
+          if (active) {
+            setStudents(res);
+            // Default select all students in the class
+            setSelectedStudentIds(res.map(s => Number(s.id)));
+          }
+        } catch (err) {
+          console.error("Failed to fetch students for class", err);
+        } finally {
+          if (active) {
+            setLoadingStudents(false);
+          }
+        }
+      };
+      fetchStudents();
     }
-  }, [isOpen, classNamePrefill]);
+    return () => {
+      active = false;
+    };
+  }, [isOpen, assessment]);
 
   if (!assessment) return null;
 
-  const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only accept numeric digits
-    const numericValue = e.target.value.replace(/[^0-9]/g, "");
-    setContact(numericValue);
+  const handleCopyLink = async (link: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy link", err);
+    }
   };
 
-  const handleCopyLink = async () => {
+  const handleCopyAllLinks = async () => {
     if (!successData) return;
     try {
-      await navigator.clipboard.writeText(successData.assessmentLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const allLinks = successData
+        .map(sa => `${sa.studentName}: ${sa.assessmentLink}`)
+        .join("\n");
+      await navigator.clipboard.writeText(allLinks);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
     } catch (err) {
-      console.error("Failed to copy", err);
+      console.error("Failed to copy all links", err);
     }
   };
 
@@ -69,38 +100,16 @@ export default function AssignAssessmentModal({
     e.preventDefault();
     setError("");
 
-    if (!(studentName || "").trim()) {
-      setError("Student Name is required.");
-      return;
-    }
-    if (!(studentClass || "").trim()) {
-      setError("Class is required.");
-      return;
-    }
-    if (!dateOfBirth) {
-      setError("Date of Birth is required.");
-      return;
-    }
-    if (!(studentEmail || "").trim()) {
-      setError("Student Email is required.");
-      return;
-    }
-    
-    // Check contact length
-    if ((contact || "").length < 7 || (contact || "").length > 15) {
-      setError("Contact number must be between 7 and 15 digits.");
+    if (selectedStudentIds.length === 0) {
+      setError("Please select at least one student to assign the assessment.");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await assessmentService.assignAssessment({
+      const res = await assessmentService.assignAssessmentBulk({
         assessmentId: Number(assessment.id),
-        studentName,
-        studentClass,
-        dateOfBirth,
-        studentEmail,
-        contact,
+        studentIds: selectedStudentIds,
       });
       setSuccessData(res);
     } catch (err: any) {
@@ -110,11 +119,21 @@ export default function AssignAssessmentModal({
     }
   };
 
+  const filteredStudents = students.filter(s => {
+    const query = studentsSearch.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(query) ||
+      s.email.toLowerCase().includes(query) ||
+      s.scholarNumber.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={successData ? "Assessment Link Generated" : `Assign Assessment: ${assessment.title}`}
+      size={successData ? "medium" : "large"}
     >
       {successData ? (
         <div style={styles.successContainer} className="animate-fade-in">
@@ -122,55 +141,93 @@ export default function AssignAssessmentModal({
             <div style={styles.successIcon}>✓</div>
             <h4 style={styles.successTitle}>Successfully Assigned!</h4>
             <p style={styles.successSubtitle}>
-              An invitation email has been logged and prepared for the student.
+              Simulated invitation emails have been logged and prepared for {successData.length} students.
             </p>
           </div>
 
-          <div style={styles.detailsGrid}>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Student</span>
-              <span style={styles.detailValue}>{successData.studentName}</span>
+          <div style={styles.bulkAssignSummary}>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Class</span>
+              <span style={styles.summaryValue}>{successData[0]?.studentClass || classNamePrefill}</span>
             </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Class</span>
-              <span style={styles.detailValue}>{successData.studentClass}</span>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Assigned Students</span>
+              <span style={styles.summaryValue}>{successData.length}</span>
             </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Date of Birth</span>
-              <span style={styles.detailValue}>{successData.dateOfBirth}</span>
-            </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Email</span>
-              <span style={styles.detailValue}>{successData.studentEmail}</span>
-            </div>
-            <div style={styles.detailItem}>
-              <span style={styles.detailLabel}>Contact</span>
-              <span style={styles.detailValue}>{successData.contact}</span>
-            </div>
-          </div>
-
-          <div style={styles.linkContainer}>
-            <label style={styles.fieldLabel}>Assessment Link (Active for 24 hours)</label>
-            <div style={styles.linkInputWrapper}>
-              <input
-                type="text"
-                readOnly
-                value={successData.assessmentLink}
-                style={styles.linkInput}
-              />
+            <div style={{ ...styles.summaryItem, gridColumn: "span 2" }}>
               <Button
-                onClick={handleCopyLink}
-                variant={copied ? "success" : "primary"}
-                style={{ borderRadius: "0 var(--radius-sm) var(--radius-sm) 0", minWidth: "90px" }}
+                onClick={handleCopyAllLinks}
+                variant={copiedAll ? "success" : "primary"}
+                style={{ width: "100%", fontSize: "0.85rem", height: "38px" }}
               >
-                {copied ? "Copied!" : "Copy"}
+                {copiedAll ? "All Links Copied!" : "📋 Copy All Invitation Links"}
               </Button>
             </div>
           </div>
 
-          <div style={styles.emailPreviewContainer}>
-            <label style={styles.fieldLabel}>Simulated Invitation Email Preview</label>
-            <pre style={styles.emailPreview}>{successData.emailContent}</pre>
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Class Shareable Link (All Students)
+          </div>
+          <div style={styles.shareableLinkWrapper}>
+            <input
+              type="text"
+              readOnly
+              value={`${typeof window !== "undefined" ? window.location.origin : ""}/assessment/join?id=${successData[0]?.assessmentId}`}
+              style={styles.shareableLinkInput}
+            />
+            <Button
+              onClick={async () => {
+                try {
+                  const link = `${window.location.origin}/assessment/join?id=${successData[0]?.assessmentId}`;
+                  await navigator.clipboard.writeText(link);
+                  setCopiedClassLink(true);
+                  setTimeout(() => setCopiedClassLink(false), 2000);
+                } catch (err) {
+                  console.error("Failed to copy link", err);
+                }
+              }}
+              variant={copiedClassLink ? "success" : "primary"}
+              style={{ borderRadius: "0 var(--radius-sm) var(--radius-sm) 0", minWidth: "90px", height: "43px" }}
+              type="button"
+            >
+              {copiedClassLink ? "Copied!" : "Copy Link"}
+            </Button>
+          </div>
+
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Student Access Links
+          </div>
+
+          <div style={styles.linksTableContainer}>
+            <table style={styles.linksTable}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Student Name</th>
+                  <th style={styles.th}>Email Address</th>
+                  <th style={styles.th}>Assessment URL / Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {successData.map((sa) => {
+                  const isCopied = copiedId === String(sa.id);
+                  return (
+                    <tr key={sa.id} style={styles.tableRow}>
+                      <td style={styles.td}>{sa.studentName}</td>
+                      <td style={styles.td}>{sa.studentEmail}</td>
+                      <td style={styles.td}>
+                        <Button
+                          onClick={() => handleCopyLink(sa.assessmentLink, String(sa.id))}
+                          variant={isCopied ? "success" : "secondary"}
+                          style={styles.copyCellBtn}
+                        >
+                          {isCopied ? "Copied!" : "Copy Link"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           <div style={styles.successActions}>
@@ -183,64 +240,109 @@ export default function AssignAssessmentModal({
         <form onSubmit={handleSubmit} style={styles.form}>
           {error && <div style={styles.errorBanner}>{error}</div>}
 
-          <Input
-            label="Student Name"
-            placeholder="Enter student's full name"
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            required
-            disabled={loading}
-          />
+          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
+            Select Students ({selectedStudentIds.length} Selected)
+          </div>
 
-          <div style={styles.row}>
-            <Input
-              label="Class"
-              placeholder="e.g. Grade 5A"
-              value={studentClass}
-              onChange={(e) => setStudentClass(e.target.value)}
-              required
-              disabled={loading}
+          <div style={styles.studentControlsRow}>
+            <input
+              type="text"
+              placeholder="Search students by name, email, or scholar ID..."
+              value={studentsSearch}
+              onChange={(e) => setStudentsSearch(e.target.value)}
+              style={styles.studentSearchInput}
             />
-
-            <div style={styles.dobWrapper}>
-              <label style={styles.dobLabel}>Date of Birth</label>
-              <input
-                type="date"
-                style={styles.dateInput}
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                required
-                disabled={loading}
-              />
+            <div style={styles.studentBatchActions}>
+              <button
+                type="button"
+                onClick={() => {
+                  const filteredIds = filteredStudents.map(s => Number(s.id));
+                  setSelectedStudentIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+                }}
+                style={styles.textLinkButton}
+              >
+                Select All Matching
+              </button>
+              <span style={{ color: "var(--border-color)" }}>|</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const filteredIds = filteredStudents.map(s => Number(s.id));
+                  setSelectedStudentIds(prev => prev.filter(id => !filteredIds.includes(id)));
+                }}
+                style={styles.textLinkButton}
+              >
+                Deselect All Matching
+              </button>
             </div>
           </div>
 
-          <Input
-            label="Student Email"
-            type="email"
-            placeholder="student@example.com"
-            value={studentEmail}
-            onChange={(e) => setStudentEmail(e.target.value)}
-            required
-            disabled={loading}
-          />
-
-          <Input
-            label="Contact Number (Digits only)"
-            type="tel"
-            placeholder="e.g. 9876543210"
-            value={contact}
-            onChange={handleContactChange}
-            required
-            disabled={loading}
-          />
+          <div style={styles.studentListContainer}>
+            {loadingStudents ? (
+              <div style={styles.emptyState}>
+                <div className="spinner" style={{ marginBottom: "1rem" }}></div>
+                Loading student records...
+              </div>
+            ) : students.length === 0 ? (
+              <div style={styles.emptyState}>
+                No students found in this class. Please upload students first.
+              </div>
+            ) : (
+              <div style={styles.studentGrid}>
+                {filteredStudents.map(s => {
+                  const isChecked = selectedStudentIds.includes(Number(s.id));
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => {
+                        const idNum = Number(s.id);
+                        setSelectedStudentIds(prev =>
+                          prev.includes(idNum)
+                            ? prev.filter(id => id !== idNum)
+                            : [...prev, idNum]
+                        );
+                      }}
+                      style={{
+                        ...styles.studentCard,
+                        borderColor: isChecked ? "var(--primary)" : "var(--border-color)",
+                        backgroundColor: isChecked ? "var(--primary-light)" : "var(--bg-card)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}} // handled by card onClick
+                        style={styles.checkbox}
+                      />
+                      {s.pictureUrl ? (
+                        <img
+                          src={s.pictureUrl}
+                          alt={s.name}
+                          style={styles.studentAvatar}
+                        />
+                      ) : (
+                        <div style={styles.studentAvatarInitials}>
+                          {s.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                        </div>
+                      )}
+                      <div style={styles.studentCardInfo}>
+                        <div style={styles.studentName}>{s.name}</div>
+                        <div style={styles.studentEmail}>{s.email}</div>
+                        <div style={styles.studentScholar}>Scholar ID: {s.scholarNumber}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div style={styles.actions}>
             <Button variant="secondary" onClick={onClose} type="button" disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" loading={loading}>
-              Assign Student
+            <Button type="submit" loading={loading} disabled={selectedStudentIds.length === 0}>
+              Assign Student ({selectedStudentIds.length})
             </Button>
           </div>
         </form>
@@ -264,30 +366,116 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     border: "1px solid rgba(239, 68, 68, 0.2)",
   },
-  row: {
-    display: "flex",
+  sectionHeader: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: "var(--primary)",
+    borderBottom: "1px solid var(--border-color)",
+    paddingBottom: "0.3rem",
+    marginTop: "0.5rem",
+  },
+  studentListContainer: {
+    maxHeight: "300px",
+    overflowY: "auto",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    padding: "1rem",
+    backgroundColor: "var(--bg-app)",
+  },
+  studentGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
     gap: "1rem",
   },
-  dobWrapper: {
+  studentCard: {
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    padding: "0.8rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  studentAvatar: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+  studentAvatarInitials: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    backgroundColor: "var(--primary-light)",
+    color: "var(--primary)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+  },
+  studentCardInfo: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.4rem",
-    width: "100%",
+    gap: "0.1rem",
+    overflow: "hidden",
   },
-  dobLabel: {
-    fontSize: "0.85rem",
+  studentName: {
+    fontSize: "0.9rem",
     fontWeight: 600,
-    color: "var(--text-secondary)",
+    color: "var(--text-primary)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
-  dateInput: {
-    padding: "0.7rem 1rem",
+  studentEmail: {
+    fontSize: "0.75rem",
+    color: "var(--text-secondary)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  studentScholar: {
+    fontSize: "0.75rem",
+    color: "var(--text-muted)",
+  },
+  studentControlsRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "1rem",
+    flexWrap: "wrap",
+  },
+  studentSearchInput: {
+    flex: 1,
+    minWidth: "200px",
+    padding: "0.6rem 0.8rem",
     borderRadius: "var(--radius-sm)",
     border: "1px solid var(--border-color)",
     backgroundColor: "var(--bg-app)",
     color: "var(--text-primary)",
-    fontSize: "0.95rem",
-    width: "100%",
-    transition: "border-color var(--transition-fast), box-shadow var(--transition-fast)",
+    fontSize: "0.9rem",
+  },
+  studentBatchActions: {
+    display: "flex",
+    gap: "0.6rem",
+    alignItems: "center",
+    fontSize: "0.85rem",
+  },
+  textLinkButton: {
+    background: "none",
+    border: "none",
+    color: "var(--primary)",
+    cursor: "pointer",
+    padding: 0,
+    fontSize: "inherit",
+    fontWeight: 600,
+  },
+  checkbox: {
+    width: "16px",
+    height: "16px",
+    cursor: "pointer",
   },
   actions: {
     display: "flex",
@@ -327,46 +515,36 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.9rem",
     color: "var(--text-secondary)",
   },
-  detailsGrid: {
+  bulkAssignSummary: {
     display: "grid",
     gridTemplateColumns: "repeat(2, 1fr)",
-    gap: "0.8rem",
+    gap: "1rem",
     backgroundColor: "var(--bg-surface-hover)",
     padding: "1rem",
     borderRadius: "var(--radius-sm)",
     border: "1px solid var(--border-color)",
   },
-  detailItem: {
+  summaryItem: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.15rem",
+    gap: "0.2rem",
   },
-  detailLabel: {
+  summaryLabel: {
     fontSize: "0.75rem",
     color: "var(--text-muted)",
     textTransform: "uppercase",
     fontWeight: 600,
   },
-  detailValue: {
-    fontSize: "0.9rem",
-    fontWeight: 500,
+  summaryValue: {
+    fontSize: "1rem",
+    fontWeight: 600,
     color: "var(--text-primary)",
   },
-  fieldLabel: {
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-    display: "block",
-    marginBottom: "0.4rem",
-  },
-  linkContainer: {
-    width: "100%",
-  },
-  linkInputWrapper: {
+  shareableLinkWrapper: {
     display: "flex",
     width: "100%",
   },
-  linkInput: {
+  shareableLinkInput: {
     flex: 1,
     padding: "0.7rem 1rem",
     border: "1px solid var(--border-color)",
@@ -377,21 +555,49 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.9rem",
     outline: "none",
   },
-  emailPreviewContainer: {
-    width: "100%",
-  },
-  emailPreview: {
-    backgroundColor: "var(--bg-app)",
-    color: "var(--text-secondary)",
-    padding: "1rem",
-    borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--border-color)",
-    fontSize: "0.8rem",
-    fontFamily: "monospace",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-all",
-    maxHeight: "150px",
+  linksTableContainer: {
+    maxHeight: "200px",
     overflowY: "auto",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    marginTop: "0.5rem",
+  },
+  linksTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.85rem",
+  },
+  th: {
+    position: "sticky",
+    top: 0,
+    backgroundColor: "var(--bg-surface-hover)",
+    borderBottom: "1px solid var(--border-color)",
+    padding: "0.6rem 0.8rem",
+    textAlign: "left",
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  },
+  tableRow: {
+    borderBottom: "1px solid var(--border-color)",
+  },
+  td: {
+    padding: "0.6rem 0.8rem",
+    color: "var(--text-primary)",
+  },
+  copyCellBtn: {
+    padding: "0.3rem 0.6rem",
+    fontSize: "0.75rem",
+    borderRadius: "var(--radius-xs)",
+  },
+  emptyState: {
+    textAlign: "center",
+    padding: "2rem",
+    color: "var(--text-secondary)",
+    fontSize: "0.9rem",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
   },
   successActions: {
     marginTop: "0.5rem",

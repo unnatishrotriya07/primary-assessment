@@ -6,4 +6,5 @@ export interface ChapterData {
   content?: string;
   textContent?: string;
   questionsCount?: number;
+  tenantId?: string;
 }

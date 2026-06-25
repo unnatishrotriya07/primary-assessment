@@ -39,6 +39,33 @@ export const studentService = {
     );
     return response.data;
   },
+
+  uploadMultipleSections: async (
+    baseClassId: string,
+    filesList: Array<{ file: File; section: string }>
+  ): Promise<{ message: string; count: number }> => {
+    const formData = new FormData();
+    formData.append("base_class_id", baseClassId);
+    
+    const sectionsMap: Record<string, string> = {};
+    filesList.forEach((item) => {
+      formData.append("files", item.file);
+      sectionsMap[item.file.name] = item.section;
+    });
+    
+    formData.append("sections_map", JSON.stringify(sectionsMap));
+    
+    const response = await apiClient.post<{ message: string; count: number }>(
+      "/students/upload-multiple-sections",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+    return response.data;
+  },
   
   uploadPicture: async (id: string, file: File): Promise<StudentData> => {
     const formData = new FormData();

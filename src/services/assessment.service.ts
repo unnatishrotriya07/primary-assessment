@@ -6,6 +6,21 @@ export interface SubmitAnswersParams {
   answers: Record<string, string>;
 }
 
+export interface AssessmentJoinInfoResponse {
+  id: number;
+  title: string;
+  subjectName: string;
+  className: string;
+  isExpired: boolean;
+  questionsCount: number;
+}
+
+export interface StudentJoinVerifyRequest {
+  assessmentId: number;
+  scholarNumber: string;
+  studentName: string;
+}
+
 export interface StudentAssessmentCreate {
   assessmentId: number;
   studentName: string;
@@ -58,6 +73,7 @@ export const assessmentService = {
     date?: string;
     questionsCount: number;
     questionIds?: number[];
+    questionsToAsk?: number;
   }): Promise<AssessmentData> => {
     return api.post<AssessmentData>("/assessments/", data);
   },
@@ -70,6 +86,9 @@ export const assessmentService = {
   assignAssessment: (data: StudentAssessmentCreate): Promise<StudentAssessmentResponse> => {
     return api.post<StudentAssessmentResponse>("/assessments/assign", data);
   },
+  assignAssessmentBulk: (data: { assessmentId: number; studentIds: number[] }): Promise<StudentAssessmentResponse[]> => {
+    return api.post<StudentAssessmentResponse[]>("/assessments/assign-bulk", data);
+  },
   verifyToken: (token: string, email: string): Promise<StudentAssessmentVerifyResponse> => {
     return api.get<StudentAssessmentVerifyResponse>(`/assessments/verify-token`, {
       params: { token, email },
@@ -77,6 +96,12 @@ export const assessmentService = {
   },
   startByToken: (token: string, email: string): Promise<{ sessionId: string; assessment: AssessmentData }> => {
     return api.post<{ sessionId: string; assessment: AssessmentData }>("/assessments/start-by-token", { token, email });
+  },
+  getJoinInfo: (id: string): Promise<AssessmentJoinInfoResponse> => {
+    return api.get<AssessmentJoinInfoResponse>(`/assessments/${id}/join-info`);
+  },
+  joinVerify: (data: StudentJoinVerifyRequest): Promise<StudentAssessmentResponse> => {
+    return api.post<StudentAssessmentResponse>("/assessments/join-verify", data);
   },
 };
 export default assessmentService;

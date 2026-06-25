@@ -9,12 +9,13 @@ import { extractErrorMessage } from "@/utils/helpers";
 interface SubjectFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  defaultClassId?: string;
 }
 
-export default function SubjectForm({ onSuccess, onCancel }: SubjectFormProps) {
+export default function SubjectForm({ onSuccess, onCancel, defaultClassId }: SubjectFormProps) {
   const [subjectName, setSubjectName] = useState("");
   const [code, setCode] = useState("");
-  const [classId, setClassId] = useState("");
+  const [classId, setClassId] = useState(defaultClassId || "");
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

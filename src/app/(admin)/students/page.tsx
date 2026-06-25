@@ -44,6 +44,8 @@ function StudentsWorkspace() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadClassId, setUploadClassId] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<"single" | "multiple">("single");
+  const [selectedSectionFiles, setSelectedSectionFiles] = useState<Array<{ id: string; file: File; section: string }>>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
@@ -51,6 +53,8 @@ function StudentsWorkspace() {
   const openUploadModal = (clsId?: string) => {
     setUploadClassId(clsId || "");
     setUploadFile(null);
+    setUploadMode("single");
+    setSelectedSectionFiles([]);
     setUploadError("");
     setUploadSuccess("");
     setUploadModalOpen(true);
@@ -160,31 +164,72 @@ function StudentsWorkspace() {
     }
   }, [studentIdParam]);
 
+  // Detect section name helper
+  const detectSectionName = (filename: string, index: number): string => {
+    const clean = filename.toUpperCase();
+    const match = clean.match(/(?:SECTION|SEC)?\s*-?\s*\b([A-Z])\b/);
+    if (match) return match[1];
+    return String.fromCharCode(65 + index); // default A, B, C, D...
+  };
+
   // Handle excel upload submit
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadClassId || !uploadFile) {
-      setUploadError("Please select a class and an Excel/CSV file.");
-      return;
-    }
-    setUploadLoading(true);
-    setUploadError("");
-    setUploadSuccess("");
-    try {
-      const res = await studentService.uploadExcel(uploadClassId, uploadFile);
-      setUploadSuccess(res.message || "Roster imported successfully!");
-      loadClasses(); // Refresh class roster student counts
-
-      // Reload active students list if we're currently viewing that class
-      if (classIdParam === uploadClassId) {
-        const data = await studentService.getByClass(uploadClassId);
-        setStudents(data);
+    if (uploadMode === "single") {
+      if (!uploadClassId || !uploadFile) {
+        setUploadError("Please select a class and an Excel/CSV file.");
+        return;
       }
-      setTimeout(() => setUploadModalOpen(false), 2000);
-    } catch (err: any) {
-      setUploadError(extractErrorMessage(err, "Excel import failed. Check file column schema."));
-    } finally {
-      setUploadLoading(false);
+      setUploadLoading(true);
+      setUploadError("");
+      setUploadSuccess("");
+      try {
+        const res = await studentService.uploadExcel(uploadClassId, uploadFile);
+        setUploadSuccess(res.message || "Roster imported successfully!");
+        loadClasses(); // Refresh class roster student counts
+
+        // Reload active students list if we're currently viewing that class
+        if (classIdParam === uploadClassId) {
+          const data = await studentService.getByClass(uploadClassId);
+          setStudents(data);
+        }
+        setTimeout(() => setUploadModalOpen(false), 2000);
+      } catch (err: any) {
+        setUploadError(extractErrorMessage(err, "Excel import failed. Check file column schema."));
+      } finally {
+        setUploadLoading(false);
+      }
+    } else {
+      if (!uploadClassId) {
+        setUploadError("Please select a base class template.");
+        return;
+      }
+      if (selectedSectionFiles.length === 0) {
+        setUploadError("Please select at least one section roster file.");
+        return;
+      }
+      if (selectedSectionFiles.some((sf) => !sf.section.trim())) {
+        setUploadError("Please specify section names for all files.");
+        return;
+      }
+      setUploadLoading(true);
+      setUploadError("");
+      setUploadSuccess("");
+      try {
+        const res = await studentService.uploadMultipleSections(uploadClassId, selectedSectionFiles);
+        setUploadSuccess(res.message || "All section rosters imported successfully!");
+        loadClasses(); // Refresh class counts
+
+        if (classIdParam) {
+          const data = await studentService.getByClass(classIdParam);
+          setStudents(data);
+        }
+        setTimeout(() => setUploadModalOpen(false), 2500);
+      } catch (err: any) {
+        setUploadError(extractErrorMessage(err, "Bulk section upload failed."));
+      } finally {
+        setUploadLoading(false);
+      }
     }
   };
 
@@ -564,28 +609,136 @@ function StudentsWorkspace() {
             {uploadError && <div style={styles.modalError}>{uploadError}</div>}
             {uploadSuccess && <div style={styles.modalSuccess}>{uploadSuccess}</div>}
 
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Excel / CSV File</label>
-              <div style={styles.fileDropZone}>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.xlsm"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  style={styles.fileInput}
-                  required
-                  disabled={uploadLoading}
-                />
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                </svg>
-                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                  {uploadFile ? uploadFile.name : "Select excel roster sheet"}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                  Supports XLSX, XLS, CSV format
-                </span>
-              </div>
+            <div style={styles.uploadModeToggle}>
+              <button
+                type="button"
+                onClick={() => setUploadMode("single")}
+                style={{
+                  ...styles.toggleBtn,
+                  backgroundColor: uploadMode === "single" ? "var(--primary)" : "transparent",
+                  color: uploadMode === "single" ? "#ffffff" : "var(--text-secondary)",
+                  borderRight: "1px solid var(--border-color)",
+                }}
+              >
+                Single Section
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadMode("multiple")}
+                style={{
+                  ...styles.toggleBtn,
+                  backgroundColor: uploadMode === "multiple" ? "var(--primary)" : "transparent",
+                  color: uploadMode === "multiple" ? "#ffffff" : "var(--text-secondary)",
+                }}
+              >
+                Multiple Sections (Bulk Upload)
+              </button>
             </div>
+
+            {uploadMode === "single" ? (
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Excel / CSV File</label>
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.xlsm"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    style={styles.fileInput}
+                    required
+                    disabled={uploadLoading}
+                  />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                  </svg>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                    {uploadFile ? uploadFile.name : "Select excel roster sheet"}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                    Supports XLSX, XLS, CSV format
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Roster Files for Sections</label>
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.xlsm"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      const newItems = files.map((file, idx) => {
+                        const id = Math.random().toString(36).substring(7);
+                        return {
+                          id,
+                          file,
+                          section: detectSectionName(file.name, selectedSectionFiles.length + idx),
+                        };
+                      });
+                      setSelectedSectionFiles((prev) => [...prev, ...newItems]);
+                    }}
+                    style={styles.fileInput}
+                    disabled={uploadLoading}
+                  />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                  </svg>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                    Select / Drop Multiple Section Files
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                    Select one file for each section (e.g. A.xlsx, B.xlsx)
+                  </span>
+                </div>
+
+                {selectedSectionFiles.length > 0 && (
+                  <div style={styles.filesListContainer}>
+                    <h5 style={styles.filesListTitle}>Uploaded Files & Section Mapping</h5>
+                    {selectedSectionFiles.map((sf, index) => (
+                      <div key={sf.id} style={styles.fileItemRow}>
+                        <div style={styles.fileItemInfo}>
+                          <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
+                          <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <div style={styles.fileItemActions}>
+                          <div style={styles.sectionInputWrapper}>
+                            <span style={styles.sectionInputLabel}>Section:</span>
+                            <input
+                              type="text"
+                              value={sf.section}
+                              onChange={(e) => {
+                                const newSec = e.target.value.toUpperCase().slice(0, 5);
+                                setSelectedSectionFiles((prev) =>
+                                  prev.map((item) => (item.id === sf.id ? { ...item, section: newSec } : item))
+                                );
+                              }}
+                              style={styles.sectionInput}
+                              placeholder="e.g. B"
+                              required
+                              disabled={uploadLoading}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
+                            }}
+                            style={styles.fileRemoveBtn}
+                            title="Remove file"
+                            disabled={uploadLoading}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={styles.infoBox}>
               <h5 style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>File Columns Format Hint</h5>
@@ -682,7 +835,9 @@ function StudentsWorkspace() {
           {uploadSuccess && <div style={styles.modalSuccess}>{uploadSuccess}</div>}
 
           <div style={styles.formGroup}>
-            <label style={styles.label}>Select Class</label>
+            <label style={styles.label}>
+              {uploadMode === "single" ? "Select Class" : "Select Base Class Template"}
+            </label>
             <select
               value={uploadClassId}
               onChange={(e) => setUploadClassId(e.target.value)}
@@ -697,30 +852,143 @@ function StudentsWorkspace() {
                 </option>
               ))}
             </select>
+            {uploadMode === "multiple" && (
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                Subjects, grade and class name will be copied from this base class to create new sections.
+              </p>
+            )}
           </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Excel / CSV File</label>
-            <div style={styles.fileDropZone}>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv,.xlsm"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                style={styles.fileInput}
-                required
-                disabled={uploadLoading}
-              />
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-              </svg>
-              <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                {uploadFile ? uploadFile.name : "Select excel roster sheet"}
-              </span>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                Supports XLSX, XLS, CSV format
-              </span>
-            </div>
+          <div style={styles.uploadModeToggle}>
+            <button
+              type="button"
+              onClick={() => setUploadMode("single")}
+              style={{
+                ...styles.toggleBtn,
+                backgroundColor: uploadMode === "single" ? "var(--primary)" : "transparent",
+                color: uploadMode === "single" ? "#ffffff" : "var(--text-secondary)",
+                borderRight: "1px solid var(--border-color)",
+              }}
+            >
+              Single Section
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadMode("multiple")}
+              style={{
+                ...styles.toggleBtn,
+                backgroundColor: uploadMode === "multiple" ? "var(--primary)" : "transparent",
+                color: uploadMode === "multiple" ? "#ffffff" : "var(--text-secondary)",
+              }}
+            >
+              Multiple Sections (Bulk Upload)
+            </button>
           </div>
+
+          {uploadMode === "single" ? (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Excel / CSV File</label>
+              <div style={styles.fileDropZone}>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.xlsm"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  style={styles.fileInput}
+                  required
+                  disabled={uploadLoading}
+                />
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                </svg>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                  {uploadFile ? uploadFile.name : "Select excel roster sheet"}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                  Supports XLSX, XLS, CSV format
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Roster Files for Sections</label>
+              <div style={styles.fileDropZone}>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.xlsm"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const newItems = files.map((file, idx) => {
+                      const id = Math.random().toString(36).substring(7);
+                      return {
+                        id,
+                        file,
+                        section: detectSectionName(file.name, selectedSectionFiles.length + idx),
+                      };
+                    });
+                    setSelectedSectionFiles((prev) => [...prev, ...newItems]);
+                  }}
+                  style={styles.fileInput}
+                  disabled={uploadLoading}
+                />
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                </svg>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                  Select / Drop Multiple Section Files
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                  Select one file for each section (e.g. A.xlsx, B.xlsx)
+                </span>
+              </div>
+
+              {selectedSectionFiles.length > 0 && (
+                <div style={styles.filesListContainer}>
+                  <h5 style={styles.filesListTitle}>Uploaded Files & Section Mapping</h5>
+                  {selectedSectionFiles.map((sf, index) => (
+                    <div key={sf.id} style={styles.fileItemRow}>
+                      <div style={styles.fileItemInfo}>
+                        <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
+                        <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
+                      </div>
+                      <div style={styles.fileItemActions}>
+                        <div style={styles.sectionInputWrapper}>
+                          <span style={styles.sectionInputLabel}>Section:</span>
+                          <input
+                            type="text"
+                            value={sf.section}
+                            onChange={(e) => {
+                              const newSec = e.target.value.toUpperCase().slice(0, 5);
+                              setSelectedSectionFiles((prev) =>
+                                prev.map((item) => (item.id === sf.id ? { ...item, section: newSec } : item))
+                              );
+                            }}
+                            style={styles.sectionInput}
+                            placeholder="e.g. B"
+                            required
+                            disabled={uploadLoading}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
+                          }}
+                          style={styles.fileRemoveBtn}
+                          title="Remove file"
+                          disabled={uploadLoading}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={styles.infoBox}>
             <h5 style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>File Columns Format Hint</h5>
@@ -1200,5 +1468,106 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 500,
     border: "1px solid rgba(74, 130, 49, 0.2)",
+  },
+  uploadModeToggle: {
+    display: "flex",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    overflow: "hidden",
+    marginBottom: "0.5rem",
+  },
+  toggleBtn: {
+    flex: 1,
+    padding: "0.6rem 1rem",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    border: "none",
+    textAlign: "center",
+    transition: "all var(--transition-fast)",
+  },
+  filesListContainer: {
+    marginTop: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    maxHeight: "220px",
+    overflowY: "auto",
+    paddingRight: "0.2rem",
+  },
+  filesListTitle: {
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    marginBottom: "0.2rem",
+  },
+  fileItemRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "0.6rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface-hover)",
+    gap: "0.8rem",
+  },
+  fileItemInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    minWidth: 0,
+    flex: 1,
+  },
+  fileItemName: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  fileItemSize: {
+    fontSize: "0.75rem",
+    color: "var(--text-muted)",
+    whiteSpace: "nowrap",
+  },
+  fileItemActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+  },
+  sectionInputWrapper: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.3rem",
+  },
+  sectionInputLabel: {
+    fontSize: "0.75rem",
+    color: "var(--text-secondary)",
+    fontWeight: 500,
+  },
+  sectionInput: {
+    width: "48px",
+    padding: "0.25rem 0.4rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface)",
+    color: "var(--text-primary)",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    textAlign: "center",
+    outline: "none",
+  },
+  fileRemoveBtn: {
+    color: "var(--error)",
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    padding: "0.2rem",
+    borderRadius: "var(--radius-sm)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "background-color 0.2s",
   }
 };

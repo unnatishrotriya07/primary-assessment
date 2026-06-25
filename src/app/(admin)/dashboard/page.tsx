@@ -126,7 +126,7 @@ export default function AdminDashboard() {
         <div className="card" style={styles.sideCard}>
           <h3>Quick Actions</h3>
           <div style={styles.actionsContainer}>
-            <a href="/questions/generate" style={styles.actionBtn}>
+            <a href="/assessments?tab=generate" style={styles.actionBtn}>
               Create Questions with AI
             </a>
             <a href="/assessments" style={styles.actionBtnSecondary}>

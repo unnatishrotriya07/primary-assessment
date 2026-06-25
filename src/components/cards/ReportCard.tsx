@@ -29,10 +29,10 @@ interface ReportCardProps {
 }
 
 const SKILL_CONFIG = [
-  { key: "scoreCommunication", label: "Communication", color: "#C7C6F5" },
-  { key: "scoreNumeracy", label: "Numeracy", color: "#D8EAF7" },
-  { key: "scoreCreativity", label: "Creativity", color: "#F8E8E8" },
-  { key: "scoreEmotionalIq", label: "Emotional IQ", color: "#D9EFCB" },
+  { key: "scoreCommunication", label: "Communication", color: "var(--primary)" },
+  { key: "scoreNumeracy", label: "Numeracy", color: "var(--secondary)" },
+  { key: "scoreCreativity", label: "Creativity", color: "var(--accent)" },
+  { key: "scoreEmotionalIq", label: "Emotional IQ", color: "var(--success)" },
 ] as const;
 
 const REC_COLOR: Record<string, string> = {
@@ -367,7 +367,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
   },
   reportHeader: {
-    background: "linear-gradient(135deg, #C7C6F5, #D8EAF7)",
+    background: "linear-gradient(135deg, var(--primary-light), var(--secondary-light))",
     borderRadius: "var(--radius-md)",
     padding: "1.5rem",
     textAlign: "center",
@@ -526,7 +526,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0.6rem 1.2rem",
     backgroundColor: "var(--primary-light)",
     color: "var(--primary)",
-    border: "1px solid rgba(99, 102, 241, 0.2)",
+    border: "1px solid rgba(139, 124, 251, 0.2)",
     borderRadius: "var(--radius-sm)",
     fontWeight: 600,
     cursor: "pointer",

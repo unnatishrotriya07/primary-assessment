@@ -280,6 +280,12 @@ export default function InterviewPage({ params }: PageProps) {
         hasRepeatedCurrentRef.current = false; // Reset repeat flag for new question
 
         let textToSpeak = questions[currentIdx].q;
+        const isMath = (subjectName || "").toLowerCase().includes("math");
+        if (isMath) {
+            textToSpeak = textToSpeak.trim().endsWith(".") 
+                ? `${textToSpeak} Please write down your step-by-step solution.` 
+                : `${textToSpeak}. Please write down your step-by-step solution.`;
+        }
         if (currentIdx === 0) {
             // Get greeting time of day (morning, afternoon, evening)
             const hour = new Date().getHours();
@@ -358,18 +364,31 @@ export default function InterviewPage({ params }: PageProps) {
 
         let fired = false;
         let fallbackTimeout: any = null;
+        let onstartFired = false;
+        let onstartTimeout: any = null;
 
         const onEndOnce = () => {
             if (fired) return;
             fired = true;
+            
+            // Clear callbacks immediately to prevent late-firing events
+            utt.onstart = null;
+            utt.onend = null;
+            utt.onerror = null;
+
+            if (onstartTimeout) clearTimeout(onstartTimeout);
             if (fallbackTimeout) clearTimeout(fallbackTimeout);
             clearInterval(resumeInterval);
             updateIsSpeaking(false);
-            utteranceRef.current = null;
+            if (utteranceRef.current === utt) {
+                utteranceRef.current = null;
+            }
             onEnd?.();
         };
 
         utt.onstart = () => {
+            onstartFired = true;
+            if (onstartTimeout) clearTimeout(onstartTimeout);
             updateIsSpeaking(true);
             setIsRecording(false);
             if (recognitionRef.current) {
@@ -392,6 +411,13 @@ export default function InterviewPage({ params }: PageProps) {
             console.warn(`SpeechSynthesis fallback timeout triggered for text: "${text}". Moving ahead.`);
             onEndOnce();
         }, estimatedDurationMs);
+
+        onstartTimeout = setTimeout(() => {
+            if (!onstartFired) {
+                console.warn(`SpeechSynthesis failed to start within 1.5 seconds for text: "${text}". Bypassing speech synthesis.`);
+                onEndOnce();
+            }
+        }, 1500);
 
         try {
             window.speechSynthesis.speak(utt);
@@ -483,7 +509,14 @@ export default function InterviewPage({ params }: PageProps) {
                 setLiveCaption("");
                 setTypedText("");
 
-                const repeatPrompt = `Sure, let me repeat that. ${questions[currentIdx].q}`;
+                let qText = questions[currentIdx].q;
+                const isMath = (subjectName || "").toLowerCase().includes("math");
+                if (isMath) {
+                    qText = qText.trim().endsWith(".") 
+                        ? `${qText} Please write down your step-by-step solution.` 
+                        : `${qText}. Please write down your step-by-step solution.`;
+                }
+                const repeatPrompt = `Sure, let me repeat that. ${qText}`;
                 speakText(repeatPrompt, () => {
                     if (micEnabledRef.current) {
                         startSpeechRecognition();
@@ -492,7 +525,7 @@ export default function InterviewPage({ params }: PageProps) {
                 return;
             }
 
-            // Auto-next silence detection: submit after 2.2 seconds of silence
+            // Auto-next silence detection: submit after 4.5 seconds of silence
             if (currentSpeech.length > 0) {
                 if (silenceTimeoutRef.current) {
                     clearTimeout(silenceTimeoutRef.current);
@@ -509,7 +542,7 @@ export default function InterviewPage({ params }: PageProps) {
                     if (submitRef.current) {
                         submitRef.current(currentSpeech);
                     }
-                }, 2200); // 2.2 seconds of silence
+                }, 4500); // 4.5 seconds of silence
             }
         };
 
@@ -730,7 +763,18 @@ export default function InterviewPage({ params }: PageProps) {
                         </ul>
                     </div>
                     <button
-                        onClick={() => setPhase("interview")}
+                        onClick={() => {
+                            // Unlock SpeechSynthesis synchronously within user gesture
+                            if (typeof window !== "undefined" && window.speechSynthesis) {
+                                try {
+                                    const unlockUtt = new SpeechSynthesisUtterance("");
+                                    window.speechSynthesis.speak(unlockUtt);
+                                } catch (e) {
+                                    console.warn("Failed to unlock speech synthesis:", e);
+                                }
+                            }
+                            setPhase("interview");
+                        }}
                         style={s.lobbyStartBtn}
                         className="interactive-element"
                     >
@@ -808,6 +852,47 @@ export default function InterviewPage({ params }: PageProps) {
                     {/* Question Subtitles overlay */}
                     <div style={s.questionSubtitleBox}>
                         <p style={s.questionText}>{currentQ?.q || "Initializing..."}</p>
+                        {currentQ && (subjectName || "").toLowerCase().includes("math") && (
+                            <p style={{
+                                fontSize: "0.95rem",
+                                color: "var(--primary)",
+                                fontWeight: "bold",
+                                marginTop: "0.5rem",
+                                fontStyle: "italic"
+                            }}>
+                                Please write down your step-by-step solution.
+                            </p>
+                        )}
+                        {currentQ && (
+                            <button
+                                onClick={() => {
+                                    if (window.speechSynthesis) {
+                                        try { window.speechSynthesis.cancel(); } catch (_) {}
+                                    }
+                                    if (recognitionRef.current) {
+                                        try { recognitionRef.current.stop(); } catch (_) {}
+                                    }
+                                    let readText = questions[currentIdx].q;
+                                    const isMath = (subjectName || "").toLowerCase().includes("math");
+                                    if (isMath) {
+                                        readText = readText.trim().endsWith(".") 
+                                            ? `${readText} Please write down your step-by-step solution.` 
+                                            : `${readText}. Please write down your step-by-step solution.`;
+                                    }
+                                    speakText(readText, () => {
+                                        if (micEnabledRef.current) {
+                                            startSpeechRecognition();
+                                        }
+                                    });
+                                }}
+                                style={s.readAloudBtn}
+                                className="interactive-element"
+                                title="Read Question Aloud"
+                                disabled={isSpeaking || isSubmitting}
+                            >
+                                {isSpeaking ? "🔊 Speaking..." : "🔊 Read Aloud"}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -961,7 +1046,7 @@ export default function InterviewPage({ params }: PageProps) {
                 <button
                     style={{ ...s.controlBtn, ...s.btnEndCall }}
                     onClick={handleManualNext}
-                    disabled={isSubmitting || !typedText.trim()}
+                    disabled={isSubmitting}
                     title="Submit Answer"
                 >
                     <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Next →</span>
@@ -1067,9 +1152,9 @@ const s: Record<string, React.CSSProperties> = {
         width: "120px",
         height: "120px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 100%)",
+        background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
         border: "3px solid var(--glass-border)",
-        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.4)",
+        boxShadow: "0 10px 30px rgba(139, 124, 251, 0.25)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1118,6 +1203,21 @@ const s: Record<string, React.CSSProperties> = {
         lineHeight: 1.5,
         color: "var(--text-primary)",
         margin: 0,
+    },
+    readAloudBtn: {
+        marginTop: "0.75rem",
+        padding: "0.4rem 1rem",
+        borderRadius: "20px",
+        border: "1px solid var(--primary)",
+        backgroundColor: "var(--primary-light)",
+        color: "var(--primary)",
+        fontSize: "0.85rem",
+        fontWeight: 600,
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.4rem",
     },
     studentPip: {
         flex: 1,
@@ -1401,9 +1501,9 @@ const s: Record<string, React.CSSProperties> = {
         width: "100px",
         height: "100px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, #C7C6F5 0%, #D8EAF7 100%)",
+        background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
         border: "3px solid var(--glass-border)",
-        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.4)",
+        boxShadow: "0 10px 30px rgba(139, 124, 251, 0.25)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

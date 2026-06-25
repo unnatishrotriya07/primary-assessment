@@ -42,8 +42,8 @@ export default function QuestionGeneratorForm() {
   const [chapterId, setChapterId] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
   const [cognitiveLevel, setCognitiveLevel] = useState("applying");
-  const [questionType, setQuestionType] = useState("mixed");
-  const [count, setCount] = useState("5");
+  const [questionType, setQuestionType] = useState("tita");
+  const [count, setCount] = useState("30");
   const [session, setSession] = useState("");
   const [isSessionModified, setIsSessionModified] = useState(false);
   const [regenerate, setRegenerate] = useState(false);
@@ -225,9 +225,9 @@ export default function QuestionGeneratorForm() {
     const newQ: QuestionData = {
       id: "draft_" + Math.random().toString(36).substring(2, 9),
       text: "",
-      options: ["", "", "", ""],
+      options: [],
       correctAnswer: "",
-      questionType: "mcq",
+      questionType: "tita",
       difficulty: difficulty as any,
       cognitiveLevel: cognitiveLevel,
       subjectId: subjectId,
@@ -252,20 +252,9 @@ export default function QuestionGeneratorForm() {
         setError(`Question ${i + 1} has empty text.`);
         return;
       }
-      if (q.options && q.options.length > 0) {
-        if (q.options.some((opt) => !opt.trim())) {
-          setError(`Question ${i + 1} has incomplete option fields.`);
-          return;
-        }
-        if (!q.correctAnswer) {
-          setError(`Question ${i + 1} has no correct answer selected.`);
-          return;
-        }
-      } else {
-        if (!q.correctAnswer || !q.correctAnswer.trim()) {
-          setError(`Question ${i + 1} must have an expected answer.`);
-          return;
-        }
+      if (!q.correctAnswer || !q.correctAnswer.trim()) {
+        setError(`Question ${i + 1} must have an expected answer.`);
+        return;
       }
     }
 
@@ -276,9 +265,9 @@ export default function QuestionGeneratorForm() {
       const savedRes = await questionService.batchSave({
         questions: draftQuestions.map((q) => ({
           text: q.text,
-          options: q.options || [],
+          options: [],
           correctAnswer: q.correctAnswer,
-          questionType: q.questionType || (q.options && q.options.length > 0 ? "mcq" : "tita"),
+          questionType: "tita",
           difficulty: q.difficulty,
           cognitiveLevel: q.cognitiveLevel,
           classId: q.classId ? parseInt(String(q.classId), 10) : undefined,
@@ -336,7 +325,6 @@ export default function QuestionGeneratorForm() {
 
           <div style={styles.cardsList}>
             {draftQuestions.map((q, qIndex) => {
-              const isMcq = q.options && q.options.length > 0;
               return (
                 <div key={q.id || qIndex} className="glass-panel" style={styles.questionCard}>
                   <div style={styles.cardHeader}>
@@ -347,37 +335,14 @@ export default function QuestionGeneratorForm() {
                         borderRadius: "12px",
                         fontSize: "0.72rem",
                         fontWeight: 600,
-                        backgroundColor: isMcq ? "rgba(59, 130, 246, 0.1)" : "rgba(16, 185, 129, 0.1)",
-                        color: isMcq ? "rgb(59, 130, 246)" : "rgb(16, 185, 129)",
-                        border: isMcq ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)",
+                        backgroundColor: "rgba(16, 185, 129, 0.1)",
+                        color: "rgb(16, 185, 129)",
+                        border: "1px solid rgba(16, 185, 129, 0.2)",
                       }}>
-                        {isMcq ? "MCQ" : "TITA (Descriptive)"}
+                        TITA (Descriptive)
                       </span>
                     </div>
                     <div style={styles.cardActions}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Toggle MCQ vs Descriptive
-                          setDraftQuestions((prev) =>
-                            prev.map((item, idx) => {
-                              if (idx === qIndex) {
-                                return {
-                                  ...item,
-                                  options: isMcq ? [] : ["", "", "", ""],
-                                  correctAnswer: "",
-                                  questionType: isMcq ? "tita" : "mcq",
-                                };
-                              }
-                              return item;
-                            })
-                          );
-                        }}
-                        style={styles.toggleTypeBtn}
-                        className="interactive-element"
-                      >
-                        {isMcq ? "Convert to Descriptive" : "Convert to MCQ"}
-                      </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteDraftQuestion(qIndex)}
@@ -413,58 +378,16 @@ export default function QuestionGeneratorForm() {
                     />
                   </div>
 
-                  {isMcq ? (
-                    <div style={styles.optionsSection}>
-                      <label style={styles.fieldLabel}>Options (Multiple Choice)</label>
-                      <div className="options-grid-responsive">
-                        {q.options.map((opt, oIndex) => (
-                          <div key={oIndex} style={styles.optionInputWrapper}>
-                            <span style={styles.optionIndicator}>
-                              {String.fromCharCode(65 + oIndex)}
-                            </span>
-                            <input
-                              type="text"
-                              value={opt}
-                              onChange={(e) =>
-                                handleOptionChange(qIndex, oIndex, e.target.value)
-                              }
-                              style={styles.optionInput}
-                              placeholder={`Option ${String.fromCharCode(65 + oIndex)}`}
-                              required
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <div style={{ ...styles.fieldGroup, marginTop: "1rem" }}>
-                        <label style={styles.fieldLabel}>Correct Answer</label>
-                        <select
-                          value={q.correctAnswer || ""}
-                          onChange={(e) => handleCorrectAnswerChange(qIndex, e.target.value)}
-                          style={styles.select}
-                          required
-                        >
-                          <option value="">Select the correct option...</option>
-                          {q.options.map((opt, oIndex) => (
-                            <option key={oIndex} value={opt}>
-                              Option {String.fromCharCode(65 + oIndex)}: {opt || "(empty)"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Expected Answer</label>
-                      <textarea
-                        value={q.correctAnswer || ""}
-                        onChange={(e) => handleCorrectAnswerChange(qIndex, e.target.value)}
-                        style={styles.textarea}
-                        placeholder="Enter the expected descriptive/numeric answer..."
-                        required
-                      />
-                    </div>
-                  )}
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>Expected Answer</label>
+                    <textarea
+                      value={q.correctAnswer || ""}
+                      onChange={(e) => handleCorrectAnswerChange(qIndex, e.target.value)}
+                      style={styles.textarea}
+                      placeholder="Enter the expected descriptive/numeric answer..."
+                      required
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -584,19 +507,6 @@ export default function QuestionGeneratorForm() {
                 <option value="easy">Easy (Foundational)</option>
                 <option value="medium">Medium (Intermediate)</option>
                 <option value="hard">Hard (Advanced Challenge)</option>
-              </select>
-            </div>
-
-            <div style={styles.selectGroup}>
-              <label style={styles.label}>Question Type</label>
-              <select
-                value={questionType}
-                onChange={(e) => setQuestionType(e.target.value)}
-                style={styles.select}
-              >
-                <option value="mixed">Mixed (MCQ & TITA)</option>
-                <option value="mcq">MCQ Only</option>
-                <option value="tita">TITA Only (Descriptive)</option>
               </select>
             </div>
           </div>

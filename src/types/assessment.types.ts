@@ -31,6 +31,7 @@ export interface AssessmentData {
   questionsCount: number;
   durationMinutes?: number;
   questions?: QuestionData[];
+  questionsToAsk?: number;
   status: "Active" | "Completed" | "Scheduled";
   date?: string;
   assignedStudents?: StudentAssignmentData[];

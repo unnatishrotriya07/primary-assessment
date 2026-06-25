@@ -167,7 +167,7 @@ export default function TeamSettings() {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
         <div className="spinner" style={{ marginBottom: "1rem" }}></div>
-        Loading team settings...
+        Loading Team...
       </div>
     );
   }
@@ -175,7 +175,7 @@ export default function TeamSettings() {
   return (
     <div style={styles.container}>
       <PageHeader
-        title="Role Management & Team Settings"
+        title="Role Management & Team"
         description="Configure fine-grained roles and access permissions for your school's faculty."
         action={
           <Button onClick={handleOpenAdd} variant="primary">
