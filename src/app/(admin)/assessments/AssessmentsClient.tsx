@@ -22,6 +22,14 @@ export default function AssessmentsClient() {
       } else {
         setActiveTab("assessments");
       }
+
+      const action = params.get("action");
+      if (action === "create") {
+        setIsModalOpen(true);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("action");
+        window.history.replaceState({}, "", url.toString());
+      }
     }
   }, []);
 
@@ -68,8 +76,8 @@ export default function AssessmentsClient() {
 
   const tabs = [
     { id: "assessments", label: "Assessments" },
-    { id: "questions", label: "Question Bank" },
-    { id: "generate", label: "Question Generator" },
+    { id: "questions", label: "Saved Questions" },
+    { id: "generate", label: "Generate Questions with AI" },
   ];
 
   return (

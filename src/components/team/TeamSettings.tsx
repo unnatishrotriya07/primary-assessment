@@ -9,13 +9,13 @@ import Input from "@/components/common/Input";
 import { extractErrorMessage } from "@/utils/helpers";
 
 const APP_FEATURES = [
-  { key: "dashboard", label: "Dashboard" },
+  { key: "dashboard", label: "Today" },
   { key: "classes", label: "Classes" },
   { key: "subjects", label: "Subjects" },
   { key: "chapters", label: "Chapters" },
-  { key: "questions", label: "Question Bank" },
+  { key: "questions", label: "Saved Questions" },
   { key: "assessments", label: "Assessments" },
-  { key: "reports", label: "Reports" },
+  { key: "reports", label: "Learning Insights" },
   { key: "students", label: "Students" },
 ];
 

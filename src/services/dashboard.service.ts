@@ -15,6 +15,13 @@ export interface DashboardStats {
     grade: string;
     accuracy: number;
   }>;
+  teacher_workloads?: Array<{
+    name: string;
+    course_class: string;
+    recent_action: string;
+    time: string;
+    status: string;
+  }>;
 }
 
 export const dashboardService = {

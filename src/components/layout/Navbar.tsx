@@ -24,6 +24,17 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
           setUser(JSON.parse(stored));
         } catch (e) {}
       }
+
+      const handleStorageUpdate = () => {
+        const updated = localStorage.getItem(STORAGE_KEYS.USER);
+        if (updated) {
+          try {
+            setUser(JSON.parse(updated));
+          } catch (e) {}
+        }
+      };
+      window.addEventListener("storage", handleStorageUpdate);
+      return () => window.removeEventListener("storage", handleStorageUpdate);
     }
   }, []);
 
@@ -59,7 +70,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
 
   const getBreadcrumbs = () => {
     const parts = pathname.split("/").filter(Boolean);
-    const crumbs = [{ label: "Home", href: "/dashboard" }];
+    const crumbs = [{ label: "Today", href: "/dashboard" }];
     
     if (parts.length === 0 || parts[0] === "dashboard") {
       return crumbs;
@@ -77,21 +88,47 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
     const firstSec = activeParts[0];
 
     if (firstSec === "syllabus" || firstSec === "classes" || firstSec === "subjects" || firstSec === "chapters") {
-      crumbs.push({ label: "Classes", href: "/syllabus" });
-      if (firstSec === "subjects") crumbs.push({ label: "Subjects", href: "/subjects" });
-      if (firstSec === "chapters") crumbs.push({ label: "Chapters", href: "/chapters" });
+      crumbs.push({ label: "Administration", href: "/syllabus" });
+      
+      // Determine tab if visible in URL query
+      let currentTab = "";
+      if (typeof window !== "undefined") {
+        currentTab = new URLSearchParams(window.location.search).get("tab") || "";
+      }
+      
+      if (firstSec === "subjects" || currentTab === "subjects") {
+        crumbs.push({ label: "Subjects", href: "/syllabus?tab=subjects" });
+      } else if (firstSec === "chapters" || currentTab === "chapters") {
+        crumbs.push({ label: "Chapters", href: "/syllabus?tab=chapters" });
+      } else {
+        crumbs.push({ label: "Classes", href: "/syllabus?tab=classes" });
+      }
     } else if (firstSec === "assessments") {
-      crumbs.push({ label: "Assessments", href: "/assessments" });
+      let currentTab = "";
+      if (typeof window !== "undefined") {
+        currentTab = new URLSearchParams(window.location.search).get("tab") || "";
+      }
+      
+      if (currentTab === "questions") {
+        crumbs.push({ label: "Administration", href: "/syllabus" });
+        crumbs.push({ label: "Saved Questions", href: "/assessments?tab=questions" });
+      } else {
+        crumbs.push({ label: "Assessments", href: "/assessments" });
+      }
     } else if (firstSec === "students") {
       crumbs.push({ label: "Students", href: "/students" });
     } else if (firstSec === "team") {
-      crumbs.push({ label: "Settings", href: "/team" });
+      crumbs.push({ label: "Administration", href: "/syllabus" });
+      crumbs.push({ label: "Team", href: "/team" });
+    } else if (firstSec === "school-settings") {
+      crumbs.push({ label: "Administration", href: "/syllabus" });
+      crumbs.push({ label: "School Settings", href: "/school-settings" });
     } else if (firstSec === "questions") {
-      crumbs.push({ label: "Assessments", href: "/assessments" });
-      crumbs.push({ label: "Question Bank", href: "/assessments?tab=questions" });
+      crumbs.push({ label: "Administration", href: "/syllabus" });
+      crumbs.push({ label: "Saved Questions", href: "/assessments?tab=questions" });
     } else if (firstSec === "reports") {
-      crumbs.push({ label: "Reports", href: "/students" });
-      if (activeParts[1]) crumbs.push({ label: "Report Details", href: pathname });
+      crumbs.push({ label: "Learning Insights", href: "/reports" });
+      if (activeParts[1]) crumbs.push({ label: "Diagnostic Report", href: pathname });
     } else {
       crumbs.push({ label: firstSec.charAt(0).toUpperCase() + firstSec.slice(1), href: `/${firstSec}` });
     }
@@ -99,6 +136,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
     return crumbs;
   };
 
+  const isSuperAdmin = user?.role === "admin" && !user?.tenantId;
   const displayNameText = user?.schoolName || "Momentum Academy";
   const displayName = user?.name || "Admin Account";
   const displayRole = getRoleTitle();
@@ -122,6 +160,14 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
           </svg>
         </button>
 
+        {/* School Name */}
+        {!isSuperAdmin && (
+          <>
+            <span style={styles.schoolNameHeader}>{displayNameText}</span>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0 0.5rem" }}>|</span>
+          </>
+        )}
+
         {/* Breadcrumbs */}
         <div style={styles.breadcrumbs}>
           {getBreadcrumbs().map((crumb, idx, arr) => (
@@ -135,15 +181,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
         </div>
       </div>
 
-      {/* Center: Contextual Search Indicator */}
-      <div style={styles.center}>
-        <div style={styles.searchBar}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" style={{ marginRight: 8 }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <span style={styles.searchText}>Search platform...</span>
-        </div>
-      </div>
+
 
       {/* Right side: Notification and Profile dropdown avatar */}
       <div className="navbar-right" style={styles.right}>
@@ -187,7 +225,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
                   <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" />
                   <rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
                 </svg>
-                Dashboard
+                Today
               </Link>
               
               <div style={styles.dropdownDivider} />
@@ -212,6 +250,13 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  schoolNameHeader: {
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-sans)",
+    letterSpacing: "-0.02em",
+  },
   header: {
     display: "flex",
     height: "72px",
@@ -234,7 +279,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     color: "var(--text-secondary)",
     cursor: "pointer",
-    display: "none", // Will be visible in responsive mobile CSS styles
+    display: "none",
     padding: 0,
   },
   breadcrumbs: {
@@ -375,4 +420,5 @@ const styles: Record<string, React.CSSProperties> = {
   logoutItem: {
     color: "var(--error)",
   },
+  styles: {},
 };

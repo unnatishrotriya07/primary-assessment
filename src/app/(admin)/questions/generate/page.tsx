@@ -12,7 +12,7 @@ export default function QuestionGeneratePage() {
 
   return (
     <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
-      Redirecting to Question Generator...
+      Redirecting to Generate Questions with AI...
     </div>
   );
 }

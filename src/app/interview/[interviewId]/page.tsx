@@ -13,13 +13,13 @@ interface PageProps {
 }
 
 const CHEERS = [
-    "Great answer!",
-    "Wonderful! Keep going!",
-    "Amazing!",
-    "Brilliant!",
-    "Super!",
-    "Love that!",
-    "Fantastic!",
+    "Thank you. Let's move to the next question.",
+    "Got it. Let's try the next one.",
+    "Okay, let's look at the next question.",
+    "Thank you. Let's proceed to the next one.",
+    "Understood. Let's try the next question.",
+    "All right. Let's look at the next one.",
+    "Thank you. Here is the next question.",
 ];
 
 export default function InterviewPage({ params }: PageProps) {
@@ -625,7 +625,7 @@ export default function InterviewPage({ params }: PageProps) {
 
         if (isLast) {
             updateIsSubmitting(true);
-            const goodbye = `Thank you ${studentName}! That was wonderful. Let me prepare your report now.`;
+            const goodbye = `Thank you, ${studentName}. You have completed all the questions. Your responses have been saved and submitted.`;
             addMsg("ai", goodbye);
 
             const finalTranscript: TranscriptEntry[] = [
@@ -754,15 +754,15 @@ export default function InterviewPage({ params }: PageProps) {
                             <path d="M21.5 12v6" />
                         </svg>
                     </div>
-                    <h2 style={s.lobbyTitle}>Welcome to the Assessment Lobby</h2>
+                    <h2 style={s.lobbyTitle}>Classroom Assessment</h2>
                     <p style={s.lobbySubtitle}>
-                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, Buddy is ready to guide you through <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
+                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, your assessment is ready to begin for <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
                     </p>
                     <div style={s.lobbyInstructions}>
                         <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "var(--text-primary)" }}>Tips before you start:</p>
                         <ul style={{ paddingLeft: "1.2rem", margin: 0, textAlign: "left", fontSize: "0.9rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                            <li>Make sure you are in a quiet room so Buddy can hear you.</li>
-                            <li>Buddy will read each question aloud. Listen carefully!</li>
+                            <li>Make sure you are in a quiet room.</li>
+                            <li>Each question will be read aloud. Listen carefully!</li>
                             <li>Speak clearly into your microphone when you answer.</li>
                         </ul>
                     </div>
@@ -804,10 +804,10 @@ export default function InterviewPage({ params }: PageProps) {
                     </div>
                 </div>
                 <h3 style={{ fontFamily: "var(--font-heading)", marginTop: "2rem", marginBottom: "0.5rem" }}>
-                    Analyzing responses...
+                    Submitting your assessment...
                 </h3>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>
-                    Buddy is reviewing your verbal responses to compile your admission note.
+                    Please wait while your answers are being processed and saved.
                 </p>
             </div>
         );
@@ -867,7 +867,7 @@ export default function InterviewPage({ params }: PageProps) {
                                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
                                 </svg>
-                                Buddy is Speaking
+                                Reading question...
                             </>
                         ) : isRecording ? (
                             <>
@@ -875,12 +875,12 @@ export default function InterviewPage({ params }: PageProps) {
                                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
                                     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                                 </svg>
-                                Mic Active
+                                Listening for answer...
                             </>
                         ) : (
                             <>
                                 <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--primary)", marginRight: 6, animation: "pulse-glow 1.5s infinite", verticalAlign: "middle" }}></span>
-                                Listening
+                                Ready
                             </>
                         )}
                     </div>
@@ -1204,9 +1204,8 @@ const s: Record<string, React.CSSProperties> = {
         width: "120px",
         height: "120px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-        border: "3px solid var(--glass-border)",
-        boxShadow: "0 10px 30px rgba(139, 124, 251, 0.25)",
+        backgroundColor: "var(--primary-light)",
+        border: "1px solid var(--border-color)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1216,18 +1215,10 @@ const s: Record<string, React.CSSProperties> = {
         fontSize: "4.5rem",
     },
     avatarGlowRing: {
-        position: "absolute",
-        width: "150px",
-        height: "150px",
-        borderRadius: "50%",
-        border: "2px solid var(--secondary)",
-        opacity: 0,
-        zIndex: 1,
-        transition: "all 0.3s ease",
+        display: "none",
     },
     ringSpeakingPulse: {
-        animation: "avatarPulse 1.2s infinite ease-out",
-        opacity: 0.8,
+        display: "none",
     },
     statusPill: {
         padding: "0.35rem 0.9rem",
@@ -1305,9 +1296,8 @@ const s: Record<string, React.CSSProperties> = {
         width: "120px",
         height: "120px",
         borderRadius: "50%",
-        background: "linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary) 100%)",
-        border: "3px solid var(--glass-border)",
-        boxShadow: "0 10px 30px rgba(199, 198, 245, 0.2)",
+        backgroundColor: "var(--primary-light)",
+        border: "1px solid var(--border-color)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

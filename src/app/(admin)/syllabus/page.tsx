@@ -215,6 +215,18 @@ export default function SyllabusPage() {
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [isChapterModalOpen, setIsChapterModalOpen] = useState(false);
 
+  // Boards state
+  const [activeBoard, setActiveBoard] = useState<string | null>(null);
+  const [boards, setBoards] = useState([
+    { id: "cbse", name: "CBSE (Central Board of Secondary Education)", language: "English / Hindi", status: "Active", classesCount: 5 },
+    { id: "icse", name: "ICSE (Indian Certificate of Secondary Education)", language: "English", status: "Active", classesCount: 3 },
+    { id: "state", name: "State Board (Syllabus Core)", language: "Regional Languages / English", status: "Active", classesCount: 4 },
+  ]);
+  const [boardSearch, setBoardSearch] = useState("");
+  const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
+  const [newBoardName, setNewBoardName] = useState("");
+  const [newBoardLanguage, setNewBoardLanguage] = useState("English");
+
   // Drilldown Modals
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
 
@@ -223,12 +235,14 @@ export default function SyllabusPage() {
 
 
   const getSearchPlaceholder = () => {
+    if (isSuperAdmin && !activeBoard) return "Search curriculum boards by name...";
     if (!activeClass) return "Search classes by name, grade, or section...";
     if (!activeSubject) return `Search subjects in ${activeClass.name}...`;
     return `Search chapters in ${activeSubject.name}...`;
   };
 
   const getSearchValue = () => {
+    if (isSuperAdmin && !activeBoard) return boardSearch;
     if (!activeClass) return classSearch;
     if (!activeSubject) return subjectSearch;
     return chapterSearch;
@@ -236,7 +250,9 @@ export default function SyllabusPage() {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (!activeClass) {
+    if (isSuperAdmin && !activeBoard) {
+      setBoardSearch(val);
+    } else if (!activeClass) {
       setClassSearch(val);
       setClassPage(1); // Reset page on class search
     }
@@ -262,6 +278,14 @@ export default function SyllabusPage() {
         } catch (e) {}
       }
       setLoadingUser(false);
+
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab === "boards") {
+        setActiveBoard(null);
+        setActiveClass(null);
+        setActiveSubject(null);
+      }
     }
   }, []);
 
@@ -495,6 +519,9 @@ export default function SyllabusPage() {
   const showTableView = user?.role === "admin" || user?.role === "director";
 
   const getHeaderAction = () => {
+    if (isSuperAdmin && !activeBoard) {
+      return <Button onClick={() => setIsBoardModalOpen(true)}>Add Board</Button>;
+    }
     if (user?.role === "director" && activeClass && activeSubject) {
       return <Button onClick={() => setIsChapterModalOpen(true)}>Add Chapter</Button>;
     }
@@ -535,18 +562,40 @@ export default function SyllabusPage() {
         <div style={styles.adminContent}>
           {/* Breadcrumb Navigation */}
           <div style={styles.breadcrumbContainer}>
-            <span
-              className={activeClass ? "breadcrumb-link-hover" : ""}
-              style={activeClass ? styles.breadcrumbLink : styles.breadcrumbActive}
-              onClick={() => {
-                if (activeClass) {
-                  setActiveClass(null);
-                  setActiveSubject(null);
-                }
-              }}
-            >
-              Classes
-            </span>
+            {isSuperAdmin && (
+              <>
+                <span
+                  className={activeBoard ? "breadcrumb-link-hover" : ""}
+                  style={activeBoard ? styles.breadcrumbLink : styles.breadcrumbActive}
+                  onClick={() => {
+                    setActiveBoard(null);
+                    setActiveClass(null);
+                    setActiveSubject(null);
+                  }}
+                >
+                  Boards
+                </span>
+                {activeBoard && <span style={styles.breadcrumbSeparator}>/</span>}
+              </>
+            )}
+
+            {(!isSuperAdmin || activeBoard) && (
+              <>
+                <span
+                  className={activeClass ? "breadcrumb-link-hover" : ""}
+                  style={activeClass ? styles.breadcrumbLink : styles.breadcrumbActive}
+                  onClick={() => {
+                    if (activeClass) {
+                      setActiveClass(null);
+                      setActiveSubject(null);
+                    }
+                  }}
+                >
+                  {isSuperAdmin ? activeBoard : "Classes"}
+                </span>
+              </>
+            )}
+            
             {activeClass && (
               <>
                 <span style={styles.breadcrumbSeparator}>/</span>
@@ -608,7 +657,48 @@ export default function SyllabusPage() {
           </div>
 
           {/* Tables Section */}
-          {!activeClass ? (
+          {isSuperAdmin && !activeBoard ? (
+            /* Level 0: Boards Table (Only for Super Admin when no board selected) */
+            <div style={styles.tableCard} className="card animate-fade-in">
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeaderRow}>
+                    <th style={styles.th}>Board Name</th>
+                    <th style={styles.th}>Primary Instruction Language</th>
+                    <th style={styles.th}>Active Classes</th>
+                    <th style={styles.th}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {boards.filter(b => b.name.toLowerCase().includes(boardSearch.toLowerCase())).map((b) => (
+                    <tr
+                      key={b.id}
+                      style={{ ...styles.tableRow, cursor: "pointer" }}
+                      onClick={() => setActiveBoard(b.name)}
+                    >
+                      <td style={styles.td}>
+                        <strong style={{ color: "var(--primary)" }}>{b.name}</strong>
+                      </td>
+                      <td style={styles.td_secondary}>{b.language}</td>
+                      <td style={styles.td_secondary}>{b.classesCount} Classes</td>
+                      <td style={styles.td}>
+                        <span style={{
+                          padding: "0.2rem 0.4rem",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          backgroundColor: "var(--success-light)",
+                          color: "var(--success)"
+                        }}>
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : !activeClass ? (
             /* Level 1: Classes Table */
             <div style={styles.tableCard} className="card animate-fade-in">
               {loadingClasses ? (
@@ -1037,6 +1127,67 @@ export default function SyllabusPage() {
       {/* 3. CRUD CREATE MODALS                                                     */}
       {/* ========================================================================= */}
       
+      {/* Create Board Modal */}
+      <Modal
+        isOpen={isBoardModalOpen}
+        onClose={() => setIsBoardModalOpen(false)}
+        title="Register Education Board"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newBoardName) return;
+            setBoards((prev) => [
+              ...prev,
+              {
+                id: newBoardName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+                name: newBoardName,
+                language: newBoardLanguage,
+                status: "Active",
+                classesCount: 0,
+              },
+            ]);
+            setNewBoardName("");
+            setIsBoardModalOpen(false);
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        >
+          <Input
+            label="Board Name"
+            type="text"
+            required
+            value={newBoardName}
+            onChange={(e) => setNewBoardName(e.target.value)}
+            placeholder="e.g. CBSE, ICSE, State Board"
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>Instruction Language</label>
+            <select
+              value={newBoardLanguage}
+              onChange={(e) => setNewBoardLanguage(e.target.value)}
+              style={{
+                padding: "0.6rem 0.8rem",
+                borderRadius: "10px",
+                border: "1px solid var(--border-color)",
+                outline: "none",
+              }}
+            >
+              <option value="English">English</option>
+              <option value="English / Hindi">English / Hindi</option>
+              <option value="Regional Languages">Regional Languages</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.8rem", marginTop: "1rem" }}>
+            <Button type="button" variant="secondary" onClick={() => setIsBoardModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Register Board
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Create Class Modal */}
       <Modal 
         isOpen={isClassModalOpen} 

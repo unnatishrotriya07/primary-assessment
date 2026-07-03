@@ -147,7 +147,7 @@ export default function LoginForm() {
             loading={loading}
             style={styles.actionBtn}
           >
-            Login as Admin
+            Login
           </Button>
 
           {/* Quick-fill helper for evaluators */}

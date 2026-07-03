@@ -92,10 +92,10 @@ export default function InterviewResultPage({ params }: PageProps) {
                 {isEvaluating ? (
                     <div style={{ textAlign: "center", maxWidth: "450px", padding: "0 1.5rem" }}>
                         <h3 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                            Evaluating Your Assessment
+                            Compiling Your Results
                         </h3>
-                        <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.5" }}>
-                            Our evaluation system is grading your response transcript. Please wait...
+                        <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                            Saving your answers and preparing the assessment report. Please wait...
                         </p>
                     </div>
                 ) : (
@@ -132,7 +132,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                         <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                 </div>
-                <h2 style={s.reportTitle}>{report.grade} — Evaluation Complete!</h2>
+                <h2 style={s.reportTitle}>{report.grade} — Assessment Complete!</h2>
                 <p style={s.reportSub}>Well done, {report.student_name}!</p>
                 {report.assessment_title && (
                     <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
@@ -210,10 +210,10 @@ export default function InterviewResultPage({ params }: PageProps) {
                     </div>
                 )}
 
-                {/* Admission recommendation */}
+                {/* Comprehension status */}
                 {report.recommendation && (
                     <div style={{ ...s.feedbackBox, borderLeftColor: recColor, background: report.recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)" }}>
-                        <p style={{ ...s.feedbackTitle, color: recColor }}>Academic Note</p>
+                        <p style={{ ...s.feedbackTitle, color: recColor }}>Comprehension Status</p>
                         <p style={s.feedbackText}>
                             <strong>{report.recommendation}</strong>
                             {report.admin_note && ` — ${report.admin_note}`}

@@ -147,7 +147,7 @@ function VerifyContent() {
         </div>
         <h2 style={styles.title} className="gradient-text">Verify Your Identity</h2>
         <p style={styles.subtitle}>
-          Welcome! You have been invited to complete a short oral assessment with Buddy, our virtual evaluator.
+          Welcome! You have been invited to complete a short oral assessment.
         </p>
 
         <div style={styles.infoSection}>
@@ -178,7 +178,7 @@ function VerifyContent() {
           </svg>
           <span style={styles.ruleText}>
             This single-use link is valid for <strong>24 hours</strong>. You will complete
-            a short oral assessment with Buddy, our virtual evaluator. Please allow microphone access when prompted.
+            a short oral assessment. Please allow microphone access when prompted.
           </span>
         </div>
 

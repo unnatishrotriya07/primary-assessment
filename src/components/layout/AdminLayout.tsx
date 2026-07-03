@@ -6,10 +6,16 @@ import Navbar from "./Navbar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
 
   return (
     <div className="admin-layout-container">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+        isHovered={isSidebarHovered}
+        onHoverChange={setIsSidebarHovered}
+      />
       
       {/* Mobile sidebar overlay backplate */}
       <div 
@@ -17,7 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         onClick={() => setSidebarOpen(false)} 
       />
 
-      <div className="admin-main-wrapper">
+      <div className={`admin-main-wrapper ${isSidebarHovered ? "sidebar-expanded" : ""}`}>
         <Navbar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className="admin-content-area">
           {children}
