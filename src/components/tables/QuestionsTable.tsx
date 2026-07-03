@@ -224,7 +224,7 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
   if (questions.length === 0) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
-        No questions found. Click "Generate via AI" or create a question.
+        No questions found. Use the question generator or create a question to begin.
       </div>
     );
   }

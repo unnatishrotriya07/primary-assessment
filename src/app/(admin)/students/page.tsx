@@ -437,7 +437,7 @@ function StudentsWorkspace() {
                 </svg>
                 <h4>No Assessment Attempted</h4>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.2rem", textAlign: "center" }}>
-                  No completed quizzes or AI interviews found for email: **{activeStudent.email}**.
+                  No completed assessments or evaluations found for email: **{activeStudent.email}**.
                 </p>
               </div>
             ) : (
@@ -455,7 +455,7 @@ function StudentsWorkspace() {
                     </div>
                     {res.feedback && (
                       <div style={styles.feedbackContainer}>
-                        <strong>AI Feedback: </strong>{res.feedback}
+                        <strong>Learning Insights: </strong>{res.feedback}
                       </div>
                     )}
                   </div>

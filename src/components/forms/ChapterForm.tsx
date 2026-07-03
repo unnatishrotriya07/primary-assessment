@@ -136,9 +136,9 @@ export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: C
       </div>
 
       <div style={styles.textareaGroup}>
-        <label style={styles.label}>Chapter Reference Content (for AI Question Generation)</label>
+        <label style={styles.label}>Chapter Reference Content (for automated question generation)</label>
         <textarea
-          placeholder="Paste or write the chapter textbook content or summary here. The AI will generate questions strictly based on this content."
+          placeholder="Paste or write the chapter textbook content or summary here. Questions will be generated strictly based on this content."
           value={content}
           onChange={(e) => setContent(e.target.value)}
           style={styles.textarea}
@@ -162,6 +162,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1.2rem",
+    maxWidth: "720px",
+    width: "100%",
   },
   errorBanner: {
     padding: "0.8rem 1rem",

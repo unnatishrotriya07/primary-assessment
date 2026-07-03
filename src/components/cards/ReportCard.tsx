@@ -76,10 +76,13 @@ export default function ReportCard({
       <div className="card" style={styles.card}>
         <div style={styles.reportHeader}>
           <div style={styles.reportEmoji}>
-            {scoreVal >= 80 ? "🏆" : scoreVal >= 60 ? "🌟" : "👍"}
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--success)", margin: "0 auto" }}>
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
           </div>
-          <h2 style={styles.reportTitle}>{grade} — Interview Complete!</h2>
-          <p style={styles.reportSub}>Assessed Student: {studentName} 🎉</p>
+          <h2 style={styles.reportTitle}>{grade} — Evaluation Complete!</h2>
+          <p style={styles.reportSub}>Assessed Student: {studentName}</p>
           <span style={styles.id}>Report Reference: #{reportId}</span>
         </div>
 
@@ -135,7 +138,7 @@ export default function ReportCard({
           {/* Summary */}
           {summary && (
             <div style={styles.feedbackBox}>
-              <p style={styles.feedbackTitle}>📝 Summary</p>
+              <p style={styles.feedbackTitle}>Summary</p>
               <p style={styles.feedbackText}>{summary}</p>
             </div>
           )}
@@ -143,7 +146,7 @@ export default function ReportCard({
           {/* Strengths */}
           {strengths && (
             <div style={styles.feedbackBox}>
-              <p style={styles.feedbackTitle}>✨ Strengths</p>
+              <p style={styles.feedbackTitle}>Key Strengths</p>
               <p style={styles.feedbackText}>{strengths}</p>
             </div>
           )}
@@ -151,7 +154,7 @@ export default function ReportCard({
           {/* Areas to Grow */}
           {improvements && (
             <div style={{ ...styles.feedbackBox, borderLeftColor: "var(--warning)", background: "var(--warning-light)" }}>
-              <p style={{ ...styles.feedbackTitle, color: "var(--warning)" }}>🌱 Areas to Grow</p>
+              <p style={{ ...styles.feedbackTitle, color: "var(--warning)" }}>Development Areas</p>
               <p style={styles.feedbackText}>{improvements}</p>
             </div>
           )}
@@ -165,7 +168,7 @@ export default function ReportCard({
                 background: recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)",
               }}
             >
-              <p style={{ ...styles.feedbackTitle, color: recColor }}>📋 Admission Note</p>
+              <p style={{ ...styles.feedbackTitle, color: recColor }}>Academic Note</p>
               <p style={styles.feedbackText}>
                 <strong>{recommendation}</strong>
                 {adminNote && ` — ${adminNote}`}
@@ -281,7 +284,7 @@ export default function ReportCard({
 
       {feedback && (
         <div style={styles.feedbackBoxFallback}>
-          <h4 style={styles.feedbackTitleFallback}>AI Feedback & Guidance</h4>
+          <h4 style={styles.feedbackTitleFallback}>Learning Insights</h4>
           <p style={styles.feedbackText}>{feedback}</p>
         </div>
       )}

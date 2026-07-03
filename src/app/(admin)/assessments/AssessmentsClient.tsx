@@ -45,7 +45,7 @@ export default function AssessmentsClient() {
     if (activeTab === "questions") {
       return "Browse, filter, and inspect existing assessment questions.";
     }
-    return "Configure topic, difficulty, cognitive level, and generate classroom-ready questions using AI.";
+    return "Configure topic, difficulty, cognitive level, and generate classroom-ready questions automatically.";
   };
 
   const getHeaderAction = () => {
@@ -69,7 +69,7 @@ export default function AssessmentsClient() {
   const tabs = [
     { id: "assessments", label: "Assessments" },
     { id: "questions", label: "Question Bank" },
-    { id: "generate", label: "AI Generator" },
+    { id: "generate", label: "Question Generator" },
   ];
 
   return (

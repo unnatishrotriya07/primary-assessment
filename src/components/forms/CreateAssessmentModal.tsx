@@ -776,7 +776,7 @@ export default function CreateAssessmentModal({
                 variant={copiedAll ? "success" : "primary"}
                 style={{ width: "100%", fontSize: "0.85rem", height: "38px" }}
               >
-                {copiedAll ? "All Links Copied!" : "📋 Copy All Invitation Links"}
+                {copiedAll ? "All Links Copied!" : "Copy All Invitation Links"}
               </Button>
             </div>
           </div>

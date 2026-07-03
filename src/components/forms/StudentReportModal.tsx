@@ -87,10 +87,13 @@ export default function StudentReportModal({
             {/* Header banner */}
             <div style={styles.reportHeader}>
               <div style={styles.reportEmoji}>
-                {score >= 80 ? "🏆" : score >= 60 ? "🌟" : "👍"}
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--success)", margin: "0 auto" }}>
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
               </div>
-              <h2 style={styles.reportTitle}>{report.grade} — Interview Complete!</h2>
-              <p style={styles.reportSub}>Assessed Student: {report.student_name} 🎉</p>
+              <h2 style={styles.reportTitle}>{report.grade} — Evaluation Complete!</h2>
+              <p style={styles.reportSub}>Assessed Student: {report.student_name}</p>
               {report.assessment_title && (
                 <p style={styles.assessmentTitle}>
                   {report.assessment_title}
@@ -147,7 +150,7 @@ export default function StudentReportModal({
               {/* Summary */}
               {report.summary && (
                 <div style={styles.feedbackBox}>
-                  <p style={styles.feedbackTitle}>📝 Summary</p>
+                  <p style={styles.feedbackTitle}>Summary</p>
                   <p style={styles.feedbackText}>{report.summary}</p>
                 </div>
               )}
@@ -155,7 +158,7 @@ export default function StudentReportModal({
               {/* Strengths */}
               {report.strengths && (
                 <div style={styles.feedbackBox}>
-                  <p style={styles.feedbackTitle}>✨ Strengths</p>
+                  <p style={styles.feedbackTitle}>Key Strengths</p>
                   <p style={styles.feedbackText}>{report.strengths}</p>
                 </div>
               )}
@@ -163,7 +166,7 @@ export default function StudentReportModal({
               {/* Areas to Grow */}
               {report.improvements && (
                 <div style={{ ...styles.feedbackBox, borderLeftColor: "var(--warning)", background: "var(--warning-light)" }}>
-                  <p style={{ ...styles.feedbackTitle, color: "var(--warning)" }}>🌱 Areas to Grow</p>
+                  <p style={{ ...styles.feedbackTitle, color: "var(--warning)" }}>Development Areas</p>
                   <p style={styles.feedbackText}>{report.improvements}</p>
                 </div>
               )}
@@ -177,7 +180,7 @@ export default function StudentReportModal({
                     background: report.recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)",
                   }}
                 >
-                  <p style={{ ...styles.feedbackTitle, color: recColor }}>📋 Admission Note</p>
+                  <p style={{ ...styles.feedbackTitle, color: recColor }}>Academic Note</p>
                   <p style={styles.feedbackText}>
                     <strong>{report.recommendation}</strong>
                     {report.admin_note && ` — ${report.admin_note}`}

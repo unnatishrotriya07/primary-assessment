@@ -48,7 +48,7 @@ export default function Home() {
           Empower Learning with <span className="gradient-text">Adaptive Evaluation</span>
         </h1>
         <p style={styles.heroSubtitle}>
-          The unified evaluation platform for schools. Secure proctoring, AI-assisted question generation, and real-time student analytics.
+          The unified evaluation platform for schools. Secure proctoring, automated question generation, and real-time student analytics.
         </p>
 
         <div style={styles.heroCTAs}>
@@ -205,7 +205,7 @@ export default function Home() {
                 <line x1="12" y1="22.08" x2="12" y2="12" />
               </svg>
             </div>
-            <h3 style={styles.featureCardTitle}>AI Test Generation</h3>
+            <h3 style={styles.featureCardTitle}>Automated Question Generation</h3>
             <p style={styles.featureCardDesc}>Generate curriculum-compliant English, Math, and Science items instantly. Teachers can verify, edit, and assign them with one click.</p>
           </div>
 
@@ -277,9 +277,9 @@ export default function Home() {
           </details>
 
           <details className="faq-details">
-            <summary className="faq-summary">Is the AI question generator aligned with national curricula?</summary>
+            <summary className="faq-summary">Is the automated question generator aligned with national curricula?</summary>
             <div className="faq-answer">
-              Yes, our AI builder maps items directly to specific curricula guidelines (e.g. CBSE, CCSS, Cambridge). Teachers can review and modify any generated items before they are assigned to an assessment.
+              Yes, our question builder maps items directly to specific curricula guidelines (e.g. CBSE, CCSS, Cambridge). Teachers can review and modify any generated items before they are assigned to an assessment.
             </div>
           </details>
 

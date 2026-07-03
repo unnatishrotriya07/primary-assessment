@@ -30,29 +30,77 @@ export default function InterviewResultPage({ params }: PageProps) {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Try sessionStorage first — instant, no network call
+        let active = true;
+        let timer: NodeJS.Timeout;
+
+        const checkReport = async () => {
+            try {
+                const r = await interviewService.getReport(parseInt(interviewId, 10));
+                if (!active) return;
+
+                setReport(r);
+                if (r.status === "Completed") {
+                    setLoading(false);
+                    // update sessionStorage so subsequent visits are instant
+                    sessionStorage.setItem(`interview_report_${interviewId}`, JSON.stringify(r));
+                } else {
+                    // Still evaluating, poll again
+                    timer = setTimeout(checkReport, 3000);
+                }
+            } catch (err) {
+                if (!active) return;
+                setError("Could not load your report. Please try again.");
+                setLoading(false);
+            }
+        };
+
+        // Try sessionStorage first — instant, no network call (only if Completed)
         const raw = sessionStorage.getItem(`interview_report_${interviewId}`);
         if (raw) {
             try {
-                setReport(JSON.parse(raw));
-                setLoading(false);
-                return;
+                const parsed = JSON.parse(raw);
+                if (parsed.status === "Completed") {
+                    setReport(parsed);
+                    setLoading(false);
+                    return;
+                }
             } catch (_) { }
         }
-        // Fallback: fetch from API
-        interviewService.getReport(parseInt(interviewId, 10))
-            .then(r => { setReport(r); setLoading(false); })
-            .catch(() => {
-                setError("Could not load your report. Please try again.");
-                setLoading(false);
-            });
+
+        // Start polling immediately
+        checkReport();
+
+        return () => {
+            active = false;
+            if (timer) clearTimeout(timer);
+        };
     }, [interviewId]);
 
     if (loading) {
+        const isEvaluating = report && (report.status === "Evaluating" || report.status === "In Progress");
         return (
             <div style={s.center}>
-                <div className="spinner" style={{ marginBottom: "1rem" }} />
-                <p>Loading your report…</p>
+                <div className="spinner" style={{ 
+                    marginBottom: "1.5rem",
+                    border: "4px solid rgba(0,0,0,0.1)",
+                    borderLeftColor: "var(--primary)",
+                    borderRadius: "50%",
+                    width: "48px",
+                    height: "48px",
+                    animation: "spin 1s linear infinite"
+                }} />
+                {isEvaluating ? (
+                    <div style={{ textAlign: "center", maxWidth: "450px", padding: "0 1.5rem" }}>
+                        <h3 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                            Evaluating Your Assessment
+                        </h3>
+                        <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+                            Our evaluation system is grading your response transcript. Please wait...
+                        </p>
+                    </div>
+                ) : (
+                    <p style={{ color: "var(--text-secondary)" }}>Loading your report…</p>
+                )}
             </div>
         );
     }
@@ -79,10 +127,13 @@ export default function InterviewResultPage({ params }: PageProps) {
             {/* Report header */}
             <div style={s.reportHeader}>
                 <div style={s.reportEmoji}>
-                    {score >= 80 ? "🏆" : score >= 60 ? "🌟" : "👍"}
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--success)", margin: "0 auto" }}>
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
                 </div>
-                <h2 style={s.reportTitle}>{report.grade} — Interview Complete!</h2>
-                <p style={s.reportSub}>Well done, {report.student_name}! 🎉</p>
+                <h2 style={s.reportTitle}>{report.grade} — Evaluation Complete!</h2>
+                <p style={s.reportSub}>Well done, {report.student_name}!</p>
                 {report.assessment_title && (
                     <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.25rem" }}>
                         {report.assessment_title}
@@ -138,7 +189,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 {/* Summary */}
                 {report.summary && (
                     <div style={s.feedbackBox}>
-                        <p style={s.feedbackTitle}>📝 Summary</p>
+                        <p style={s.feedbackTitle}>Summary</p>
                         <p style={s.feedbackText}>{report.summary}</p>
                     </div>
                 )}
@@ -146,7 +197,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 {/* Strengths */}
                 {report.strengths && (
                     <div style={s.feedbackBox}>
-                        <p style={s.feedbackTitle}>✨ Strengths</p>
+                        <p style={s.feedbackTitle}>Key Strengths</p>
                         <p style={s.feedbackText}>{report.strengths}</p>
                     </div>
                 )}
@@ -154,7 +205,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 {/* Areas to grow */}
                 {report.improvements && (
                     <div style={{ ...s.feedbackBox, borderLeftColor: "var(--warning)", background: "var(--warning-light)" }}>
-                        <p style={{ ...s.feedbackTitle, color: "var(--warning)" }}>🌱 Areas to Grow</p>
+                        <p style={{ ...s.feedbackTitle, color: "var(--warning)" }}>Development Areas</p>
                         <p style={s.feedbackText}>{report.improvements}</p>
                     </div>
                 )}
@@ -162,7 +213,7 @@ export default function InterviewResultPage({ params }: PageProps) {
                 {/* Admission recommendation */}
                 {report.recommendation && (
                     <div style={{ ...s.feedbackBox, borderLeftColor: recColor, background: report.recommendation === "Needs Review" ? "var(--warning-light)" : "var(--success-light)" }}>
-                        <p style={{ ...s.feedbackTitle, color: recColor }}>📋 Admission Note</p>
+                        <p style={{ ...s.feedbackTitle, color: recColor }}>Academic Note</p>
                         <p style={s.feedbackText}>
                             <strong>{report.recommendation}</strong>
                             {report.admin_note && ` — ${report.admin_note}`}

@@ -671,7 +671,7 @@ export default function InterviewPage({ params }: PageProps) {
             sessionStorage.setItem(`interview_report_${report.id}`, JSON.stringify(report));
             router.push(`/interview/${report.id}/result`);
         } catch (e: any) {
-            setError("Failed to submit interview. Please try again.");
+            setError("Failed to submit assessment. Please try again.");
             setPhase("interview");
             updateIsSubmitting(false);
         }
@@ -748,11 +748,15 @@ export default function InterviewPage({ params }: PageProps) {
             <div style={s.centerScreen}>
                 <div style={s.lobbyCard} className="glass-panel animate-fade-in">
                     <div style={s.lobbyAvatarCircle}>
-                        <span style={s.aiAvatarEmoji}>🤖</span>
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
+                            <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
+                            <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+                            <path d="M21.5 12v6" />
+                        </svg>
                     </div>
-                    <h2 style={s.lobbyTitle}>Welcome to the Interview Lobby</h2>
+                    <h2 style={s.lobbyTitle}>Welcome to the Assessment Lobby</h2>
                     <p style={s.lobbySubtitle}>
-                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, Buddy is ready to talk with you for <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
+                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, Buddy is ready to guide you through <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
                     </p>
                     <div style={s.lobbyInstructions}>
                         <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "var(--text-primary)" }}>Tips before you start:</p>
@@ -778,7 +782,7 @@ export default function InterviewPage({ params }: PageProps) {
                         style={s.lobbyStartBtn}
                         className="interactive-element"
                     >
-                        Start Interview
+                        Start Assessment
                     </button>
                 </div>
             </div>
@@ -790,7 +794,14 @@ export default function InterviewPage({ params }: PageProps) {
             <div style={s.centerScreen}>
                 <div style={s.callConnectingRipple}>
                     <div style={s.rippleCircle}></div>
-                    <div style={s.rippleCenter}>🤖</div>
+                    <div style={s.rippleCenter}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                    </div>
                 </div>
                 <h3 style={{ fontFamily: "var(--font-heading)", marginTop: "2rem", marginBottom: "0.5rem" }}>
                     Analyzing responses...
@@ -822,7 +833,7 @@ export default function InterviewPage({ params }: PageProps) {
             <div style={s.roomHeader}>
                 <div style={s.logoArea}>
                     <span style={s.callIndicatorPulse}></span>
-                    <span style={s.logoText}>Live AI Interview Room</span>
+                    <span style={s.logoText}>Oral Assessment Room</span>
                 </div>
                 <div style={s.progressChip}>
                     Question {currentIdx + 1} of {questions.length}
@@ -840,13 +851,38 @@ export default function InterviewPage({ params }: PageProps) {
                             ...(isSpeaking ? s.ringSpeakingPulse : {})
                         }} />
                         <div style={s.aiAvatarCircle}>
-                            <span style={s.aiAvatarEmoji}>🤖</span>
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
+                                <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
+                                <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+                                <path d="M21.5 12v6" />
+                            </svg>
                         </div>
                     </div>
                     
                     {/* Status Text overlay */}
                     <div style={s.statusPill}>
-                        {isSpeaking ? "🔊 Buddy is Speaking" : isRecording ? "🎤 Mic Active" : "👂 Listening"}
+                        {isSpeaking ? (
+                            <>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                </svg>
+                                Buddy is Speaking
+                            </>
+                        ) : isRecording ? (
+                            <>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
+                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                                </svg>
+                                Mic Active
+                            </>
+                        ) : (
+                            <>
+                                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--primary)", marginRight: 6, animation: "pulse-glow 1.5s infinite", verticalAlign: "middle" }}></span>
+                                Listening
+                            </>
+                        )}
                     </div>
 
                     {/* Question Subtitles overlay */}
@@ -890,7 +926,23 @@ export default function InterviewPage({ params }: PageProps) {
                                 title="Read Question Aloud"
                                 disabled={isSpeaking || isSubmitting}
                             >
-                                {isSpeaking ? "🔊 Speaking..." : "🔊 Read Aloud"}
+                                {isSpeaking ? (
+                                    <>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                        </svg>
+                                        Speaking...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                        </svg>
+                                        Read Aloud
+                                    </>
+                                )}
                             </button>
                         )}
                     </div>

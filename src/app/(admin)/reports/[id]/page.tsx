@@ -94,7 +94,7 @@ export default function ReportDetailPage({ params }: PageProps) {
                 marginBottom: "0.5rem"
               }}>
                 <label style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-secondary)" }}>
-                  Select Student Interview:
+                  Select Student Evaluation:
                 </label>
                 <select
                   value={selectedInterviewId ?? ""}

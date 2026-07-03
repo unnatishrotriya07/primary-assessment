@@ -152,7 +152,7 @@ export default function LoginForm() {
 
           {/* Quick-fill helper for evaluators */}
           <div onClick={handleQuickFill} style={styles.demoBanner} className="interactive-element">
-            <span style={styles.demoHeading}>💡 Quick-Fill Demo Account</span>
+            <span style={styles.demoHeading}>Quick-Fill Demo Account</span>
             <div style={styles.demoCredentials}>
               <div>Email: <strong style={{ color: "var(--primary)" }}>director_test@example.com</strong></div>
               <div>Password: <strong style={{ color: "var(--primary)" }}>password123</strong></div>

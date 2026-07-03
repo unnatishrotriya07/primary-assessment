@@ -128,7 +128,7 @@ function VerifyContent() {
           <p>Common reasons for this error:</p>
           <ul style={styles.helpList}>
             <li>The link has expired (active for 24 hours from creation).</li>
-            <li>The interview has already been started or taken.</li>
+            <li>The assessment has already been started or completed.</li>
             <li>The link parameters were copied incorrectly.</li>
           </ul>
         </div>
@@ -147,7 +147,7 @@ function VerifyContent() {
         </div>
         <h2 style={styles.title} className="gradient-text">Verify Your Identity</h2>
         <p style={styles.subtitle}>
-          Welcome! You have been invited to complete a short voice interview with Buddy, our AI interviewer.
+          Welcome! You have been invited to complete a short oral assessment with Buddy, our virtual evaluator.
         </p>
 
         <div style={styles.infoSection}>
@@ -178,7 +178,7 @@ function VerifyContent() {
           </svg>
           <span style={styles.ruleText}>
             This single-use link is valid for <strong>24 hours</strong>. You will complete
-            a short voice interview with Buddy the AI. Please allow microphone access when prompted.
+            a short oral assessment with Buddy, our virtual evaluator. Please allow microphone access when prompted.
           </span>
         </div>
 
@@ -190,7 +190,7 @@ function VerifyContent() {
               <path fill="#FBBC05" d="M5.4 14.29a7.22 7.22 0 0 1 0-4.58V6.51H1.32a11.99 11.99 0 0 0 0 10.98l4.08-3.2z" />
               <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.32 0 3.28 2.69 1.32 6.51l4.08 3.2c.93-2.8 3.53-4.96 6.6-4.96z" />
             </svg>
-            Sign in with Google to Begin Interview
+            Sign in with Google to Begin Assessment
           </button>
         </div>
       </div>
@@ -221,7 +221,7 @@ function VerifyContent() {
             {authStep === "success" && (
               <div style={styles.googleSuccessContainer}>
                 <div style={styles.googleSuccessIcon}>✓</div>
-                <p style={styles.googleSuccessText}>Starting your interview...</p>
+                <p style={styles.googleSuccessText}>Starting your assessment...</p>
               </div>
             )}
 
