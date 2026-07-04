@@ -12,6 +12,7 @@ export interface AIQuestionParams {
   previewOnly?: boolean;
   session?: string;
   questionType?: string;
+  selectedText?: string;
 }
 
 export interface QuestionBatchSave {

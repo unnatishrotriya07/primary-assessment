@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/common/PageHeader";
 import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
@@ -70,6 +72,7 @@ const CustomCheckbox = ({ checked, onChange, label }: CustomCheckboxProps) => {
 };
 
 export default function SyllabusPage() {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
@@ -364,8 +367,7 @@ export default function SyllabusPage() {
   };
 
   const handleAdminSelectChapter = (ch: ChapterData) => {
-    setActiveChapter(ch);
-    setIsContentModalOpen(true);
+    router.push(`/chapters/${ch.id}`);
   };
 
   // Delete handlers
@@ -516,7 +518,7 @@ export default function SyllabusPage() {
     return true;
   });
 
-  const showTableView = user?.role === "admin" || user?.role === "director";
+  const showTableView = true;
 
   const getHeaderAction = () => {
     if (isSuperAdmin && !activeBoard) {
@@ -902,7 +904,30 @@ export default function SyllabusPage() {
                           </span>
                         </td>
                         <td style={styles.td} onClick={(e) => e.stopPropagation()}>
-                          <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                          <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+                            <Link
+                              href={`/chapters/${item.id}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                textDecoration: "none",
+                                backgroundColor: "var(--primary)",
+                                color: "white",
+                                height: "32px",
+                                padding: "0 10px",
+                                borderRadius: "6px",
+                                fontSize: "0.85rem",
+                                fontWeight: 500,
+                                border: "none",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              className="interactive-element"
+                              title="Read textbook content"
+                            >
+                              Read
+                            </Link>
                             {!item.tenantId && (
                               <Button 
                                 size="sm" 

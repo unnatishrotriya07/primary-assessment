@@ -95,7 +95,7 @@ export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: C
           required
         />
         <div style={styles.selectGroup}>
-          <label style={styles.label}>Link to Subject</label>
+          <label style={styles.label}>Link to Subject<span className="required-asterisk">*</span></label>
           <select 
             value={subjectId} 
             onChange={(e) => setSubjectId(e.target.value)}

@@ -24,9 +24,9 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [isAdminExpanded, setIsAdminExpanded] = useState(false);
   const [currentTab, setCurrentTab] = useState("");
   const [localHovered, setLocalHovered] = useState(false);
+  const [hoveredLink, setHoveredLink] = useState<string | null>(null);
 
   const isHovered = propsHovered !== undefined ? propsHovered : localHovered;
 
@@ -74,22 +74,6 @@ export default function Sidebar({
     }
   }, [pathname]);
 
-  // Keep admin expanded if any admin page is active
-  useEffect(() => {
-    const isAdminPageActive =
-      pathname.startsWith("/syllabus") ||
-      pathname.startsWith("/classes") ||
-      pathname.startsWith("/subjects") ||
-      pathname.startsWith("/chapters") ||
-      pathname.startsWith("/team") ||
-      pathname.startsWith("/school-settings") ||
-      (pathname.startsWith("/assessments") && currentTab === "questions");
-
-    if (isAdminPageActive) {
-      setIsAdminExpanded(true);
-    }
-  }, [pathname, currentTab]);
-
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
     if (onClose) onClose();
@@ -126,9 +110,50 @@ export default function Sidebar({
 
   const userAvatarChar = user?.name ? user.name.charAt(0).toUpperCase() : "A";
 
-  const showAdminGroup = showSyllabus || showTeamSettings || isAllowed("/questions");
-
   const asideWidth = isHovered ? "260px" : "80px";
+
+  // Helper function to check if active
+  const isTabActive = (href: string, tabValue?: string) => {
+    if (href === "/syllabus") {
+      return pathname.startsWith("/syllabus");
+    }
+    if (tabValue) {
+      return pathname.startsWith(href) && currentTab === tabValue;
+    }
+    // Specific case for Assessments with questions tab
+    if (href === "/assessments" && pathname.startsWith("/assessments") && currentTab === "questions") {
+      return false;
+    }
+    return pathname.startsWith(href) && !currentTab;
+  };
+
+  const renderNavLink = (id: string, href: string, label: string, iconSvg: React.ReactNode, tabVal?: string) => {
+    const isActive = isTabActive(href, tabVal);
+    const isLinkHovered = hoveredLink === id;
+
+    return (
+      <Link
+        href={href}
+        onClick={handleLinkClick}
+        onMouseEnter={() => setHoveredLink(id)}
+        onMouseLeave={() => setHoveredLink(null)}
+        style={{
+          ...styles.navLink,
+          backgroundColor: isActive ? "var(--selected-bg)" : isLinkHovered ? "var(--bg-surface-hover)" : "transparent",
+          color: isActive ? "var(--primary)" : isLinkHovered ? "var(--text-primary)" : "var(--text-secondary)",
+          fontWeight: isActive ? 500 : 400,
+          justifyContent: isHovered ? "flex-start" : "center",
+        }}
+        className="interactive-element"
+        title={!isHovered ? label : undefined}
+      >
+        <span style={{ color: isActive ? "var(--primary)" : isLinkHovered ? "var(--text-primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
+          {iconSvg}
+        </span>
+        {isHovered && label}
+      </Link>
+    );
+  };
 
   return (
     <aside 
@@ -156,302 +181,126 @@ export default function Sidebar({
         </Link>
       </div>
 
-      {/* Primary Navigation */}
+      {/* Navigation Groups */}
       <nav style={styles.nav}>
-        {/* Today (Home) */}
-        {isAllowed("/dashboard") && (
-          <Link
-            href="/dashboard"
-            onClick={handleLinkClick}
-            style={{
-              ...styles.navLink,
-              backgroundColor: pathname === "/dashboard" ? "var(--selected-bg)" : "transparent",
-              color: pathname === "/dashboard" ? "var(--primary)" : "var(--text-secondary)",
-              fontWeight: pathname === "/dashboard" ? 500 : 400,
-              justifyContent: isHovered ? "flex-start" : "center",
-            }}
-            className="interactive-element"
-            title={!isHovered ? "Today" : undefined}
-          >
-            <span style={{ color: pathname === "/dashboard" ? "var(--primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </span>
-            {isHovered && "Today"}
-          </Link>
+        {/* Section 1: Today, Assessments, Students, Insights */}
+        {isAllowed("/dashboard") && renderNavLink(
+          "today",
+          "/dashboard",
+          "Today",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
         )}
 
-        {/* Control Panel (Super Admin only) */}
-        {isSuperAdmin && (
-          <Link
-            href="/control-panel"
-            onClick={handleLinkClick}
-            style={{
-              ...styles.navLink,
-              backgroundColor: pathname.startsWith("/control-panel") ? "var(--selected-bg)" : "transparent",
-              color: pathname.startsWith("/control-panel") ? "var(--primary)" : "var(--text-secondary)",
-              fontWeight: pathname.startsWith("/control-panel") ? 500 : 400,
-              justifyContent: isHovered ? "flex-start" : "center",
-            }}
-            className="interactive-element"
-            title={!isHovered ? "Control Panel" : undefined}
-          >
-            <span style={{ color: pathname.startsWith("/control-panel") ? "var(--primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </span>
-            {isHovered && "Control Panel"}
-          </Link>
+        {isSuperAdmin && renderNavLink(
+          "control-panel",
+          "/control-panel",
+          "Control Panel",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
         )}
 
-        {/* Assessments */}
-        {isAllowed("/assessments") && !isSuperAdmin && (
-          <Link
-            href="/assessments"
-            onClick={handleLinkClick}
-            style={{
-              ...styles.navLink,
-              backgroundColor: pathname.startsWith("/assessments") && currentTab !== "questions" ? "var(--selected-bg)" : "transparent",
-              color: pathname.startsWith("/assessments") && currentTab !== "questions" ? "var(--primary)" : "var(--text-secondary)",
-              fontWeight: pathname.startsWith("/assessments") && currentTab !== "questions" ? 500 : 400,
-              justifyContent: isHovered ? "flex-start" : "center",
-            }}
-            className="interactive-element"
-            title={!isHovered ? "Assessments" : undefined}
-          >
-            <span style={{ color: pathname.startsWith("/assessments") && currentTab !== "questions" ? "var(--primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              </svg>
-            </span>
-            {isHovered && "Assessments"}
-          </Link>
+        {isAllowed("/assessments") && !isSuperAdmin && renderNavLink(
+          "assessments",
+          "/assessments",
+          "Assessments",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
         )}
 
-        {/* Students */}
-        {isAllowed("/students") && !isSuperAdmin && (
-          <Link
-            href="/students"
-            onClick={handleLinkClick}
-            style={{
-              ...styles.navLink,
-              backgroundColor: pathname.startsWith("/students") ? "var(--selected-bg)" : "transparent",
-              color: pathname.startsWith("/students") ? "var(--primary)" : "var(--text-secondary)",
-              fontWeight: pathname.startsWith("/students") ? 500 : 400,
-              justifyContent: isHovered ? "flex-start" : "center",
-            }}
-            className="interactive-element"
-            title={!isHovered ? "Students" : undefined}
-          >
-            <span style={{ color: pathname.startsWith("/students") ? "var(--primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M9 21v-2a4 4 0 0 0-3-3.87" />
-                <circle cx="9" cy="7" r="4" />
-                <circle cx="17" cy="11" r="3" />
-              </svg>
-            </span>
-            {isHovered && "Students"}
-          </Link>
+        {isAllowed("/students") && !isSuperAdmin && renderNavLink(
+          "students",
+          "/students",
+          "Students",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M9 21v-2a4 4 0 0 0-3-3.87" />
+            <circle cx="9" cy="7" r="4" />
+            <circle cx="17" cy="11" r="3" />
+          </svg>
         )}
 
-        {/* Learning Insights (Reports) */}
-        {isAllowed("/students") && !isSuperAdmin && (
-          <Link
-            href="/reports"
-            onClick={handleLinkClick}
-            style={{
-              ...styles.navLink,
-              backgroundColor: pathname.startsWith("/reports") ? "var(--selected-bg)" : "transparent",
-              color: pathname.startsWith("/reports") ? "var(--primary)" : "var(--text-secondary)",
-              fontWeight: pathname.startsWith("/reports") ? 500 : 400,
-              justifyContent: isHovered ? "flex-start" : "center",
-            }}
-            className="interactive-element"
-            title={!isHovered ? "Learning Insights" : undefined}
-          >
-            <span style={{ color: pathname.startsWith("/reports") ? "var(--primary)" : "var(--text-muted)", display: "flex", alignItems: "center" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10" />
-                <line x1="12" y1="20" x2="12" y2="4" />
-                <line x1="6" y1="20" x2="6" y2="14" />
-              </svg>
-            </span>
-            {isHovered && "Learning Insights"}
-          </Link>
+        {isAllowed("/students") && !isSuperAdmin && renderNavLink(
+          "reports",
+          "/reports",
+          "Learning Insights",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
         )}
 
-        {/* Collapsible Administration Group */}
-        {showAdminGroup && (
-          <div>
-            <button
-              onClick={() => setIsAdminExpanded(!isAdminExpanded)}
-              style={{
-                ...styles.navLink,
-                background: "none",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                color: "var(--text-secondary)",
-                fontWeight: 500,
-                cursor: "pointer",
-                justifyContent: isHovered ? "flex-start" : "center",
-              }}
-              className="interactive-element"
-              title={!isHovered ? "Administration" : undefined}
-            >
-              <span style={{ color: "var(--text-muted)", display: "flex", alignItems: "center" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="9" y1="9" x2="15" y2="9" />
-                  <line x1="9" y1="13" x2="15" y2="13" />
-                  <line x1="9" y1="17" x2="15" y2="17" />
-                </svg>
-              </span>
-              {isHovered && "Administration"}
-              {isHovered && (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  style={{
-                    marginLeft: "auto",
-                    transform: isAdminExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform var(--transition-fast)",
-                  }}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              )}
-            </button>
+        {/* Section divider */}
+        <div style={styles.divider} />
 
-            {isHovered && isAdminExpanded && (
-              <div style={styles.adminSubmenu}>
-                {/* Boards */}
-                {isSuperAdmin && (
-                  <Link
-                    href="/syllabus?tab=boards"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/syllabus") && currentTab === "boards" ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/syllabus") && currentTab === "boards" ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Boards
-                  </Link>
-                )}
-                {/* Classes */}
-                {isAllowed("/classes") && (
-                  <Link
-                    href="/syllabus?tab=classes"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/syllabus") && currentTab === "classes" ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/syllabus") && currentTab === "classes" ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Classes
-                  </Link>
-                )}
-
-                {/* Subjects */}
-                {isAllowed("/subjects") && (
-                  <Link
-                    href="/syllabus?tab=subjects"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/syllabus") && currentTab === "subjects" ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/syllabus") && currentTab === "subjects" ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Subjects
-                  </Link>
-                )}
-
-                {/* Chapters */}
-                {isAllowed("/chapters") && (
-                  <Link
-                    href="/syllabus?tab=chapters"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/syllabus") && currentTab === "chapters" ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/syllabus") && currentTab === "chapters" ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Chapters
-                  </Link>
-                )}
-
-                {/* Saved Questions */}
-                {isAllowed("/questions") && (
-                  <Link
-                    href="/assessments?tab=questions"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/assessments") && currentTab === "questions" ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/assessments") && currentTab === "questions" ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Saved Questions
-                  </Link>
-                )}
-
-                {/* Team */}
-                {showTeamSettings && (
-                  <Link
-                    href="/team"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/team") ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/team") ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    Team
-                  </Link>
-                )}
-
-                {/* School Settings */}
-                {showSchoolSettings && (
-                  <Link
-                    href="/school-settings"
-                    onClick={handleLinkClick}
-                    style={{
-                      ...styles.adminSubLink,
-                      backgroundColor: pathname.startsWith("/school-settings") ? "var(--selected-bg)" : "transparent",
-                      color: pathname.startsWith("/school-settings") ? "var(--primary)" : "var(--text-secondary)",
-                    }}
-                    className="interactive-element"
-                  >
-                    School Settings
-                  </Link>
-                )}
-              </div>
+        {/* Section 2: Academics */}
+        {(showSyllabus || isAllowed("/questions")) && (
+          <>
+            {isHovered ? (
+              <div style={styles.sectionHeader}>Academics</div>
+            ) : (
+              <div style={{ height: "4px" }} />
             )}
-          </div>
+
+            {showSyllabus && renderNavLink(
+              "syllabus",
+              "/syllabus",
+              "Syllabus",
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+              </svg>
+            )}
+
+            {isAllowed("/questions") && renderNavLink(
+              "questions",
+              "/assessments?tab=questions",
+              "Question Library",
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>,
+              "questions"
+            )}
+
+            {/* Section divider */}
+            <div style={styles.divider} />
+          </>
+        )}
+
+        {/* Section 3: Team & Settings */}
+        {showTeamSettings && renderNavLink(
+          "team",
+          "/team",
+          "Team",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        )}
+
+        {showSchoolSettings && renderNavLink(
+          "settings",
+          "/school-settings",
+          "Settings",
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
         )}
       </nav>
 
-      {/* Divider and User Profile Card */}
+      {/* User Profile Card */}
       <div style={{
         ...styles.profileSection,
         padding: isHovered ? "1rem 1rem 1.5rem 1rem" : "1rem 0.2rem 1.5rem 0.2rem",
@@ -520,15 +369,6 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "140px",
     margin: 0,
   },
-  schoolNameSub: {
-    fontSize: "0.75rem",
-    color: "var(--text-secondary)",
-    fontWeight: 500,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    marginTop: "0.2rem",
-  },
   nav: {
     display: "flex",
     flexDirection: "column",
@@ -547,24 +387,13 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     transition: "all var(--transition-fast)",
   },
-  adminSubmenu: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.2rem",
-    paddingLeft: "1rem",
-    marginTop: "0.25rem",
-    borderLeft: "1px solid var(--border-color)",
-    marginLeft: "1.6rem",
-  },
-  adminSubLink: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    padding: "0.5rem 0.8rem",
-    borderRadius: "var(--radius-sm)",
-    fontSize: "0.9rem",
-    textDecoration: "none",
-    transition: "all var(--transition-fast)",
+  sectionHeader: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+    color: "var(--text-muted)",
+    padding: "0.8rem 0.8rem 0.3rem 0.8rem",
   },
   profileSection: {
     display: "flex",
@@ -634,3 +463,4 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "0.5rem 0",
   },
 };
+

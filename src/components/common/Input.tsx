@@ -8,7 +8,12 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 export default function Input({ label, error, style, ...props }: InputProps) {
   return (
     <div style={styles.container}>
-      {label && <label style={styles.label}>{label}</label>}
+      {label && (
+        <label style={styles.label}>
+          {label}
+          {props.required && <span className="required-asterisk">*</span>}
+        </label>
+      )}
       <input 
         style={{
           ...styles.input,

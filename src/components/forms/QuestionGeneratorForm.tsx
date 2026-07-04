@@ -63,12 +63,48 @@ export default function QuestionGeneratorForm() {
   const [draftQuestions, setDraftQuestions] = useState<QuestionData[]>([]);
   const [isReviewMode, setIsReviewMode] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  
+  // URL Pre-fill support
+  const [isPrefilled, setIsPrefilled] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
 
   useEffect(() => {
     const loadClasses = async () => {
       try {
         const data = await classService.getAll();
         setClasses(data);
+        
+        // Priority: Check query parameters first
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const qClassId = params.get("classId");
+          const qSubjectId = params.get("subjectId");
+          const qChapterId = params.get("chapterId");
+          const qSelectedText = params.get("selectedText");
+          
+          if (qSelectedText) {
+            setSelectedText(qSelectedText);
+          }
+          
+          if (qClassId && qSubjectId && qChapterId) {
+            setIsPrefilled(true);
+            setClassId(String(qClassId));
+            return;
+          }
+        }
+        
+        // Fallback: Restore classId from draft on mount
+        if (typeof window !== "undefined") {
+          const saved = localStorage.getItem("momentum_draft_question_generator");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              if (parsed.classId && data.some(c => String(c.id) === String(parsed.classId))) {
+                setClassId(String(parsed.classId));
+              }
+            } catch (e) {}
+          }
+        }
       } catch (err: any) {
         console.error("Failed to load classes", err);
       }
@@ -86,7 +122,33 @@ export default function QuestionGeneratorForm() {
       try {
         const data = await subjectService.getAll(classId);
         setSubjects(data);
-        setSubjectId("");
+        
+        // Priority: Check query parameters first
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const qClassId = params.get("classId");
+          const qSubjectId = params.get("subjectId");
+          const qChapterId = params.get("chapterId");
+          if (qClassId && qSubjectId && qChapterId) {
+            setSubjectId(String(qSubjectId));
+            return;
+          }
+        }
+
+        // Check if there is a matching draft subjectId
+        let restoredSubjectId = "";
+        if (typeof window !== "undefined") {
+          const saved = localStorage.getItem("momentum_draft_question_generator");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              if (parsed.subjectId && data.some(s => String(s.id) === String(parsed.subjectId))) {
+                restoredSubjectId = String(parsed.subjectId);
+              }
+            } catch (e) {}
+          }
+        }
+        setSubjectId(restoredSubjectId);
       } catch (err: any) {
         console.error("Failed to load subjects for class", err);
       }
@@ -104,7 +166,33 @@ export default function QuestionGeneratorForm() {
       try {
         const data = await chapterService.getBySubject(subjectId);
         setChapters(data);
-        setChapterId("");
+        
+        // Priority: Check query parameters first
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const qClassId = params.get("classId");
+          const qSubjectId = params.get("subjectId");
+          const qChapterId = params.get("chapterId");
+          if (qClassId && qSubjectId && qChapterId) {
+            setChapterId(String(qChapterId));
+            return;
+          }
+        }
+
+        // Check if there is a matching draft chapterId
+        let restoredChapterId = "";
+        if (typeof window !== "undefined") {
+          const saved = localStorage.getItem("momentum_draft_question_generator");
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              if (parsed.chapterId && data.some(ch => String(ch.id) === String(parsed.chapterId))) {
+                restoredChapterId = String(parsed.chapterId);
+              }
+            } catch (e) {}
+          }
+        }
+        setChapterId(restoredChapterId);
       } catch (err: any) {
         console.error("Failed to load chapters for subject", err);
       }
@@ -127,6 +215,19 @@ export default function QuestionGeneratorForm() {
       }
     }
   }, [subjectId, chapterId, subjects, chapters, isSessionModified]);
+
+  // Save draft details to localStorage on change (only if not prefilled)
+  useEffect(() => {
+    if (typeof window !== "undefined" && !isPrefilled && (classId || subjectId || chapterId)) {
+      localStorage.setItem("momentum_draft_question_generator", JSON.stringify({
+        classId,
+        subjectId,
+        chapterId,
+        difficulty,
+        count
+      }));
+    }
+  }, [classId, subjectId, chapterId, difficulty, count, isPrefilled]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +273,7 @@ export default function QuestionGeneratorForm() {
         previewOnly: true, // Always request preview first so the admin can verify
         session: finalSessionName,
         questionType,
+        selectedText: selectedText || undefined
       });
       clearInterval(interval);
       setProgress(100);
@@ -289,6 +391,11 @@ export default function QuestionGeneratorForm() {
       setDraftQuestions([]);
       setIsSessionModified(false);
       setIsAssignModalOpen(true);
+      
+      // Clear draft localStorage upon successful save
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("momentum_draft_question_generator");
+      }
     } catch (err: any) {
       setError(extractErrorMessage(err, "Failed to save questions to database."));
     } finally {
@@ -368,7 +475,7 @@ export default function QuestionGeneratorForm() {
                   </div>
 
                   <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>Question Text</label>
+                    <label style={styles.fieldLabel}>Question Text<span className="required-asterisk">*</span></label>
                     <textarea
                       value={q.text}
                       onChange={(e) => handleQuestionTextChange(qIndex, e.target.value)}
@@ -379,7 +486,7 @@ export default function QuestionGeneratorForm() {
                   </div>
 
                   <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>Expected Answer</label>
+                    <label style={styles.fieldLabel}>Expected Answer<span className="required-asterisk">*</span></label>
                     <textarea
                       value={q.correctAnswer || ""}
                       onChange={(e) => handleCorrectAnswerChange(qIndex, e.target.value)}
@@ -441,100 +548,143 @@ export default function QuestionGeneratorForm() {
         <form onSubmit={handleGenerate} style={styles.form}>
           {error && <div style={styles.errorBanner}>{error}</div>}
 
-          <div className="form-row-responsive">
-            <div style={styles.selectGroup}>
-              <label style={styles.label}>Class</label>
-              <select
-                value={classId}
-                onChange={(e) => setClassId(e.target.value)}
-                style={styles.select}
-                required
-              >
-                <option value="">Select a Class...</option>
-                {classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name} (Grade {cls.grade}-{cls.section})
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Section 1: Syllabus Selection */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "1.2rem" }}>
+            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Syllabus Selection</h4>
+            {isPrefilled ? (
+              <div style={styles.preFilledCard}>
+                <div style={styles.preFilledLabel}>Generating assessment for</div>
+                <div style={styles.preFilledGrid}>
+                  <div style={styles.preFilledItem}>
+                    <span style={styles.preFilledHeading}>Class</span>
+                    <span style={styles.preFilledVal}>
+                      {selectedClass ? `${selectedClass.name} (Grade ${selectedClass.grade}-${selectedClass.section})` : "Loading..."}
+                    </span>
+                  </div>
+                  <div style={styles.preFilledItem}>
+                    <span style={styles.preFilledHeading}>Subject</span>
+                    <span style={styles.preFilledVal}>
+                      {selectedSubject ? selectedSubject.name : "Loading..."}
+                    </span>
+                  </div>
+                  <div style={styles.preFilledItem}>
+                    <span style={styles.preFilledHeading}>Chapter</span>
+                    <span style={styles.preFilledVal}>
+                      {selectedChapter ? `Chapter ${selectedChapter.number}: ${selectedChapter.title}` : "Loading..."}
+                    </span>
+                  </div>
+                </div>
+                {selectedText && (
+                  <div style={{ marginTop: "1rem", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
+                    <span style={styles.preFilledHeading}>Contextual Selection</span>
+                    <blockquote style={{ margin: "0.25rem 0 0 0", fontStyle: "italic", fontSize: "0.85rem", color: "var(--text-secondary)", borderLeft: "3px solid var(--primary)", paddingLeft: "0.5rem" }}>
+                      "{selectedText.length > 150 ? selectedText.substring(0, 150) + "..." : selectedText}"
+                    </blockquote>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="form-row-responsive">
+                <div style={styles.selectGroup}>
+                  <label style={styles.label}>Class<span className="required-asterisk">*</span></label>
+                  <select
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value)}
+                    style={styles.select}
+                    required
+                  >
+                    <option value="">Select a Class...</option>
+                    {classes.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.name} (Grade {cls.grade}-{cls.section})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div style={styles.selectGroup}>
-              <label style={styles.label}>Subject</label>
-              <select
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                style={styles.select}
-                disabled={!classId}
-                required
-              >
-                <option value="">Select a Subject...</option>
-                {subjects.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name} ({sub.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div style={styles.selectGroup}>
+                  <label style={styles.label}>Subject<span className="required-asterisk">*</span></label>
+                  <select
+                    value={subjectId}
+                    onChange={(e) => setSubjectId(e.target.value)}
+                    style={styles.select}
+                    disabled={!classId}
+                    required
+                  >
+                    <option value="">Select a Subject...</option>
+                    {subjects.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name} ({sub.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div style={styles.selectGroup}>
-              <label style={styles.label}>Chapter</label>
-              <select
-                value={chapterId}
-                onChange={(e) => setChapterId(e.target.value)}
-                style={styles.select}
-                disabled={!subjectId}
-                required
-              >
-                <option value="">Select a Chapter...</option>
-                {chapters.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    Chapter {ch.number}: {ch.title}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div style={styles.selectGroup}>
+                  <label style={styles.label}>Chapter<span className="required-asterisk">*</span></label>
+                  <select
+                    value={chapterId}
+                    onChange={(e) => setChapterId(e.target.value)}
+                    style={styles.select}
+                    disabled={!subjectId}
+                    required
+                  >
+                    <option value="">Select a Chapter...</option>
+                    {chapters.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        Chapter {ch.number}: {ch.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="form-row-responsive">
-            <div style={styles.selectGroup}>
-              <label style={styles.label}>Difficulty Level</label>
-              <select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                style={styles.select}
-              >
-                <option value="easy">Easy (Foundational)</option>
-                <option value="medium">Medium (Intermediate)</option>
-                <option value="hard">Hard (Advanced Challenge)</option>
-              </select>
+          {/* Section 2: Assessment Parameters */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", paddingTop: "0.4rem" }}>
+            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Assessment Parameters</h4>
+            
+            <div className="form-row-responsive">
+              <div style={styles.selectGroup}>
+                <label style={styles.label}>Difficulty Level<span className="required-asterisk">*</span></label>
+                <select
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="easy">Easy (Foundational)</option>
+                  <option value="medium">Medium (Intermediate)</option>
+                  <option value="hard">Hard (Advanced Challenge)</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          <div className="form-row-responsive">
-            <div style={styles.selectGroup}>
-              <Input
-                label="Number of Questions"
-                type="number"
-                min="1"
-                max="30"
-                value={count}
-                onChange={(e) => setCount(e.target.value)}
-                required
-              />
-            </div>
-            <div style={styles.selectGroup}>
-              <Input
-                label="Generation Session Name"
-                type="text"
-                placeholder="Auto-generated unique session name"
-                value={session}
-                onChange={(e) => {
-                  setSession(e.target.value);
-                  setIsSessionModified(true);
-                }}
-                required
-              />
+            <div className="form-row-responsive">
+              <div style={styles.selectGroup}>
+                <Input
+                  label="Number of Questions"
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                  required
+                />
+              </div>
+              <div style={styles.selectGroup}>
+                <Input
+                  label="Generation Session Name"
+                  type="text"
+                  placeholder="Auto-generated unique session name"
+                  value={session}
+                  onChange={(e) => {
+                    setSession(e.target.value);
+                    setIsSessionModified(true);
+                  }}
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -577,7 +727,7 @@ export default function QuestionGeneratorForm() {
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
-                <span>Success! {savedCount} questions have been saved and published to the database.</span>
+                <span>{savedCount} questions are ready for review.</span>
               </div>
               <div style={styles.successBannerActions}>
                 <Button
@@ -875,5 +1025,42 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-md)",
     color: "var(--text-secondary)",
     fontSize: "0.95rem",
+  },
+  preFilledCard: {
+    backgroundColor: "var(--selected-bg)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    padding: "1.2rem",
+    marginTop: "0.4rem",
+  },
+  preFilledLabel: {
+    fontSize: "0.85rem",
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: "0.75rem",
+  },
+  preFilledGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "1.5rem",
+  },
+  preFilledItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.25rem",
+  },
+  preFilledHeading: {
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  preFilledVal: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: "var(--primary)",
   },
 };

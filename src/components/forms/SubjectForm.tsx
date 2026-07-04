@@ -56,7 +56,7 @@ export default function SubjectForm({ onSuccess, onCancel, defaultClassId }: Sub
       {error && <div style={styles.errorBanner}>{error}</div>}
       
       <div style={styles.selectGroup}>
-        <label style={styles.label}>Class</label>
+        <label style={styles.label}>Class<span className="required-asterisk">*</span></label>
         <select
           value={classId}
           onChange={(e) => setClassId(e.target.value)}

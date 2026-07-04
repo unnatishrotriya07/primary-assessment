@@ -8,6 +8,9 @@ export const chapterService = {
     if (subjectId) params.subject_id = subjectId;
     return api.get<ChapterData[]>("/chapters/", { params });
   },
+  getById: (id: string | number): Promise<ChapterData> => {
+    return api.get<ChapterData>(`/chapters/${id}`);
+  },
   getBySubject: (subjectId: string): Promise<ChapterData[]> => {
     return api.get<ChapterData[]>(`/subjects/${subjectId}/chapters`);
   },

@@ -166,7 +166,7 @@ export default function AdminDashboard() {
   const fetchSchools = () => {
     controlPanelService.getSchools()
       .then((res) => {
-        setRegisteredSchools(res.data);
+        setRegisteredSchools(Array.isArray(res) ? res : (res as any)?.data || []);
       })
       .catch((err) => {
         console.error("Failed to load schools", err);
@@ -863,45 +863,70 @@ export default function AdminDashboard() {
   return (
     <div style={styles.container}>
       <PageHeader
-        title={`${getGreeting()}, ${teacherName}`}
-        description="Here is your checklist and learning diagnostics for today."
-        action={
-          <Link href="/assessments" style={styles.headerCta} className="interactive-element">
-            Continue Today's Work
-          </Link>
-        }
+        title={`${getGreeting()}, ${teacherName} 👋`}
+        description="Let's continue today's teaching."
       />
+
+      {/* Dashboard Hero: Continue Working */}
+      <div className="card animate-fade-in" style={styles.heroCard}>
+        <div style={styles.heroLeft}>
+          <span style={styles.heroLabel}>CONTINUE WORKING</span>
+          <h2 style={styles.heroTitle}>
+            {lastAssessment ? lastAssessment.title : "Fractions Assessment"}
+          </h2>
+          <p style={styles.heroSubtitle}>
+            {lastAssessment 
+              ? `${lastAssessment.questionsCount} questions • Assigned to class roster` 
+              : "Grade 3 Mathematics • Conceptual mastery check"}
+          </p>
+        </div>
+        <div style={styles.heroRight}>
+          <Link href={lastAssessment ? "/assessments" : "/assessments?action=create"} style={{ textDecoration: "none" }}>
+            <Button variant="primary" size="lg" style={{ borderRadius: "10px" }}>
+              Continue <span style={{ marginLeft: "6px" }}>&rarr;</span>
+            </Button>
+          </Link>
+        </div>
+      </div>
 
       {/* Teacher Metrics */}
       <div style={styles.metricGrid}>
-        <Link href="/reports" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
-          <span style={styles.metricLabel}>Assessments Waiting</span>
+        <Link href="/assessments" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
+          <span style={styles.metricLabel}>Pending Assessments</span>
           <h3 style={styles.metricValue}>
             {activeAssessmentsCount > 0 ? activeAssessmentsCount : "3"}
           </h3>
-          <span style={styles.metricSubtext}>Awaiting evaluations or student submissions</span>
+          <span style={styles.metricSubtext}>Awaiting student completions</span>
         </Link>
 
+        <div style={styles.metricCard}>
+          <span style={styles.metricLabel}>AI Evaluations</span>
+          <h3 style={styles.metricValue}>
+            {stats.assessments_conducted || "24"}
+          </h3>
+          <span style={styles.metricSubtext}>Completed automated audits</span>
+        </div>
+
         <Link href="/students" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
-          <span style={styles.metricLabel}>Students Need Help</span>
+          <span style={styles.metricLabel}>Students Requiring Attention</span>
           <h3 style={styles.metricValue}>
             {studentsNeedHelpCount > 0 ? studentsNeedHelpCount : "12"}
           </h3>
-          <span style={styles.metricSubtext}>Scoring below 70% average conceptual mastery</span>
+          <span style={styles.metricSubtext}>Scoring below 70% conceptual mastery</span>
         </Link>
 
         <Link href="/reports" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
-          <span style={styles.metricLabel}>Average Mastery</span>
+          <span style={styles.metricLabel}>Average Chapter Mastery</span>
           <h3 style={styles.metricValue}>
             {stats.average_accuracy || "92"}%
           </h3>
-          <span style={styles.metricSubtext}>Across math & reading chapters this term</span>
+          <span style={styles.metricSubtext}>Across active class syllabus boards</span>
         </Link>
       </div>
 
       {/* Main Grid Layout */}
       <div style={styles.dashboardGrid}>
-        {/* Left Column: Tasks, Continue Previous, Recent Activity */}
+        {/* Left Column: Tasks, Recent Activity */}
         <div style={styles.mainCol}>
           {/* Today's Tasks */}
           <div className="card" style={styles.sectionCard}>
@@ -926,34 +951,6 @@ export default function AdminDashboard() {
                 <span style={styles.checkText}>Review student questions accuracy gaps in Subtraction chapter</span>
               </div>
             </div>
-          </div>
-
-          {/* Continue Previous Work */}
-          <div className="card" style={{ ...styles.sectionCard, marginTop: "2rem" }}>
-            <h3 style={styles.sectionTitle}>Continue Previous Work</h3>
-            <p style={styles.sectionDesc}>Jump back into your most recently configured syllabus assessment.</p>
-
-            {lastAssessment ? (
-              <div style={styles.continueCard}>
-                <div style={styles.continueCardDetails}>
-                  <span style={styles.continueTitle}>{lastAssessment.title}</span>
-                  <span style={styles.continueSub}>{lastAssessment.questionsCount} questions • Assigned to {lastAssessment.classId ? `Class #${lastAssessment.classId}` : "students"}</span>
-                </div>
-                <Link href="/assessments">
-                  <Button variant="primary">Resume Workspace</Button>
-                </Link>
-              </div>
-            ) : (
-              <div style={styles.continueCard}>
-                <div style={styles.continueCardDetails}>
-                  <span style={styles.continueTitle}>Grade 3 Math - Division Chapter</span>
-                  <span style={styles.continueSub}>5 questions • Ready to review and assign</span>
-                </div>
-                <Link href="/assessments?action=create">
-                  <Button variant="primary">Launch Wizard</Button>
-                </Link>
-              </div>
-            )}
           </div>
 
           {/* Recent Student Activity */}
@@ -1026,22 +1023,65 @@ export default function AdminDashboard() {
           {/* Quick Actions */}
           <div className="card" style={styles.sectionCard}>
             <h3 style={styles.widgetTitle}>Quick Actions</h3>
-            <p style={styles.widgetDesc}>Immediate pathways for daily operations.</p>
+            <p style={{ ...styles.widgetDesc, marginBottom: "1rem" }}>One-click daily educational tasks.</p>
 
-            <div style={styles.quickActionsGrid}>
-              <Link href="/assessments?action=create" style={styles.actionButtonCard} className="interactive-element">
-                <span style={{ ...styles.actionIconWrapper, color: "var(--primary)" }}>+</span>
-                <span style={styles.actionBtnLabel}>Create Quiz</span>
+            <div style={styles.quickActionsStack}>
+              <Link href="/assessments?action=create" style={styles.quickActionRow} className="interactive-element">
+                <div style={{ ...styles.quickActionIconBg, color: "var(--primary)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+                <div style={styles.quickActionContent}>
+                  <strong style={styles.quickActionName}>Create Assessment</strong>
+                  <span style={styles.quickActionSub}>Configure custom diagnostics</span>
+                </div>
+                <span style={styles.quickActionArrow}>&rarr;</span>
               </Link>
 
-              <Link href="/assessments?tab=questions" style={styles.actionButtonCard} className="interactive-element">
-                <span style={{ ...styles.actionIconWrapper, color: "var(--info)" }}>📚</span>
-                <span style={styles.actionBtnLabel}>Saved Qs</span>
+              <Link href="/students?import=true" style={styles.quickActionRow} className="interactive-element">
+                <div style={{ ...styles.quickActionIconBg, color: "var(--success)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M19 8v6M16 11h6" />
+                  </svg>
+                </div>
+                <div style={styles.quickActionContent}>
+                  <strong style={styles.quickActionName}>Add Student</strong>
+                  <span style={styles.quickActionSub}>Import new class rosters</span>
+                </div>
+                <span style={styles.quickActionArrow}>&rarr;</span>
               </Link>
 
-              <Link href="/reports" style={styles.actionButtonCard} className="interactive-element">
-                <span style={{ ...styles.actionIconWrapper, color: "var(--warning)" }}>📊</span>
-                <span style={styles.actionBtnLabel}>Insights</span>
+              <Link href="/assessments?tab=generate" style={styles.quickActionRow} className="interactive-element">
+                <div style={{ ...styles.quickActionIconBg, color: "var(--info)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <div style={styles.quickActionContent}>
+                  <strong style={styles.quickActionName}>Generate Questions</strong>
+                  <span style={styles.quickActionSub}>Build custom question list</span>
+                </div>
+                <span style={styles.quickActionArrow}>&rarr;</span>
+              </Link>
+
+              <Link href="/reports" style={styles.quickActionRow} className="interactive-element">
+                <div style={{ ...styles.quickActionIconBg, color: "var(--warning)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                </div>
+                <div style={styles.quickActionContent}>
+                  <strong style={styles.quickActionName}>View Insights</strong>
+                  <span style={styles.quickActionSub}>Review class mastery trends</span>
+                </div>
+                <span style={styles.quickActionArrow}>&rarr;</span>
               </Link>
             </div>
           </div>
@@ -1392,7 +1432,97 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.95rem",
     fontWeight: 600,
     cursor: "pointer",
-    outline: "none",
     transition: "color var(--transition-fast)",
   },
+  heroCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "var(--selected-bg)",
+    border: "1px solid #BFDBFE",
+    borderRadius: "14px",
+    padding: "2rem",
+    width: "100%",
+    gap: "1.5rem",
+    flexWrap: "wrap",
+    boxShadow: "var(--shadow-sm)",
+  },
+  heroLeft: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.4rem",
+    textAlign: "left",
+  },
+  heroLabel: {
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    color: "var(--primary)",
+    letterSpacing: "0.07em",
+  },
+  heroTitle: {
+    fontSize: "1.5rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    margin: 0,
+  },
+  heroSubtitle: {
+    fontSize: "0.9rem",
+    color: "var(--text-secondary)",
+    margin: 0,
+  },
+  heroRight: {
+    display: "flex",
+    alignItems: "center",
+  },
+  quickActionsStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.75rem",
+    marginTop: "0.5rem",
+  },
+  quickActionRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.8rem",
+    padding: "0.75rem",
+    borderRadius: "10px",
+    backgroundColor: "var(--bg-app)",
+    border: "1px solid var(--border-color)",
+    textDecoration: "none",
+    transition: "all var(--transition-fast)",
+    textAlign: "left",
+  },
+  quickActionIconBg: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "8px",
+    backgroundColor: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  quickActionContent: {
+    display: "flex",
+    flexDirection: "column",
+    flexGrow: 1,
+    overflow: "hidden",
+    alignItems: "flex-start",
+  },
+  quickActionName: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text-primary)",
+  },
+  quickActionSub: {
+    fontSize: "0.72rem",
+    color: "var(--text-secondary)",
+  },
+  quickActionArrow: {
+    fontSize: "0.9rem",
+    color: "var(--text-muted)",
+    paddingRight: "4px",
+  },
 };
+

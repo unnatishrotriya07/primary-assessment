@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import chapterService from "@/services/chapter.service";
 import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
@@ -203,13 +204,13 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
               <th style={styles.th}>Class</th>
               <th style={styles.th}>NCERT Source</th>
               <th style={styles.th}>Questions Count</th>
-              {isSuperAdmin && <th style={styles.th}>Actions</th>}
+              <th style={styles.th}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedChapters.length === 0 ? (
               <tr style={styles.row}>
-                <td colSpan={isSuperAdmin ? 7 : 6} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
+                <td colSpan={7} style={{ ...styles.td, textAlign: "center", color: "var(--text-secondary)", padding: "3rem" }}>
                   No chapters match the selected filters.
                 </td>
               </tr>
@@ -248,47 +249,83 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
                       </div>
                     </td>
                     <td style={styles.td}>{item.questionsCount ?? 0} Items</td>
-                    {isSuperAdmin && (
-                      <td style={styles.td}>
-                        <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                          <button style={styles.actionBtn} title="Edit">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M12 20h9" />
-                              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                            </svg>
-                          </button>
-                          <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M3 6h18" />
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                              <line x1="10" x2="10" y1="11" y2="17" />
-                              <line x1="14" x2="14" y1="11" y2="17" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td style={styles.td}>
+                      <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+                        <Link
+                          href={`/chapters/${item.id}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            textDecoration: "none",
+                            backgroundColor: "var(--primary)",
+                            color: "white",
+                            padding: "5px 10px",
+                            borderRadius: "6px",
+                            fontSize: "0.85rem",
+                            fontWeight: 500,
+                            border: "none",
+                            cursor: "pointer"
+                          }}
+                          title="Read Chapter"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ marginRight: "4px" }}
+                          >
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                          </svg>
+                          Read
+                        </Link>
+                        {isSuperAdmin && (
+                          <>
+                            <button style={styles.actionBtn} title="Edit">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                            <button style={styles.deleteBtn} onClick={() => handleDelete(item.id)} title="Delete">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <line x1="10" x2="10" y1="11" y2="17" />
+                                <line x1="14" x2="14" y1="11" y2="17" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -549,3 +586,4 @@ const styles: Record<string, React.CSSProperties> = {
     animation: "spin 0.8s linear infinite",
   },
 };
+

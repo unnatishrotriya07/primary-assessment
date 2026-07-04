@@ -12,5 +12,10 @@ export interface QuestionData {
   generatedBy?: string;
   session?: string;
   createdAt?: string;
+  source?: string;
+  section?: string;
+  page?: string;
+  confidence?: number;
+  referenceText?: string;
 }
 

@@ -86,13 +86,13 @@ export default function CreateAndAssignModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={successData ? "Assessment Created Successfully" : "Create Assessment"}
+      title={successData ? "Your assessment is ready to assign" : "Create Assessment"}
     >
       {successData ? (
         <div style={styles.successContainer} className="animate-fade-in">
           <div style={styles.successHeader}>
             <div style={styles.successIcon}>✓</div>
-            <h4 style={styles.successTitle}>Assessment Created!</h4>
+            <h4 style={styles.successTitle}>Your assessment is ready to assign.</h4>
             <p style={styles.successSubtitle}>
               The assessment is active. Students can verify themselves and take it via the shareable link.
             </p>

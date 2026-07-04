@@ -52,6 +52,7 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   
   const [selectedClassFilter, setSelectedClassFilter] = useState("");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState("");
@@ -156,11 +157,12 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
   }, [selectedGroupQuestions, isDetailModalOpen]);
 
   const filteredQuestions = questions.filter((item) => {
+    const matchesSearch = !searchTerm || item.text.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = !selectedClassFilter || String(item.classId) === selectedClassFilter;
     const matchesSubject = !selectedSubjectFilter || String(item.subjectId) === selectedSubjectFilter;
     const matchesChapter = !selectedChapterFilter || (item.chapterId && String(item.chapterId) === selectedChapterFilter);
     const matchesSession = !selectedSessionFilter || item.session === selectedSessionFilter;
-    return matchesClass && matchesSubject && matchesChapter && matchesSession;
+    return matchesSearch && matchesClass && matchesSubject && matchesChapter && matchesSession;
   });
 
   const groupedSessions = React.useMemo(() => {
@@ -231,6 +233,24 @@ export default function QuestionsTable({ refreshTrigger = 0 }: QuestionsTablePro
 
   return (
     <div style={styles.container}>
+      <div style={styles.searchBarContainer}>
+        <div style={styles.searchContainer}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" style={styles.searchIcon}>
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search questions by text content..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={styles.searchInput}
+          />
+        </div>
+      </div>
+
       <div className="table-filter-bar card">
         <div style={styles.filterGroup}>
           <label style={styles.filterLabel}>Filter by Class</label>
@@ -861,5 +881,34 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: 600,
     color: "var(--text-primary)",
+  },
+  searchBarContainer: {
+    display: "flex",
+    width: "100%",
+  },
+  searchContainer: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    flex: 1,
+    backgroundColor: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "10px",
+  },
+  searchIcon: {
+    position: "absolute",
+    left: "12px",
+    color: "var(--text-muted)",
+    pointerEvents: "none",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "0.7rem 1rem 0.7rem 2.5rem",
+    border: "none",
+    background: "transparent",
+    color: "var(--text-primary)",
+    fontSize: "0.95rem",
+    outline: "none",
+    borderRadius: "10px",
   },
 };

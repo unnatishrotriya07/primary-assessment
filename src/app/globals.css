@@ -1259,3 +1259,78 @@ button, input, select, textarea {
 }
 
 
+/* Premium SaaS Platform Table Classes */
+.premium-table-container {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--bg-surface) !important;
+  box-shadow: var(--shadow-sm) !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.premium-table-th {
+  position: sticky !important;
+  top: 0 !important;
+  background-color: var(--bg-surface-hover) !important;
+  z-index: 10 !important;
+  box-shadow: inset 0 -1px 0 var(--border-color) !important;
+  padding: 1rem 1.5rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: var(--text-secondary) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.premium-table-tr {
+  border-bottom: 1px solid var(--divider) !important;
+  transition: background-color var(--transition-fast) !important;
+}
+
+.premium-table-tr:nth-child(even) {
+  background-color: #FCFDFE !important;
+}
+
+.premium-table-tr:nth-child(odd) {
+  background-color: #FFFFFF !important;
+}
+
+.premium-table-tr:hover {
+  background-color: var(--selected-bg) !important;
+}
+
+.premium-table-td {
+  padding: 1rem 1.5rem !important;
+  font-size: 0.95rem !important;
+  color: var(--text-primary) !important;
+  vertical-align: middle !important;
+}
+
+/* Skeleton Loading Pulse Items */
+.skeleton-line {
+  height: 18px;
+  background-color: #E5E7EB;
+  border-radius: 4px;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+.skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  background-color: #E5E7EB;
+  border-radius: 50%;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+/* Required Fields Red Asterisks */
+.required-asterisk {
+  color: var(--error);
+  margin-left: 2px;
+  font-weight: bold;
+}
+
+
+

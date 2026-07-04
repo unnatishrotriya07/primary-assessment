@@ -26,6 +26,8 @@ function StudentsWorkspace() {
   // Student list view states
   const [students, setStudents] = useState<StudentData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
@@ -164,6 +166,13 @@ function StudentsWorkspace() {
     }
   }, [studentIdParam]);
 
+  // Trigger import modal on ?import=true parameter load
+  useEffect(() => {
+    if (searchParams.get("import") === "true") {
+      setUploadModalOpen(true);
+    }
+  }, [searchParams]);
+
   // Detect section name helper
   const detectSectionName = (filename: string, index: number): string => {
     const clean = filename.toUpperCase();
@@ -288,19 +297,37 @@ function StudentsWorkspace() {
     }
   };
 
-  // Filter roster list based on user search term
+  // Filter roster list based on user search term and section
   const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.scholarNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (s) => {
+      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.scholarNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.email.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesSection = !sectionFilter || (s as any).section === sectionFilter;
+      
+      return matchesSearch && matchesSection;
+    }
   );
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (sortBy === "name-asc") {
+      return a.name.localeCompare(b.name);
+    } else if (sortBy === "name-desc") {
+      return b.name.localeCompare(a.name);
+    } else if (sortBy === "scholar-asc") {
+      return a.scholarNumber.localeCompare(b.scholarNumber);
+    } else if (sortBy === "scholar-desc") {
+      return b.scholarNumber.localeCompare(a.scholarNumber);
+    }
+    return 0;
+  });
 
   // Pagination indexing
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentStudents = filteredStudents.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const currentStudents = sortedStudents.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedStudents.length / itemsPerPage);
 
   const getInitials = (nameStr: string) => {
     if (!nameStr) return "?";
@@ -499,9 +526,37 @@ function StudentsWorkspace() {
               style={styles.searchInput}
             />
           </div>
-          <Button onClick={() => openUploadModal(classIdParam)} variant="primary">
-            Import Excel List
-          </Button>
+
+          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
+            <select
+              value={sectionFilter}
+              onChange={(e) => {
+                setSectionFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={styles.filterSelect}
+            >
+              <option value="">All Sections</option>
+              <option value="A">Section A</option>
+              <option value="B">Section B</option>
+              <option value="C">Section C</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="name-asc">Sort: Name (A-Z)</option>
+              <option value="name-desc">Sort: Name (Z-A)</option>
+              <option value="scholar-asc">Sort: Scholar No (Low-High)</option>
+              <option value="scholar-desc">Sort: Scholar No (High-Low)</option>
+            </select>
+
+            <Button onClick={() => openUploadModal(classIdParam)} variant="primary">
+              Import Excel List
+            </Button>
+          </div>
         </div>
 
         {studentsLoading ? (
@@ -1569,5 +1624,16 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     transition: "background-color 0.2s",
+  },
+  filterSelect: {
+    padding: "0.5rem 0.8rem",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface)",
+    color: "var(--text-primary)",
+    fontSize: "0.85rem",
+    outline: "none",
+    cursor: "pointer",
+    height: "40px",
   }
 };

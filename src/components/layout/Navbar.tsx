@@ -88,7 +88,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
     const firstSec = activeParts[0];
 
     if (firstSec === "syllabus" || firstSec === "classes" || firstSec === "subjects" || firstSec === "chapters") {
-      crumbs.push({ label: "Administration", href: "/syllabus" });
+      crumbs.push({ label: "Academics", href: "/syllabus?tab=classes" });
       
       // Determine tab if visible in URL query
       let currentTab = "";
@@ -110,22 +110,20 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
       }
       
       if (currentTab === "questions") {
-        crumbs.push({ label: "Administration", href: "/syllabus" });
-        crumbs.push({ label: "Saved Questions", href: "/assessments?tab=questions" });
+        crumbs.push({ label: "Academics", href: "/syllabus?tab=classes" });
+        crumbs.push({ label: "Question Library", href: "/assessments?tab=questions" });
       } else {
         crumbs.push({ label: "Assessments", href: "/assessments" });
       }
     } else if (firstSec === "students") {
       crumbs.push({ label: "Students", href: "/students" });
     } else if (firstSec === "team") {
-      crumbs.push({ label: "Administration", href: "/syllabus" });
       crumbs.push({ label: "Team", href: "/team" });
     } else if (firstSec === "school-settings") {
-      crumbs.push({ label: "Administration", href: "/syllabus" });
-      crumbs.push({ label: "School Settings", href: "/school-settings" });
+      crumbs.push({ label: "Settings", href: "/school-settings" });
     } else if (firstSec === "questions") {
-      crumbs.push({ label: "Administration", href: "/syllabus" });
-      crumbs.push({ label: "Saved Questions", href: "/assessments?tab=questions" });
+      crumbs.push({ label: "Academics", href: "/syllabus?tab=classes" });
+      crumbs.push({ label: "Question Library", href: "/assessments?tab=questions" });
     } else if (firstSec === "reports") {
       crumbs.push({ label: "Learning Insights", href: "/reports" });
       if (activeParts[1]) crumbs.push({ label: "Diagnostic Report", href: pathname });
