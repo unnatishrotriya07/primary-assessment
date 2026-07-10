@@ -3,9 +3,11 @@ import api from "./api";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface InterviewQuestion {
+    id?: number;
     q: string;
     skill: string;
     category: string;
+    hint?: string;
 }
 
 export interface InterviewStartResponse {
@@ -39,6 +41,7 @@ export interface InterviewReport {
     student_name: string;
     student_class: string;
     assessment_title?: string;
+    questions?: any[];
     overall_score?: number;
     grade?: string;
     recommendation?: string;
@@ -61,6 +64,26 @@ export interface InterviewReport {
         isCorrect: boolean;
         explanation?: string;
     }[];
+    transcript?: TranscriptEntry[];
+    language?: string;
+    confidence?: number;
+    audio_references?: string[];
+    report_version?: string;
+    requires_review?: boolean;
+    review_reason?: string;
+    current_question_index?: number;
+    session_state?: string;
+    comfort_index?: number;
+    raw_answers?: AnswerEntry[];
+    network_status?: string;
+    completion_status?: string;
+    evaluation_steps?: {
+        step_name: string;
+        status: string;
+        output?: any;
+        error?: string;
+        completed_at?: string;
+    }[];
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -75,14 +98,13 @@ const interviewService = {
 
     /**
      * Called when student finishes all questions.
-     * Backend calls Claude AI and returns the full scored report.
+     * Backend calls LLM and returns the report.
      */
     submit: (payload: InterviewSubmitPayload): Promise<InterviewReport> =>
         api.post<InterviewReport>("/interviews/submit", payload),
 
     /**
      * Fetch a saved report by interview ID.
-     * Used on the result page if sessionStorage was cleared.
      */
     getReport: (interviewId: number): Promise<InterviewReport> =>
         api.get<InterviewReport>(`/interviews/${interviewId}`),
@@ -92,6 +114,65 @@ const interviewService = {
      */
     getByAssessment: (assessmentId: number): Promise<InterviewReport[]> =>
         api.get<InterviewReport[]>(`/interviews/assessment/${assessmentId}`),
+
+    /**
+     * Admin: update observation notes for a student's interview.
+     */
+    updateNotes: (interviewId: number, adminNote: string): Promise<InterviewReport> =>
+        api.put<InterviewReport>(`/interviews/${interviewId}/notes`, { admin_note: adminNote }),
+
+    /**
+     * Called in real-time to save conversation turn by turn.
+     */
+    addMessage: (
+        interviewId: number,
+        payload: {
+            role: "ai" | "student";
+            text: string;
+            question_category?: string;
+            sequence_number?: number;
+            question_id?: number;
+            student_response?: string;
+            buddy_response?: string;
+            audio_url?: string;
+            speech_confidence?: number;
+        }
+    ): Promise<{ status: string; message_id: number }> =>
+        api.post<{ status: string; message_id: number }>(`/interviews/${interviewId}/messages`, payload),
+
+    /**
+     * Updates progressive session state turn-by-turn.
+     */
+    updateSession: (
+        interviewId: number,
+        payload: {
+            current_question_index: number;
+            session_state: string;
+            comfort_index: number;
+            raw_answers: AnswerEntry[];
+            network_status: string;
+            completion_status: string;
+        }
+    ): Promise<InterviewReport> =>
+        api.post<InterviewReport>(`/interviews/${interviewId}/session`, payload),
+
+    /**
+     * Teacher: review and approve evaluation report.
+     */
+    reviewReport: (
+        interviewId: number,
+        payload: {
+            evaluated_answers: any[];
+            admin_note?: string;
+        }
+    ): Promise<InterviewReport> =>
+        api.put<InterviewReport>(`/interviews/${interviewId}/review`, payload),
+
+    /**
+     * Admin: regenerate evaluation report.
+     */
+    regenerateReport: (interviewId: number): Promise<{ status: string; message: string }> =>
+        api.post<{ status: string; message: string }>(`/interviews/${interviewId}/regenerate`, {}),
 };
 
 export default interviewService;

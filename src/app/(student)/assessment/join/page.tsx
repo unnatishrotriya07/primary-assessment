@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import assessmentService, { AssessmentJoinInfoResponse } from "@/services/assessment.service";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, isHindiText } from "@/utils/helpers";
+
 
 function JoinAssessmentForm() {
   const searchParams = useSearchParams();
@@ -123,24 +124,31 @@ function JoinAssessmentForm() {
           Please enter your credentials to verify your enrollment in the target class and start the test.
         </p>
 
-        <div style={styles.detailsGrid}>
-          <div style={styles.detailItem}>
-            <span style={styles.detailLabel}>Assessment</span>
-            <span style={styles.detailValue}>{joinInfo?.title}</span>
-          </div>
-          <div style={styles.detailItem}>
-            <span style={styles.detailLabel}>Class</span>
-            <span style={styles.detailValue}>{joinInfo?.className}</span>
-          </div>
-          <div style={styles.detailItem}>
-            <span style={styles.detailLabel}>Subject</span>
-            <span style={styles.detailValue}>{joinInfo?.subjectName}</span>
-          </div>
-          <div style={styles.detailItem}>
-            <span style={styles.detailLabel}>Questions</span>
-            <span style={styles.detailValue}>{joinInfo?.questionsCount} Qs</span>
-          </div>
-        </div>
+        {(() => {
+          const isHindi = joinInfo 
+            ? (joinInfo.subjectName?.toLowerCase() === "hindi" || isHindiText(joinInfo.title))
+            : false;
+          return (
+            <div style={styles.detailsGrid}>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Assessment</span>
+                <span style={styles.detailValue} className={isHindi ? "font-hindi" : ""}>{joinInfo?.title}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Class</span>
+                <span style={styles.detailValue}>{joinInfo?.className}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Subject</span>
+                <span style={styles.detailValue} className={isHindi ? "font-hindi" : ""}>{joinInfo?.subjectName}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Questions</span>
+                <span style={styles.detailValue}>{joinInfo?.questionsCount} Qs</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <form onSubmit={handleSubmit} style={styles.form}>
           {submitError && <div style={styles.errorBanner}>{submitError}</div>}

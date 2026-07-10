@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/common/PageHeader";
 import Modal from "@/components/common/Modal";
 import Button from "@/components/common/Button";
@@ -17,7 +17,8 @@ import chapterService from "@/services/chapter.service";
 import { ClassData } from "@/types/class.types";
 import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, isHindiText } from "@/utils/helpers";
+
 import { STORAGE_KEYS } from "@/utils/constants";
 
 // Custom premium checkbox to match the mockup (rounded blue container with white dot)
@@ -71,8 +72,9 @@ const CustomCheckbox = ({ checked, onChange, label }: CustomCheckboxProps) => {
   );
 };
 
-export default function SyllabusPage() {
+function SyllabusPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
@@ -267,7 +269,7 @@ export default function SyllabusPage() {
   };
   const [syncingChapterId, setSyncingChapterId] = useState<string | number | null>(null);
 
-  // Load User and Classes on Mount
+  // Load User details on Mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem(STORAGE_KEYS.USER);
@@ -281,16 +283,58 @@ export default function SyllabusPage() {
         } catch (e) {}
       }
       setLoadingUser(false);
+    }
+  }, []);
 
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get("tab");
-      if (tab === "boards") {
-        setActiveBoard(null);
+  // Sync URL search params with active drilldown state
+  useEffect(() => {
+    // 1. Sync activeBoard / tab=boards
+    const tabParam = searchParams.get("tab");
+    const boardParam = searchParams.get("boardName");
+    
+    if (tabParam === "boards") {
+      setActiveBoard(null);
+      setActiveClass(null);
+      setActiveSubject(null);
+    } else if (boardParam) {
+      if (boardParam !== activeBoard) {
+        setActiveBoard(boardParam);
+      }
+    }
+
+    // 2. Sync activeClass
+    const classIdParam = searchParams.get("classId");
+    if (classIdParam) {
+      const cls = classes.find((c) => String(c.id) === classIdParam);
+      if (cls) {
+        if (!activeClass || String(activeClass.id) !== classIdParam) {
+          setActiveClass(cls);
+          fetchSubjectsForClass(cls.id);
+        }
+      }
+    } else {
+      if (activeClass !== null && tabParam !== "boards") {
         setActiveClass(null);
         setActiveSubject(null);
       }
     }
-  }, []);
+
+    // 3. Sync activeSubject
+    const subjectIdParam = searchParams.get("subjectId");
+    if (subjectIdParam) {
+      const sub = subjects.find((s) => String(s.id) === subjectIdParam);
+      if (sub) {
+        if (!activeSubject || String(activeSubject.id) !== subjectIdParam) {
+          setActiveSubject(sub);
+          fetchChaptersForSubject(sub.id);
+        }
+      }
+    } else {
+      if (activeSubject !== null && tabParam !== "boards") {
+        setActiveSubject(null);
+      }
+    }
+  }, [searchParams, classes, subjects]);
 
   const fetchClasses = async () => {
     setLoadingClasses(true);
@@ -341,27 +385,25 @@ export default function SyllabusPage() {
 
   // Selection Handlers (Horizontal Tree / Director & Teacher View)
   const handleTreeSelectClass = (cls: ClassData) => {
-    setSelectedClass(cls);
-    setSelectedSubject(null);
-    setChapters([]);
-    fetchSubjectsForClass(cls.id);
+    router.push(`/syllabus?classId=${cls.id}`);
   };
 
   const handleTreeSelectSubject = (sub: SubjectData) => {
-    setSelectedSubject(sub);
-    fetchChaptersForSubject(sub.id);
+    if (selectedClass) {
+      router.push(`/syllabus?classId=${selectedClass.id}&subjectId=${sub.id}`);
+    }
   };
 
   // Selection Handlers (Drilldown / Admin View)
   const handleAdminSelectClass = (cls: ClassData) => {
-    setActiveClass(cls);
-    fetchSubjectsForClass(cls.id);
+    router.push(`/syllabus?classId=${cls.id}`);
     setSubjectSearch(""); // Reset search
   };
 
   const handleAdminSelectSubject = (sub: SubjectData) => {
-    setActiveSubject(sub);
-    fetchChaptersForSubject(sub.id);
+    if (activeClass) {
+      router.push(`/syllabus?classId=${activeClass.id}&subjectId=${sub.id}`);
+    }
     setChapterSearch(""); // Reset search
     setChapterPage(1); // Reset chapter page
   };
@@ -378,8 +420,7 @@ export default function SyllabusPage() {
       await classService.delete(id);
       fetchClasses();
       if (activeClass?.id === id) {
-        setActiveClass(null);
-        setActiveSubject(null);
+        router.push("/syllabus");
       }
     } catch (err: any) {
       alert(extractErrorMessage(err, "Failed to delete class."));
@@ -394,8 +435,8 @@ export default function SyllabusPage() {
       if (activeClass) {
         fetchSubjectsForClass(activeClass.id);
       }
-      if (activeSubject?.id === id) {
-        setActiveSubject(null);
+      if (activeSubject?.id === id && activeClass) {
+        router.push(`/syllabus?classId=${activeClass.id}`);
       }
     } catch (err: any) {
       alert(extractErrorMessage(err, "Failed to delete subject."));
@@ -570,9 +611,7 @@ export default function SyllabusPage() {
                   className={activeBoard ? "breadcrumb-link-hover" : ""}
                   style={activeBoard ? styles.breadcrumbLink : styles.breadcrumbActive}
                   onClick={() => {
-                    setActiveBoard(null);
-                    setActiveClass(null);
-                    setActiveSubject(null);
+                    router.push("/syllabus?tab=boards");
                   }}
                 >
                   Boards
@@ -588,8 +627,7 @@ export default function SyllabusPage() {
                   style={activeClass ? styles.breadcrumbLink : styles.breadcrumbActive}
                   onClick={() => {
                     if (activeClass) {
-                      setActiveClass(null);
-                      setActiveSubject(null);
+                      router.push("/syllabus");
                     }
                   }}
                 >
@@ -605,8 +643,8 @@ export default function SyllabusPage() {
                   className={activeSubject ? "breadcrumb-link-hover" : ""}
                   style={activeSubject ? styles.breadcrumbLink : styles.breadcrumbActive}
                   onClick={() => {
-                    if (activeSubject) {
-                      setActiveSubject(null);
+                    if (activeSubject && activeClass) {
+                      router.push(`/syllabus?classId=${activeClass.id}`);
                     }
                   }}
                 >
@@ -715,7 +753,9 @@ export default function SyllabusPage() {
                     <tr style={styles.tableHeaderRow}>
                       <th style={styles.th}>Class Name</th>
                       <th style={styles.th}>Grade Level</th>
-                      <th style={styles.th}>Section</th>
+                      {classes.some((c) => (c.section && c.section !== "A") || (c.studentsCount && c.studentsCount > 0)) && (
+                        <th style={styles.th}>Section</th>
+                      )}
                       <th style={styles.th}>Linked Students</th>
                       {isSuperAdmin && <th style={styles.th}>Actions</th>}
                     </tr>
@@ -730,9 +770,11 @@ export default function SyllabusPage() {
                       >
                         <td style={{ ...styles.td, fontWeight: 600, color: "var(--primary)" }}>{item.name}</td>
                         <td style={styles.td}>Grade {item.grade}</td>
-                        <td style={styles.td}>
-                          <span style={styles.badgePrimary}>{item.section}</span>
-                        </td>
+                        {classes.some((c) => (c.section && c.section !== "A") || (c.studentsCount && c.studentsCount > 0)) && (
+                          <td style={styles.td}>
+                            <span style={styles.badgePrimary}>{item.section}</span>
+                          </td>
+                        )}
                         <td style={styles.td}>{item.studentsCount ?? 0} students</td>
                         {isSuperAdmin && (
                           <td style={styles.td} onClick={(e) => e.stopPropagation()}>
@@ -844,7 +886,7 @@ export default function SyllabusPage() {
                         className="clickable-row-hover"
                         onClick={() => handleAdminSelectSubject(item)}
                       >
-                        <td style={{ ...styles.td, fontWeight: 600, color: "var(--primary)" }}>{item.name}</td>
+                        <td style={{ ...styles.td, fontWeight: 600, color: "var(--primary)" }} className={isHindiText(item.name) || item.name.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.name}</td>
                         <td style={styles.td}>{item.code}</td>
                         <td style={styles.td}>
                           <span style={styles.badgeSuccess}>{item.status || "Active"}</span>
@@ -897,7 +939,7 @@ export default function SyllabusPage() {
                         onClick={() => handleAdminSelectChapter(item)}
                       >
                         <td style={{ ...styles.td, fontWeight: 700, width: "80px", whiteSpace: "nowrap" }}>Ch {item.number}</td>
-                        <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
+                        <td style={{ ...styles.td, fontWeight: 600 }} className={isHindiText(item.title) || selectedSubject?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.title}</td>
                         <td style={styles.td}>
                           <span style={item.textContent ? styles.badgeSuccess : styles.badgeWarning}>
                             {item.textContent ? "NCERT Synced" : "Pending Sync"}
@@ -1055,7 +1097,10 @@ export default function SyllabusPage() {
                     className="interactive-element"
                   >
                     <div style={styles.nodeCardTitle}>{item.name}</div>
-                    <div style={styles.nodeCardSub}>Grade Level: {item.grade} • Sec {item.section}</div>
+                    <div style={styles.nodeCardSub}>
+                      Grade Level: {item.grade}
+                      {Boolean((item.section && item.section !== "A") || (item.studentsCount && item.studentsCount > 0)) && ` • Sec ${item.section}`}
+                    </div>
                     <div style={styles.nodeCardSub}>{item.studentsCount ?? 0} Students</div>
                     
                     {/* Horizontal connection dot right */}
@@ -1098,7 +1143,7 @@ export default function SyllabusPage() {
                     {/* Horizontal connection dot left */}
                     <div style={styles.connectionDotLeft} />
 
-                    <div style={styles.nodeCardTitle}>{item.name}</div>
+                    <div style={styles.nodeCardTitle} className={isHindiText(item.name) || item.name.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.name}</div>
                     <div style={styles.nodeCardSub}>Code: {item.code}</div>
                     
                     {/* Horizontal connection dot right */}
@@ -1137,8 +1182,8 @@ export default function SyllabusPage() {
                     <span style={styles.chapterNodeNum}>Ch {item.number}</span>
                     {item.textContent && <span style={styles.badgeSuccessSmall}>NCERT</span>}
                   </div>
-                  <div style={styles.chapterNodeTitle}>{item.title}</div>
-                  <div style={styles.chapterNodeContent}>
+                  <div style={styles.chapterNodeTitle} className={isHindiText(item.title) || selectedSubject?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.title}</div>
+                  <div style={styles.chapterNodeContent} className={isHindiText(item.title) || selectedSubject?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>
                     {item.content ? item.content.substring(0, 80) + "..." : "No textbook contents."}
                   </div>
                 </div>
@@ -2374,3 +2419,16 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "all 0.15s ease",
   },
 };
+
+export default function SyllabusPage() {
+  return (
+    <Suspense fallback={
+      <div style={styles.loadingContainer}>
+        <div className="spinner"></div>
+        <span style={{ marginTop: "1rem" }}>Loading syllabus explorer...</span>
+      </div>
+    }>
+      <SyllabusPageContent />
+    </Suspense>
+  );
+}

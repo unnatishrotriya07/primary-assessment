@@ -19,11 +19,13 @@ export default function SchoolSettingsPage() {
   useEffect(() => {
     controlPanelService.getSchoolSettings()
       .then((res) => {
-        setSchoolName(res.data.name);
-        setTenantId(res.data.tenant_id);
-        setSchoolCode(res.data.school_code);
-        setAcademicYear(res.data.academic_year || "2026-2027");
-        setScholarSystem(res.data.scholar_system || "Auto-Incrementing Integer");
+        if (res) {
+          setSchoolName(res.name || "");
+          setTenantId(res.tenant_id || "");
+          setSchoolCode(res.school_code || "SCH-DEFAULT");
+          setAcademicYear(res.academic_year || "2026-2027");
+          setScholarSystem(res.scholar_system || "Auto-Incrementing Integer");
+        }
       })
       .catch((err) => {
         console.error("Failed to load school settings from backend", err);

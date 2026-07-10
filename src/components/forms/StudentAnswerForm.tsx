@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { isHindiText } from "@/utils/helpers";
+
 
 interface StudentAnswerFormProps {
   options: string[];
@@ -9,6 +11,8 @@ interface StudentAnswerFormProps {
 }
 
 export default function StudentAnswerForm({ options, selectedOption, onSelect }: StudentAnswerFormProps) {
+  const isHindi = (options && options.some(isHindiText)) || isHindiText(selectedOption);
+
   if (!options || options.length === 0) {
     return (
       <div style={styles.container}>
@@ -17,7 +21,7 @@ export default function StudentAnswerForm({ options, selectedOption, onSelect }:
           value={selectedOption}
           onChange={(e) => onSelect(e.target.value)}
           placeholder="Type your response here..."
-          className="student-answer-textarea interactive-element"
+          className={`student-answer-textarea interactive-element ${isHindi ? "font-hindi" : ""}`}
           rows={5}
         />
       </div>
@@ -51,7 +55,7 @@ export default function StudentAnswerForm({ options, selectedOption, onSelect }:
             >
               {letter}
             </div>
-            <span style={styles.text}>{option}</span>
+            <span style={styles.text} className={isHindi || isHindiText(option) ? "font-hindi" : ""}>{option}</span>
           </button>
         );
       })}

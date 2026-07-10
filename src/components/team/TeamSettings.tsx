@@ -26,6 +26,8 @@ export default function TeamSettings() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [selectedUser, setSelectedUser] = useState<TeamUser | null>(null);
+  const [activeDirectorId, setActiveDirectorId] = useState<number | null>(null);
+  const [hoveredDirectorId, setHoveredDirectorId] = useState<number | null>(null);
 
   // Form states
   const [name, setName] = useState("");
@@ -163,6 +165,64 @@ export default function TeamSettings() {
     }
   };
 
+  const renderPermissions = (features: string[], isMini: boolean = false) => {
+    if (!features || features.length === 0) {
+      return <span style={{ color: "var(--text-muted)", fontSize: isMini ? "0.75rem" : "0.85rem" }}>No Permissions Granted</span>;
+    }
+    if (features.length === APP_FEATURES.length) {
+      return (
+        <span style={{ 
+          ...styles.featureBadgeGlobal, 
+          fontSize: isMini ? "0.75rem" : "0.8rem", 
+          padding: isMini ? "0.1rem 0.4rem" : "0.2rem 0.6rem" 
+        }}>
+          Full Access
+        </span>
+      );
+    }
+    
+    const maxToShow = 3;
+    const shownFeatures = features.slice(0, maxToShow);
+    const remainingCount = features.length - maxToShow;
+    const fullListText = features.map(f => APP_FEATURES.find(af => af.key === f)?.label || f).join(", ");
+    
+    return (
+      <div style={styles.featureGrid} title={fullListText}>
+        {shownFeatures.map((feat) => {
+          const label = APP_FEATURES.find((f) => f.key === feat)?.label || feat;
+          return (
+            <span 
+              key={feat} 
+              style={{ 
+                ...styles.featureBadge, 
+                fontSize: isMini ? "0.7rem" : "0.75rem", 
+                padding: isMini ? "0.1rem 0.4rem" : "0.2rem 0.5rem" 
+              }}
+            >
+              {label}
+            </span>
+          );
+        })}
+        {remainingCount > 0 && (
+          <span 
+            style={{
+              ...styles.featureBadge,
+              backgroundColor: "var(--bg-app)",
+              color: "var(--text-secondary)",
+              fontSize: isMini ? "0.7rem" : "0.75rem", 
+              padding: isMini ? "0.1rem 0.4rem" : "0.2rem 0.5rem",
+              cursor: "help",
+              borderStyle: "dashed"
+            }}
+            title={fullListText}
+          >
+            +{remainingCount} more
+          </span>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
@@ -207,62 +267,196 @@ export default function TeamSettings() {
                 </td>
               </tr>
             ) : (
-              team.map((member) => (
-                <tr key={member.id} style={styles.row}>
-                  <td style={styles.td}>
-                    <strong>{member.name}</strong>
-                  </td>
-                  <td style={styles.td}>{member.email}</td>
-                  <td style={styles.td}>
-                    <span style={{ ...styles.badge, ...getRoleBadgeStyle(member.role) }}>
-                      {getRoleLabel(member.role)}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    {member.role === "admin" ? (
-                      <span style={styles.featureBadgeGlobal}>All Features Allowed</span>
-                    ) : member.allowedFeatures && member.allowedFeatures.length > 0 ? (
-                      <div style={styles.featureGrid}>
-                        {member.allowedFeatures.map((feat) => {
-                          const label = APP_FEATURES.find((f) => f.key === feat)?.label || feat;
-                          return (
-                            <span key={feat} style={styles.featureBadge}>
-                              {label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>No Permissions Granted</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ display: "inline-flex", gap: "0.5rem" }}>
-                      <button
-                        onClick={() => handleOpenEdit(member)}
-                        style={styles.actionBtn}
-                        title="Edit Role & Permissions"
+              (() => {
+                const directors = team.filter(m => m.role === "director");
+                const mainMembers = team.filter(member => {
+                  if (member.role === "admin" || member.role === "director") return true;
+                  if (member.role === "teacher") {
+                    const hasDirector = directors.some(d => d.tenantId === member.tenantId);
+                    return !hasDirector;
+                  }
+                  return true;
+                });
+
+                return mainMembers.map((member) => {
+                  const isExpanded = activeDirectorId === member.id || hoveredDirectorId === member.id;
+                  const schoolTeachers = team.filter(t => t.role === "teacher" && t.tenantId === member.tenantId);
+
+                  return (
+                    <React.Fragment key={member.id}>
+                      <tr 
+                        style={{
+                          ...styles.row,
+                          cursor: member.role === "director" ? "pointer" : "default",
+                          backgroundColor: isExpanded ? "var(--bg-surface-hover)" : undefined,
+                          transition: "background-color 0.2s"
+                        }}
+                        onClick={() => {
+                          if (member.role === "director") {
+                            setActiveDirectorId(activeDirectorId === member.id ? null : member.id);
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (member.role === "director") {
+                            setHoveredDirectorId(member.id);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (member.role === "director") {
+                            setHoveredDirectorId(null);
+                          }
+                        }}
                       >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                        </svg>
-                      </button>
-                      {member.role !== "admin" && (
-                        <button
-                          onClick={() => handleDelete(member.id)}
-                          style={styles.deleteBtn}
-                          title="Remove Member"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          </svg>
-                        </button>
+                        <td style={styles.td}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            {member.role === "director" && (
+                              <span style={{ 
+                                color: "var(--text-muted)", 
+                                display: "inline-flex", 
+                                transition: "transform 0.2s",
+                                transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)"
+                              }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="9 18 15 12 9 6" />
+                                </svg>
+                              </span>
+                            )}
+                            <strong>{member.name}</strong>
+                          </div>
+                        </td>
+                        <td style={styles.td}>{member.email}</td>
+                        <td style={styles.td}>
+                          <span style={{ ...styles.badge, ...getRoleBadgeStyle(member.role) }}>
+                            {getRoleLabel(member.role)}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          {member.role === "admin" ? (
+                            <span style={styles.featureBadgeGlobal}>All Features Allowed</span>
+                          ) : (
+                            renderPermissions(member.allowedFeatures || [])
+                          )}
+                        </td>
+                        <td style={styles.td}>
+                          <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEdit(member);
+                              }}
+                              style={styles.actionBtn}
+                              title="Edit Role & Permissions"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                            {member.role !== "admin" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(member.id);
+                                }}
+                                style={styles.deleteBtn}
+                                title="Remove Member"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {member.role === "director" && isExpanded && (
+                        <tr style={{ backgroundColor: "var(--bg-app)" }}>
+                          <td colSpan={5} style={{ padding: "0.5rem 1.5rem 1rem 3rem", borderBottom: "1px solid var(--border-color)" }}>
+                            <div style={{
+                              borderLeft: "3px solid var(--primary)",
+                              backgroundColor: "#FFFFFF",
+                              borderRadius: "10px",
+                              boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
+                              border: "1px solid var(--border-color)",
+                              overflow: "hidden"
+                            }}>
+                              <div style={{
+                                padding: "0.75rem 1rem",
+                                borderBottom: "1px solid var(--border-color)",
+                                backgroundColor: "var(--bg-surface-hover)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center"
+                              }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>
+                                  School Teachers ({schoolTeachers.length})
+                                </span>
+                              </div>
+                              {schoolTeachers.length === 0 ? (
+                                <div style={{ padding: "1rem", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                                  No teachers assigned to this school yet.
+                                </div>
+                              ) : (
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                  <tbody>
+                                    {schoolTeachers.map((teacher) => (
+                                      <tr key={teacher.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                                        <td style={{ padding: "0.75rem 1rem", fontSize: "0.9rem", width: "25%" }}>
+                                          <strong>{teacher.name}</strong>
+                                        </td>
+                                        <td style={{ padding: "0.75rem 1rem", fontSize: "0.9rem", color: "var(--text-secondary)", width: "30%" }}>
+                                          {teacher.email}
+                                        </td>
+                                        <td style={{ padding: "0.75rem 1rem", width: "15%" }}>
+                                          <span style={{ ...styles.badge, backgroundColor: "var(--secondary-light)", color: "var(--secondary)", fontSize: "0.7rem" }}>
+                                            Teacher
+                                          </span>
+                                        </td>
+                                        <td style={{ padding: "0.75rem 1rem" }}>
+                                          {renderPermissions(teacher.allowedFeatures || [], true)}
+                                        </td>
+                                        <td style={{ padding: "0.75rem 1rem", textAlign: "right", width: "10%" }}>
+                                          <div style={{ display: "inline-flex", gap: "0.5rem" }}>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenEdit(teacher);
+                                              }}
+                                              style={styles.actionBtn}
+                                              title="Edit Permissions"
+                                            >
+                                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(teacher.id);
+                                              }}
+                                              style={styles.deleteBtn}
+                                              title="Remove Teacher"
+                                            >
+                                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </React.Fragment>
+                  );
+                });
+              })()
             )}
           </tbody>
         </table>

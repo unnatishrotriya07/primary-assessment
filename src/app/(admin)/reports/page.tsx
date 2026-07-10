@@ -32,7 +32,7 @@ export default function LearningInsightsPage() {
         const [classesData, assessmentsData, overviewData, subjectsData] = await Promise.all([
           classService.getAll(),
           assessmentService.getAll(),
-          reportService.getOverview().catch(() => ({ totalStudents: 0, passingRate: 85 })),
+          reportService.getOverview().catch(() => ({ totalStudents: 0, passingRate: 0 })),
           // Fallback if not inside active class filter
           Promise.resolve([])
         ]);
@@ -100,7 +100,7 @@ export default function LearningInsightsPage() {
             
             <div className="card" style={styles.metricCard}>
               <span style={styles.metricLabel}>Average Passing Rate</span>
-              <span style={styles.metricValue}>{overviewStats?.passingRate || 85}%</span>
+              <span style={styles.metricValue}>{overviewStats?.passingRate ?? 0}%</span>
               <span style={styles.metricSubtext}>Benchmark target set at 75% accuracy</span>
             </div>
 

@@ -15,7 +15,8 @@ import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
 import { QuestionData } from "@/types/question.types";
 import { StudentData } from "@/types/student.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, formatClassName, isHindiText } from "@/utils/helpers";
+
 
 interface CreateAssessmentModalProps {
   isOpen: boolean;
@@ -73,6 +74,10 @@ export default function CreateAssessmentModal({
   const [loading, setLoading] = useState(false);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
   const [error, setError] = useState("");
+
+  const selectedSub = subjects.find(s => String(s.id) === String(selectedSubjectId));
+  const isHindi = selectedSub?.name?.toLowerCase() === "hindi" || isHindiText(assessmentTitle);
+
 
   const prepMessages = [
     "Reading chapter...",
@@ -603,7 +608,7 @@ export default function CreateAssessmentModal({
                   <option value="">Choose class...</option>
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.section})
+                      {formatClassName(c)}
                     </option>
                   ))}
                 </select>
@@ -835,6 +840,7 @@ export default function CreateAssessmentModal({
                         }}
                         style={styles.cardTextarea}
                         placeholder="Type question content..."
+                        className={isHindi || isHindiText(q.text) ? "font-hindi" : ""}
                         required
                       />
                     </div>
@@ -849,6 +855,7 @@ export default function CreateAssessmentModal({
                         }}
                         style={styles.cardTextarea}
                         placeholder="Specify expected student response..."
+                        className={isHindi || isHindiText(q.correctAnswer) ? "font-hindi" : ""}
                         required
                       />
                     </div>
@@ -869,6 +876,7 @@ export default function CreateAssessmentModal({
                   value={assessmentTitle}
                   onChange={(e) => setAssessmentTitle(e.target.value)}
                   style={styles.formTextInput}
+                  className={isHindi ? "font-hindi" : ""}
                   placeholder="e.g. Science Chapter 1 Assessment"
                 />
               </div>

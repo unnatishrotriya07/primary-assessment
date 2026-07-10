@@ -1,5 +1,5 @@
 import { api } from "./api";
-import { StudentData, StudentResult } from "@/types/student.types";
+import { StudentData, StudentResult, StudentJourneyData } from "@/types/student.types";
 import apiClient from "@/lib/axios";
 
 export const studentService = {
@@ -23,6 +23,10 @@ export const studentService = {
     return api.get<StudentResult[]>(`/students/${id}/results`);
   },
   
+  getJourney: (id: string): Promise<StudentJourneyData> => {
+    return api.get<StudentJourneyData>(`/students/${id}/journey`);
+  },
+  
   uploadExcel: async (classId: string, file: File): Promise<{ message: string; count: number }> => {
     const formData = new FormData();
     formData.append("class_id", classId);
@@ -43,7 +47,7 @@ export const studentService = {
   uploadMultipleSections: async (
     baseClassId: string,
     filesList: Array<{ file: File; section: string }>
-  ): Promise<{ message: string; count: number }> => {
+  ): Promise<{ message: string; count: number; results?: Array<{ filename: string; section: string; classId: number; count: number }> }> => {
     const formData = new FormData();
     formData.append("base_class_id", baseClassId);
     

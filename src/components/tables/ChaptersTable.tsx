@@ -8,7 +8,8 @@ import classService from "@/services/class.service";
 import { ChapterData } from "@/types/chapter.types";
 import { SubjectData } from "@/types/subject.types";
 import { ClassData } from "@/types/class.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, isHindiText } from "@/utils/helpers";
+
 
 interface ChaptersTableProps {
   refreshTrigger?: number;
@@ -221,8 +222,8 @@ export default function ChaptersTable({ refreshTrigger = 0 }: ChaptersTableProps
                 return (
                   <tr key={item.id} style={styles.row}>
                     <td style={{ ...styles.td, fontWeight: 700 }}>Ch {item.number}</td>
-                    <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
-                    <td style={styles.td}>{sub ? sub.name : `Subject #${item.subjectId}`}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }} className={isHindiText(item.title) || sub?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.title}</td>
+                    <td style={styles.td} className={sub?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{sub ? sub.name : `Subject #${item.subjectId}`}</td>
                     <td style={styles.td}>{className || `Class #${sub?.classId}`}</td>
                     <td style={styles.td}>
                       <div style={styles.syncContainer}>

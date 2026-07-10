@@ -4,7 +4,7 @@ import Button from "../common/Button";
 import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
 import { ClassData } from "@/types/class.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, formatClassName } from "@/utils/helpers";
 
 interface SubjectFormProps {
   onSuccess: () => void;
@@ -66,7 +66,7 @@ export default function SubjectForm({ onSuccess, onCancel, defaultClassId }: Sub
           <option value="">Select a Class...</option>
           {classes.map((cls) => (
             <option key={cls.id} value={cls.id}>
-              {cls.name} (Grade {cls.grade}-{cls.section})
+              {formatClassName(cls)}
             </option>
           ))}
         </select>

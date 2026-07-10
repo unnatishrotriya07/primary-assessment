@@ -14,7 +14,7 @@ interface ClassFormProps {
 export default function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
   const [className, setClassName] = useState("");
   const [grade, setGrade] = useState("");
-  const [section, setSection] = useState("");
+  const [section, setSection] = useState("A");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -53,13 +53,6 @@ export default function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
           placeholder="e.g. 5"
           value={grade}
           onChange={(e) => setGrade(e.target.value)}
-          required
-        />
-        <Input
-          label="Section"
-          placeholder="e.g. A"
-          value={section}
-          onChange={(e) => setSection(e.target.value)}
           required
         />
       </div>

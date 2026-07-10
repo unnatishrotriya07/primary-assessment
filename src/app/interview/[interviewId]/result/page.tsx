@@ -39,13 +39,13 @@ export default function InterviewResultPage({ params }: PageProps) {
                 if (!active) return;
 
                 setReport(r);
-                if (r.status === "Completed") {
+                if (r.status === "Report Ready" || r.status === "Completed") {
                     setLoading(false);
                     // update sessionStorage so subsequent visits are instant
                     sessionStorage.setItem(`interview_report_${interviewId}`, JSON.stringify(r));
                 } else {
                     // Still evaluating, poll again
-                    timer = setTimeout(checkReport, 3000);
+                    timer = setTimeout(checkReport, 2000);
                 }
             } catch (err) {
                 if (!active) return;
@@ -54,12 +54,12 @@ export default function InterviewResultPage({ params }: PageProps) {
             }
         };
 
-        // Try sessionStorage first — instant, no network call (only if Completed)
+        // Try sessionStorage first — instant, no network call (only if Completed/Ready)
         const raw = sessionStorage.getItem(`interview_report_${interviewId}`);
         if (raw) {
             try {
                 const parsed = JSON.parse(raw);
-                if (parsed.status === "Completed") {
+                if (parsed.status === "Report Ready" || parsed.status === "Completed") {
                     setReport(parsed);
                     setLoading(false);
                     return;
@@ -77,11 +77,20 @@ export default function InterviewResultPage({ params }: PageProps) {
     }, [interviewId]);
 
     if (loading) {
-        const isEvaluating = report && (report.status === "Evaluating" || report.status === "In Progress");
+        const status = report?.status || "Transcript Saved";
+        
+        const steps = [
+            { key: "completed", label: "Conversation Completed", done: true },
+            { key: "saved", label: "Transcript Saved", done: status !== "In Progress" },
+            { key: "running", label: "Evaluation Running", done: status === "Generating Insights" || status === "Report Ready" || status === "Completed", active: status === "Evaluation Running" },
+            { key: "insights", label: "Generating Insights", done: status === "Report Ready" || status === "Completed", active: status === "Generating Insights" },
+            { key: "ready", label: "Report Ready", done: status === "Report Ready" || status === "Completed", active: status === "Report Ready" }
+        ];
+
         return (
             <div style={s.center}>
                 <div className="spinner" style={{ 
-                    marginBottom: "1.5rem",
+                    marginBottom: "2rem",
                     border: "4px solid rgba(0,0,0,0.1)",
                     borderLeftColor: "var(--primary)",
                     borderRadius: "50%",
@@ -89,18 +98,45 @@ export default function InterviewResultPage({ params }: PageProps) {
                     height: "48px",
                     animation: "spin 1s linear infinite"
                 }} />
-                {isEvaluating ? (
-                    <div style={{ textAlign: "center", maxWidth: "450px", padding: "0 1.5rem" }}>
-                        <h3 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                            Compiling Your Results
-                        </h3>
-                        <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                            Saving your answers and preparing the assessment report. Please wait...
-                        </p>
+                <div style={{ textAlign: "center", maxWidth: "480px", width: "100%", padding: "2rem", backgroundColor: "#ffffff", border: "1px solid var(--border-color)", borderRadius: "14px", boxShadow: "0 1px 3px rgba(15,23,42,0.08)" }}>
+                    <h3 style={{ marginBottom: "1.5rem", fontSize: "1.2rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                        Analyzing Assessment Progress
+                    </h3>
+                    
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem", textAlign: "left" }}>
+                        {steps.map((step, idx) => (
+                            <div key={step.key} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                                <div style={{
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    backgroundColor: step.done ? "rgba(22, 163, 74, 0.1)" : step.active ? "rgba(37, 99, 235, 0.1)" : "#F3F4F6",
+                                    color: step.done ? "var(--success)" : step.active ? "var(--primary)" : "var(--text-muted)",
+                                    border: step.done ? "1px solid rgba(22, 163, 74, 0.2)" : step.active ? "1px solid rgba(37, 99, 235, 0.2)" : "1px solid #E5E7EB"
+                                }}>
+                                    {step.done ? "✓" : idx + 1}
+                                </div>
+                                <span style={{
+                                    fontSize: "0.95rem",
+                                    fontWeight: step.active ? 600 : 500,
+                                    color: step.done ? "var(--text-primary)" : step.active ? "var(--primary)" : "var(--text-secondary)"
+                                }}>
+                                    {step.label}
+                                </span>
+                                {step.active && (
+                                    <span style={{ fontSize: "0.75rem", color: "var(--primary)", fontStyle: "italic", marginLeft: "auto" }}>
+                                        in progress...
+                                    </span>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                ) : (
-                    <p style={{ color: "var(--text-secondary)" }}>Loading your report…</p>
-                )}
+                </div>
             </div>
         );
     }
@@ -309,7 +345,7 @@ const s: Record<string, React.CSSProperties> = {
         gap: "0.5rem",
     },
     reportHeader: {
-        background: "linear-gradient(135deg, var(--primary-light), var(--secondary-light))",
+        background: "var(--primary-light)",
         borderRadius: "var(--radius-md) var(--radius-md) 0 0",
         padding: "2rem",
         textAlign: "center",

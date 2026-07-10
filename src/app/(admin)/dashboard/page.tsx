@@ -727,19 +727,19 @@ export default function AdminDashboard() {
         <div style={styles.metricGrid}>
           <div style={styles.metricCard}>
             <span style={styles.metricLabel}>Active Teachers</span>
-            <h3 style={styles.metricValue}>8</h3>
+            <h3 style={styles.metricValue}>{stats.active_teachers ?? 0}</h3>
             <span style={styles.metricSubtext}>Faculty deploying quizzes this week</span>
           </div>
 
           <div style={styles.metricCard}>
             <span style={styles.metricLabel}>Enrolled Students</span>
-            <h3 style={styles.metricValue}>320</h3>
+            <h3 style={styles.metricValue}>{stats.active_students ?? 0}</h3>
             <span style={styles.metricSubtext}>Across Grades 1 to 5</span>
           </div>
 
           <div style={styles.metricCard}>
             <span style={styles.metricLabel}>School Mastery</span>
-            <h3 style={styles.metricValue}>86%</h3>
+            <h3 style={styles.metricValue}>{stats.average_accuracy ? `${stats.average_accuracy}%` : "0%"}</h3>
             <span style={styles.metricSubtext}>Aggregate student conceptual accuracy</span>
           </div>
         </div>
@@ -804,27 +804,30 @@ export default function AdminDashboard() {
               <p style={styles.sectionDesc}>Syllabus accuracy diagnostics ranked by mastery status.</p>
 
               <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "0.75rem", border: "1px solid var(--border-color)", borderRadius: "10px", alignItems: "center" }}>
-                  <div>
-                    <strong style={{ fontSize: "0.9rem" }}>Grade 3-A Math</strong>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Division & Fractions Chapter</div>
+                {!stats.class_performance || stats.class_performance.length === 0 ? (
+                  <div style={{ padding: "1.5rem", color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: "10px" }}>
+                    No class performance metrics available. Conduct assessments to see results.
                   </div>
-                  <span style={{ padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: 700, fontSize: "0.85rem", backgroundColor: "var(--success-light)", color: "var(--success)" }}>92% High Mastery</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "0.75rem", border: "1px solid var(--border-color)", borderRadius: "10px", alignItems: "center" }}>
-                  <div>
-                    <strong style={{ fontSize: "0.9rem" }}>Grade 5-B Science</strong>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Ecology Concept</div>
-                  </div>
-                  <span style={{ padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: 700, fontSize: "0.85rem", backgroundColor: "var(--warning-light)", color: "var(--warning)" }}>74% Awaiting Review</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "0.75rem", border: "1px solid var(--border-color)", borderRadius: "10px", alignItems: "center" }}>
-                  <div>
-                    <strong style={{ fontSize: "0.9rem" }}>Grade 2-B Math</strong>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Addition Subtraction</div>
-                  </div>
-                  <span style={{ padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: 700, fontSize: "0.85rem", backgroundColor: "var(--error-light)", color: "var(--error)" }}>67% Needs Support</span>
-                </div>
+                ) : (
+                  stats.class_performance.map((cp, idx) => (
+                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "0.75rem", border: "1px solid var(--border-color)", borderRadius: "10px", alignItems: "center" }}>
+                      <div>
+                        <strong style={{ fontSize: "0.9rem" }}>{cp.class_name}</strong>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{cp.topic}</div>
+                      </div>
+                      <span style={{
+                        padding: "0.2rem 0.5rem",
+                        borderRadius: "4px",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        backgroundColor: cp.color_type === "success" ? "var(--success-light)" : cp.color_type === "warning" ? "var(--warning-light)" : "var(--error-light)",
+                        color: cp.color_type === "success" ? "var(--success)" : cp.color_type === "warning" ? "var(--warning)" : "var(--error)"
+                      }}>
+                        {cp.status}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -870,20 +873,20 @@ export default function AdminDashboard() {
       {/* Dashboard Hero: Continue Working */}
       <div className="card animate-fade-in" style={styles.heroCard}>
         <div style={styles.heroLeft}>
-          <span style={styles.heroLabel}>CONTINUE WORKING</span>
+          <span style={styles.heroLabel}>{lastAssessment ? "CONTINUE WORKING" : "GET STARTED"}</span>
           <h2 style={styles.heroTitle}>
-            {lastAssessment ? lastAssessment.title : "Fractions Assessment"}
+            {lastAssessment ? lastAssessment.title : "Create Your First Assessment"}
           </h2>
           <p style={styles.heroSubtitle}>
             {lastAssessment 
               ? `${lastAssessment.questionsCount} questions • Assigned to class roster` 
-              : "Grade 3 Mathematics • Conceptual mastery check"}
+              : "Design custom diagnostics or oral unit tests to evaluate student progress."}
           </p>
         </div>
         <div style={styles.heroRight}>
-          <Link href={lastAssessment ? "/assessments" : "/assessments?action=create"} style={{ textDecoration: "none" }}>
+          <Link href={lastAssessment ? `/assessments/${lastAssessment.id}` : "/assessments?action=create"} style={{ textDecoration: "none" }}>
             <Button variant="primary" size="lg" style={{ borderRadius: "10px" }}>
-              Continue <span style={{ marginLeft: "6px" }}>&rarr;</span>
+              {lastAssessment ? "Continue" : "Create Assessment"} <span style={{ marginLeft: "6px" }}>&rarr;</span>
             </Button>
           </Link>
         </div>
@@ -894,7 +897,7 @@ export default function AdminDashboard() {
         <Link href="/assessments" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
           <span style={styles.metricLabel}>Pending Assessments</span>
           <h3 style={styles.metricValue}>
-            {activeAssessmentsCount > 0 ? activeAssessmentsCount : "3"}
+            {activeAssessmentsCount}
           </h3>
           <span style={styles.metricSubtext}>Awaiting student completions</span>
         </Link>
@@ -902,7 +905,7 @@ export default function AdminDashboard() {
         <div style={styles.metricCard}>
           <span style={styles.metricLabel}>AI Evaluations</span>
           <h3 style={styles.metricValue}>
-            {stats.assessments_conducted || "24"}
+            {stats.assessments_conducted ?? 0}
           </h3>
           <span style={styles.metricSubtext}>Completed automated audits</span>
         </div>
@@ -910,7 +913,7 @@ export default function AdminDashboard() {
         <Link href="/students" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
           <span style={styles.metricLabel}>Students Requiring Attention</span>
           <h3 style={styles.metricValue}>
-            {studentsNeedHelpCount > 0 ? studentsNeedHelpCount : "12"}
+            {studentsNeedHelpCount}
           </h3>
           <span style={styles.metricSubtext}>Scoring below 70% conceptual mastery</span>
         </Link>
@@ -918,7 +921,7 @@ export default function AdminDashboard() {
         <Link href="/reports" style={{ ...styles.metricCard, textDecoration: "none" }} className="interactive-element">
           <span style={styles.metricLabel}>Average Chapter Mastery</span>
           <h3 style={styles.metricValue}>
-            {stats.average_accuracy || "92"}%
+            {stats.average_accuracy ? `${stats.average_accuracy}%` : "0%"}
           </h3>
           <span style={styles.metricSubtext}>Across active class syllabus boards</span>
         </Link>
@@ -929,32 +932,64 @@ export default function AdminDashboard() {
         {/* Left Column: Tasks, Recent Activity */}
         <div style={styles.mainCol}>
           {/* Today's Tasks */}
-          <div className="card" style={styles.sectionCard}>
-            <h3 style={styles.sectionTitle}>Today's Tasks</h3>
-            <p style={styles.sectionDesc}>Action items demanding attention or upcoming syllabus checks.</p>
+          {!isTeacher && (
+            <div className="card" style={styles.sectionCard}>
+              <h3 style={styles.sectionTitle}>Today's Tasks</h3>
+              <p style={styles.sectionDesc}>Action items demanding attention or upcoming syllabus checks.</p>
 
-            <div style={styles.checklist}>
-              <div style={styles.checkItem}>
-                <input type="checkbox" defaultChecked style={styles.checkbox} />
-                <span style={styles.checkTextLineThrough}>Verify Class roster import details for Grade 3 Math</span>
-              </div>
-              <div style={styles.checkItem}>
-                <input type="checkbox" defaultChecked style={styles.checkbox} />
-                <span style={styles.checkTextLineThrough}>Set parameters for Grade 5 Science chapter quiz</span>
-              </div>
-              <div style={styles.checkItem}>
-                <input type="checkbox" style={styles.checkbox} />
-                <span style={styles.checkText}>Review draft oral assessment student audio transcript results</span>
-              </div>
-              <div style={styles.checkItem}>
-                <input type="checkbox" style={styles.checkbox} />
-                <span style={styles.checkText}>Review student questions accuracy gaps in Subtraction chapter</span>
+              <div style={styles.checklist}>
+                {stats.total_classes === 0 ? (
+                  <>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" disabled style={styles.checkbox} />
+                      <span style={styles.checkText}>Set up your first classroom syllabus under Classes</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" disabled style={styles.checkbox} />
+                      <span style={styles.checkText}>Invite students to join the class registry</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" disabled style={styles.checkbox} />
+                      <span style={styles.checkText}>Schedule your first student conceptual oral assessment</span>
+                    </div>
+                  </>
+                ) : assessments.length === 0 ? (
+                  <>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" defaultChecked disabled style={styles.checkbox} />
+                      <span style={styles.checkTextLineThrough}>Set up your first classroom syllabus under Classes</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" style={styles.checkbox} />
+                      <span style={styles.checkText}>Invite students to join the class registry</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" style={styles.checkbox} />
+                      <span style={styles.checkText}>Schedule your first student conceptual oral assessment</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" defaultChecked disabled style={styles.checkbox} />
+                      <span style={styles.checkTextLineThrough}>Set up your first classroom syllabus under Classes</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" defaultChecked disabled style={styles.checkbox} />
+                      <span style={styles.checkTextLineThrough}>Schedule your first student conceptual oral assessment</span>
+                    </div>
+                    <div style={styles.checkItem}>
+                      <input type="checkbox" style={styles.checkbox} />
+                      <span style={styles.checkText}>Review student questions accuracy gaps in the dashboard</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Recent Student Activity */}
-          <div className="card" style={{ ...styles.sectionCard, marginTop: "2rem" }}>
+          <div className="card" style={{ ...styles.sectionCard, marginTop: !isTeacher ? "2rem" : 0 }}>
             <h3 style={styles.sectionTitle}>Recent Student Activity</h3>
             <p style={styles.sectionDesc}>Live feed of student quiz completions and scored outcomes.</p>
 
@@ -992,33 +1027,7 @@ export default function AdminDashboard() {
           {/* Calendar Widget */}
           {renderInteractiveCalendar("Calendar", "Plan and review academic events.")}
 
-          {/* AI Recommendations */}
-          <div className="card" style={{ ...styles.sectionCard, marginBottom: "2rem" }}>
-            <h3 style={styles.widgetTitle}>Pedagogical Guidance</h3>
-            <p style={styles.widgetDesc}>Contextual instructional tips compiled from student outcome data.</p>
-            
-            <div style={styles.recommendationsContainer}>
-              <div style={styles.recItem}>
-                <div style={styles.recLightbulb}>💡</div>
-                <div style={styles.recContent}>
-                  <span style={styles.recTitle}>Division Concept Gap</span>
-                  <span style={styles.recDesc}>
-                    Grade 3 Math reports indicate high subtraction mastery (92%) but low accuracy in long division concepts. Try assigning targeted practice drills.
-                  </span>
-                </div>
-              </div>
 
-              <div style={styles.recItem}>
-                <div style={styles.recLightbulb}>💡</div>
-                <div style={styles.recContent}>
-                  <span style={styles.recTitle}>Reading Speed Progress</span>
-                  <span style={styles.recDesc}>
-                    Grade 4 Reading speeds increased by average 8 WPM following the phonics assignment. Suggest regular oral reading homework.
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Quick Actions */}
           <div className="card" style={styles.sectionCard}>

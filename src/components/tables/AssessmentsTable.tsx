@@ -9,7 +9,8 @@ import { AssessmentData } from "@/types/assessment.types";
 import AssignAssessmentModal from "../forms/AssignAssessmentModal";
 import ViewAssignmentsModal from "../forms/ViewAssignmentsModal";
 import StudentReportModal from "../forms/StudentReportModal";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, formatClassName, isHindiText } from "@/utils/helpers";
+
 
 export default function AssessmentsTable() {
   const [assessments, setAssessments] = useState<AssessmentData[]>([]);
@@ -76,7 +77,7 @@ export default function AssessmentsTable() {
 
       const clsMap: Record<string, string> = {};
       classesData.forEach((cls) => {
-        clsMap[cls.id] = `${cls.name} (${cls.section})`;
+        clsMap[cls.id] = formatClassName(cls);
       });
       setClassesMap(clsMap);
     } catch (err: any) {
@@ -228,8 +229,8 @@ export default function AssessmentsTable() {
             ) : (
               paginatedAssessments.map((item) => (
                 <tr key={item.id} style={styles.row}>
-                  <td style={{ ...styles.td, fontWeight: 600 }}>{item.title}</td>
-                  <td style={styles.td}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
+                  <td style={{ ...styles.td, fontWeight: 600 }} className={isHindiText(item.title) || subjectsMap[item.subjectId]?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{item.title}</td>
+                  <td style={styles.td} className={subjectsMap[item.subjectId]?.toLowerCase() === "hindi" ? "font-hindi" : ""}>{subjectsMap[item.subjectId] || `Subject #${item.subjectId}`}</td>
                   <td style={styles.td}>{classesMap[item.classId] || `Class #${item.classId}`}</td>
                   <td style={styles.td}>
                     <button

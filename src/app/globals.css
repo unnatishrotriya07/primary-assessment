@@ -1,9 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
 
 :root {
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-heading: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-hindi: 'Noto Sans Devanagari', 'Inter', system-ui, -apple-system, sans-serif;
+
 
   /* Color Palette - Modern Enterprise SaaS (Mandatory Colors) */
   --primary: #2563EB;
@@ -1331,6 +1333,11 @@ button, input, select, textarea {
   margin-left: 2px;
   font-weight: bold;
 }
+
+.font-hindi {
+  font-family: var(--font-hindi) !important;
+}
+
 
 
 

@@ -12,7 +12,7 @@ import { SubjectData } from "@/types/subject.types";
 import { ChapterData } from "@/types/chapter.types";
 import { QuestionData } from "@/types/question.types";
 import CreateAndAssignModal from "./CreateAndAssignModal";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, formatClassName } from "@/utils/helpers";
 
 const generateDefaultSessionName = (subjectName?: string, chapterNumber?: string, chapterTitle?: string) => {
   const now = new Date();
@@ -414,7 +414,7 @@ export default function QuestionGeneratorForm() {
     : "New Assessment";
 
   const classNamePrefill = selectedClass
-    ? `Grade ${selectedClass.grade}-${selectedClass.section}`
+    ? formatClassName(selectedClass)
     : "";
 
   return (
@@ -536,7 +536,7 @@ export default function QuestionGeneratorForm() {
                 loading={publishing}
                 style={{
                   ...styles.actionBtn,
-                  background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)",
+                  background: "var(--primary)",
                 }}
               >
                 {publishing ? "Saving..." : `Save & Publish ${draftQuestions.length} Questions`}
@@ -558,7 +558,7 @@ export default function QuestionGeneratorForm() {
                   <div style={styles.preFilledItem}>
                     <span style={styles.preFilledHeading}>Class</span>
                     <span style={styles.preFilledVal}>
-                      {selectedClass ? `${selectedClass.name} (Grade ${selectedClass.grade}-${selectedClass.section})` : "Loading..."}
+                      {selectedClass ? formatClassName(selectedClass) : "Loading..."}
                     </span>
                   </div>
                   <div style={styles.preFilledItem}>
@@ -596,7 +596,7 @@ export default function QuestionGeneratorForm() {
                     <option value="">Select a Class...</option>
                     {classes.map((cls) => (
                       <option key={cls.id} value={cls.id}>
-                        {cls.name} (Grade {cls.grade}-{cls.section})
+                        {formatClassName(cls)}
                       </option>
                     ))}
                   </select>

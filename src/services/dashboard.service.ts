@@ -7,6 +7,13 @@ export interface DashboardStats {
   assessments_conducted: number;
   average_score: number;
   average_accuracy: number;
+  active_teachers?: number;
+  class_performance?: Array<{
+    class_name: string;
+    topic: string;
+    status: string;
+    color_type: string;
+  }>;
   recent_activity: Array<{
     id: number;
     student_name: string;

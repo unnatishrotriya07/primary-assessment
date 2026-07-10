@@ -6,7 +6,8 @@ import Button from "../common/Button";
 import subjectService from "@/services/subject.service";
 import chapterService from "@/services/chapter.service";
 import { SubjectData } from "@/types/subject.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { extractErrorMessage, isHindiText } from "@/utils/helpers";
+
 
 interface ChapterFormProps {
   onSuccess: () => void;
@@ -75,6 +76,9 @@ export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: C
     }
   };
 
+  const selectedSub = subjects.find(s => String(s.id) === String(subjectId));
+  const isHindi = selectedSub?.name?.toLowerCase() === "hindi" || isHindiText(title) || isHindiText(content);
+
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
       {error && <div style={styles.errorBanner}>{error}</div>}
@@ -83,6 +87,7 @@ export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: C
         placeholder="e.g. Photosynthesis and Ecosystems"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        className={isHindi ? "font-hindi" : ""}
         required
       />
 
@@ -142,6 +147,7 @@ export default function ChapterForm({ onSuccess, onCancel, defaultSubjectId }: C
           value={content}
           onChange={(e) => setContent(e.target.value)}
           style={styles.textarea}
+          className={isHindi ? "font-hindi" : ""}
         />
       </div>
 

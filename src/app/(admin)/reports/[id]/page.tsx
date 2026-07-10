@@ -136,6 +136,10 @@ export default function ReportDetailPage({ params }: PageProps) {
               recommendation={selectedIv.recommendation}
               adminNote={selectedIv.admin_note}
               summary={selectedIv.summary}
+              transcript={selectedIv.transcript}
+              reportVersion={selectedIv.report_version}
+              requiresReview={selectedIv.requires_review}
+              reviewReason={selectedIv.review_reason}
             />
           </div>
         )}

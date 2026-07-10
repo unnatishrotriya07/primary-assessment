@@ -81,6 +81,8 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
     );
   }
 
+  const hasSections = classes.some((c) => (c.section && c.section !== "A") || (c.studentsCount && c.studentsCount > 0));
+
   return (
     <div style={styles.tableWrapper} className="card">
       <table style={styles.table}>
@@ -88,7 +90,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
           <tr style={styles.headerRow}>
             <th style={styles.th}>Class Name</th>
             <th style={styles.th}>Grade</th>
-            <th style={styles.th}>Section</th>
+            {hasSections && <th style={styles.th}>Section</th>}
             <th style={styles.th}>Students</th>
             {isSuperAdmin && <th style={styles.th}>Actions</th>}
           </tr>
@@ -98,9 +100,11 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
             <tr key={item.id} style={styles.row}>
               <td style={{ ...styles.td, fontWeight: 600 }}>{item.name}</td>
               <td style={styles.td}>{item.grade}</td>
-              <td style={styles.td}>
-                <span style={styles.sectionBadge}>{item.section}</span>
-              </td>
+              {hasSections && (
+                <td style={styles.td}>
+                  <span style={styles.sectionBadge}>{item.section}</span>
+                </td>
+              )}
               <td style={styles.td}>{item.studentsCount ?? 0}</td>
               {isSuperAdmin && (
                 <td style={styles.td}>

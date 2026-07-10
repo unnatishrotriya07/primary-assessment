@@ -123,16 +123,7 @@ export default function ViewAssignmentsModal({
                             View Report
                           </button>
                         ) : (
-                          <button
-                            onClick={() => handleCopyLink(student)}
-                            style={{
-                              ...styles.copyBtn,
-                              color: copiedId === student.id ? "var(--success)" : "var(--primary)",
-                            }}
-                            disabled={student.status === "Expired"}
-                          >
-                            {copiedId === student.id ? "Copied!" : "Copy Link"}
-                          </button>
+                          <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>—</span>
                         )}
                       </td>
                     </tr>

@@ -9,8 +9,13 @@ import Input from "@/components/common/Input";
 import classService from "@/services/class.service";
 import studentService from "@/services/student.service";
 import { ClassData } from "@/types/class.types";
-import { StudentData, StudentResult } from "@/types/student.types";
-import { extractErrorMessage } from "@/utils/helpers";
+import { StudentData, StudentResult, StudentJourneyData } from "@/types/student.types";
+import { extractErrorMessage, formatClassName } from "@/utils/helpers";
+import ParentSummaryCard from "@/components/students/ParentSummaryCard";
+import SubjectMasteryCard from "@/components/students/SubjectMasteryCard";
+import LearningTrendChart from "@/components/students/LearningTrendChart";
+import LearningJourneyTimeline from "@/components/students/LearningJourneyTimeline";
+import TeacherNotesPanel from "@/components/students/TeacherNotesPanel";
 
 // Main workspace component that consumes search params
 function StudentsWorkspace() {
@@ -51,11 +56,13 @@ function StudentsWorkspace() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [singleSectionName, setSingleSectionName] = useState("A");
 
   const openUploadModal = (clsId?: string) => {
     setUploadClassId(clsId || "");
     setUploadFile(null);
     setUploadMode("single");
+    setSingleSectionName("A");
     setSelectedSectionFiles([]);
     setUploadError("");
     setUploadSuccess("");
@@ -73,6 +80,10 @@ function StudentsWorkspace() {
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");
+  const [journeyData, setJourneyData] = useState<StudentJourneyData | null>(null);
+  const [journeyLoading, setJourneyLoading] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [journeyActiveTab, setJourneyActiveTab] = useState<"journey" | "growth">("journey");
 
   // 1. Load classes at startup
   const loadClasses = async () => {
@@ -133,9 +144,11 @@ function StudentsWorkspace() {
       const fetchProfile = async () => {
         setProfileLoading(true);
         setResultsLoading(true);
+        setJourneyLoading(true);
         setErrorMsg("");
         setActiveStudent(null);
         setStudentResults([]);
+        setJourneyData(null);
         setEditPicFile(null);
         setEditError("");
         setEditSuccess("");
@@ -152,17 +165,23 @@ function StudentsWorkspace() {
           // Fetch outcomes results
           const results = await studentService.getResults(studentIdParam);
           setStudentResults(results);
+
+          // Fetch learning journey
+          const journey = await studentService.getJourney(studentIdParam);
+          setJourneyData(journey);
         } catch (err: any) {
           setErrorMsg(extractErrorMessage(err, "Failed to load student profile details."));
         } finally {
           setProfileLoading(false);
           setResultsLoading(false);
+          setJourneyLoading(false);
         }
       };
       fetchProfile();
     } else {
       setActiveStudent(null);
       setStudentResults([]);
+      setJourneyData(null);
     }
   }, [studentIdParam]);
 
@@ -185,21 +204,24 @@ function StudentsWorkspace() {
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (uploadMode === "single") {
-      if (!uploadClassId || !uploadFile) {
-        setUploadError("Please select a class and an Excel/CSV file.");
+      if (!uploadClassId || !uploadFile || !singleSectionName.trim()) {
+        setUploadError("Please select a class, specify a section, and choose an Excel/CSV file.");
         return;
       }
       setUploadLoading(true);
       setUploadError("");
       setUploadSuccess("");
       try {
-        const res = await studentService.uploadExcel(uploadClassId, uploadFile);
+        const res = await studentService.uploadMultipleSections(uploadClassId, [
+          { file: uploadFile, section: singleSectionName.trim() }
+        ]);
         setUploadSuccess(res.message || "Roster imported successfully!");
         loadClasses(); // Refresh class roster student counts
 
         // Reload active students list if we're currently viewing that class
-        if (classIdParam === uploadClassId) {
-          const data = await studentService.getByClass(uploadClassId);
+        const newClassId = String(res.results?.[0]?.classId || uploadClassId);
+        if (classIdParam === newClassId || classIdParam === uploadClassId) {
+          const data = await studentService.getByClass(newClassId);
           setStudents(data);
         }
         setTimeout(() => setUploadModalOpen(false), 2000);
@@ -285,11 +307,19 @@ function StudentsWorkspace() {
       setEditSuccess("Profile updated successfully!");
       setActiveStudent(res);
 
+      try {
+        const journey = await studentService.getJourney(activeStudent.id);
+        setJourneyData(journey);
+      } catch (e) {}
+
       // Refresh class roster student list in memory
       if (classIdParam) {
         const refreshed = await studentService.getByClass(classIdParam);
         setStudents(refreshed);
       }
+      setTimeout(() => {
+        setEditModalOpen(false);
+      }, 1000);
     } catch (err: any) {
       setEditError(extractErrorMessage(err, "Failed to save profile changes."));
     } finally {
@@ -336,18 +366,18 @@ function StudentsWorkspace() {
     return nameStr.substring(0, 2).toUpperCase();
   };
 
-  // RENDER VIEW 3: Student Profile View
+  // RENDER VIEW 3: Student Learning Journey View
   if (studentIdParam) {
-    if (profileLoading) {
+    if (profileLoading || journeyLoading) {
       return (
         <div style={styles.centerLoading}>
           <div className="spinner" style={{ marginBottom: "1rem" }} />
-          Loading student profile file...
+          Loading student learning journey...
         </div>
       );
     }
 
-    if (!activeStudent) {
+    if (!activeStudent || !journeyData) {
       return (
         <div style={styles.container}>
           <Button onClick={() => router.push(classIdParam ? `/students?classId=${classIdParam}` : "/students")} variant="secondary" size="sm">
@@ -360,137 +390,247 @@ function StudentsWorkspace() {
 
     return (
       <div style={styles.container} className="animate-fade-in">
-        <div style={styles.profileHeader}>
-          <Button
+        {/* Top Navigation Toolbar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "1.5rem" }}>
+          <button
             onClick={() => router.push(`/students?classId=${activeStudent.classId}`)}
-            variant="secondary"
-            size="sm"
-            style={{ width: "fit-content" }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: 0,
+            }}
           >
-            ← Back to Class Roster
+            ← Back to Roster
+          </button>
+          <Button onClick={() => setEditModalOpen(true)} variant="secondary" size="sm">
+            Edit Profile
           </Button>
-          <PageHeader
-            title={activeStudent.name}
-            description={`Scholar No: ${activeStudent.scholarNumber} • Profile dossier and assessment results.`}
-          />
         </div>
 
-        <div style={styles.profileGrid}>
-          {/* Left Column: Editable Details Form */}
-          <div style={styles.profileCol} className="card">
-            <h3 style={styles.sectionTitle}>Personal Details</h3>
-            <form onSubmit={handleEditSubmit} style={styles.form}>
-              {editError && <div style={styles.errorText}>{editError}</div>}
-              {editSuccess && <div style={styles.successText}>{editSuccess}</div>}
-
-              <div style={styles.photoContainerWrapper}>
-                <div style={styles.photoContainer}>
-                  {editPicPreview ? (
-                    <img src={editPicPreview} alt="Student Profile" style={styles.profileLargePhoto} />
-                  ) : (
-                    <div style={styles.fallbackLargePhoto}>
-                      {getInitials(activeStudent.name)}
-                    </div>
-                  )}
-                </div>
-                <label style={styles.uploadPicLabel} className="interactive-element">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "0.3rem" }}>
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
-                  </svg>
-                  Change Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePicChange}
-                    style={{ display: "none" }}
-                    disabled={editLoading}
-                  />
-                </label>
-              </div>
-
-              <Input
-                label="Scholar Number"
-                type="text"
-                required
-                value={editScholarNum}
-                onChange={(e) => setEditScholarNum(e.target.value)}
-                disabled={editLoading}
-              />
-
-              <Input
-                label="Student Full Name"
-                type="text"
-                required
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                disabled={editLoading}
-              />
-
-              <Input
-                label="Email Address"
-                type="email"
-                required
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-                disabled={editLoading}
-              />
-
-              <Input
-                label="Contact Phone"
-                type="text"
-                value={editContact}
-                onChange={(e) => setEditContact(e.target.value)}
-                disabled={editLoading}
-              />
-
-              <Button type="submit" variant="primary" loading={editLoading} style={{ marginTop: "1rem" }}>
-                Save Profile Changes
-              </Button>
-            </form>
-          </div>
-
-          {/* Right Column: Assessment Reports */}
-          <div style={styles.profileCol} className="card">
-            <h3 style={styles.sectionTitle}>Assessment Reports</h3>
-            {resultsLoading ? (
-              <div style={styles.centerLoading}>
-                <div className="spinner" style={{ marginBottom: "0.5rem" }} />
-                Loading results history...
-              </div>
-            ) : studentResults.length === 0 ? (
-              <div style={styles.emptyResultsBox}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.8rem" }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-                </svg>
-                <h4>No Assessment Attempted</h4>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.2rem", textAlign: "center" }}>
-                  No completed assessments or evaluations found for email: **{activeStudent.email}**.
-                </p>
-              </div>
-            ) : (
-              <div style={styles.reportsWrapper}>
-                {studentResults.map((res) => (
-                  <div key={res.id} style={styles.reportItem}>
-                    <div style={styles.reportMain}>
-                      <div>
-                        <h4 style={styles.reportTitle}>{res.assessmentTitle}</h4>
-                        <p style={styles.reportMeta}>Duration: {res.duration} • Accuracy: {res.accuracy}%</p>
-                      </div>
-                      <div style={styles.gradeBadge}>
-                        Grade {res.grade}
-                      </div>
-                    </div>
-                    {res.feedback && (
-                      <div style={styles.feedbackContainer}>
-                        <strong>Learning Insights: </strong>{res.feedback}
-                      </div>
-                    )}
+        {/* Top Summary Card (Multi-Column Layout) */}
+        <div style={styles.topSummaryCard} className="card">
+          <div style={styles.profileRow}>
+            {/* Column 1: Avatar and Name */}
+            <div style={styles.profileColMain}>
+              <div style={styles.photoContainer}>
+                {editPicPreview ? (
+                  <img src={editPicPreview} alt="Student Profile" style={styles.profileLargePhoto} />
+                ) : (
+                  <div style={styles.fallbackLargePhoto}>
+                    {getInitials(activeStudent.name)}
                   </div>
-                ))}
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span style={{ fontSize: "11px", textTransform: "uppercase", color: "var(--text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>Scholar Profile</span>
+                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>{activeStudent.name}</h3>
+              </div>
+            </div>
+
+            {/* Column 2: Scholar ID */}
+            <div style={styles.cardProfileCol}>
+              <span style={styles.infoLabel}>Scholar ID</span>
+              <span style={styles.infoValue}>{activeStudent.scholarNumber}</span>
+            </div>
+
+            {/* Column 3: Email */}
+            <div style={styles.cardProfileCol}>
+              <span style={styles.infoLabel}>Email Address</span>
+              <span style={styles.infoValue}>{activeStudent.email || "—"}</span>
+            </div>
+
+            {/* Column 4: Phone (conditional) */}
+            {activeStudent.contactNumber && (
+              <div style={styles.cardProfileCol}>
+                <span style={styles.infoLabel}>Contact Number</span>
+                <span style={styles.infoValue}>{activeStudent.contactNumber}</span>
               </div>
             )}
           </div>
         </div>
+
+        {/* Tab Switcher */}
+        <div style={styles.tabContainer}>
+          <button
+            onClick={() => setJourneyActiveTab("journey")}
+            style={{
+              ...styles.tabButton,
+              borderBottomColor: journeyActiveTab === "journey" ? "var(--primary)" : "transparent",
+              color: journeyActiveTab === "journey" ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: journeyActiveTab === "journey" ? 700 : 500,
+            }}
+          >
+            Learning Journey
+          </button>
+          <button
+            onClick={() => setJourneyActiveTab("growth")}
+            style={{
+              ...styles.tabButton,
+              borderBottomColor: journeyActiveTab === "growth" ? "var(--primary)" : "transparent",
+              color: journeyActiveTab === "growth" ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: journeyActiveTab === "growth" ? 700 : 500,
+            }}
+          >
+            Growth & Observations
+          </button>
+        </div>
+
+        {/* Tab Content Rendering */}
+        {journeyActiveTab === "journey" ? (
+          <div style={styles.tabContentGrid}>
+            {/* Subject Mastery Grid */}
+            <div style={styles.subjectMasterySection}>
+              <h3 style={styles.tabSectionTitle}>Subject Mastery Progress</h3>
+              <div style={styles.subjectGrid}>
+                {journeyData.subjects.map((sub) => (
+                  <SubjectMasteryCard key={sub.subjectId} subject={sub} />
+                ))}
+              </div>
+            </div>
+
+            {/* Strengths & Improvements List Card */}
+            <ParentSummaryCard
+              summary={journeyData.parentSummary}
+              strengths={journeyData.strengths}
+              improvements={journeyData.improvements}
+              achievements={journeyData.achievements}
+            />
+
+            {/* Chronological Timeline */}
+            <div style={{ marginTop: "12px" }}>
+              <h3 style={styles.tabSectionTitle}>Timeline of Assessments & Achievements</h3>
+              <LearningJourneyTimeline timeline={journeyData.timeline} />
+            </div>
+          </div>
+        ) : (
+          <div style={styles.tabContentGrid}>
+            {/* Growth chart */}
+            <div>
+              <h3 style={styles.tabSectionTitle}>Growth & Skill Development Trend</h3>
+              <LearningTrendChart trendData={journeyData.trendData} />
+            </div>
+
+            {/* Teacher Notes and Recommendations */}
+            <div style={styles.notesGrid}>
+              <TeacherNotesPanel
+                studentId={activeStudent.id}
+                notes={journeyData.teacherNotes}
+                onNotesUpdated={(updated) =>
+                  setJourneyData({
+                    ...journeyData,
+                    teacherNotes: updated,
+                  })
+                }
+              />
+              <div style={styles.aiRecommendationsCard} className="card">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 600 }}>Suggested Next Pedagogical Steps</h4>
+                </div>
+                <ul style={{ listStyleType: "none", padding: 0 }}>
+                  {journeyData.teacherRecommendations.length === 0 ? (
+                    <li style={{ fontSize: "13.5px", color: "var(--text-muted)", opacity: 0.8 }}>
+                      No recommendations compile. Complete assessments to generate pedagogical suggestions.
+                    </li>
+                  ) : (
+                    journeyData.teacherRecommendations.map((rec, idx) => (
+                      <li key={idx} style={{ fontSize: "13.5px", color: "var(--text-secondary)", marginBottom: "12px", display: "flex", alignItems: "flex-start" }}>
+                        <span style={{ color: "var(--primary)", fontWeight: "bold", marginRight: "8px" }}>→</span>
+                        {rec}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal form for Editing Scholar Profile */}
+        <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Scholar Details">
+          <form onSubmit={handleEditSubmit} style={styles.modalForm}>
+            {editError && <div style={styles.modalError}>{editError}</div>}
+            {editSuccess && <div style={styles.modalSuccess}>{editSuccess}</div>}
+
+            <div style={styles.photoContainerWrapper}>
+              <div style={styles.photoContainer}>
+                {editPicPreview ? (
+                  <img src={editPicPreview} alt="Student Profile" style={styles.profileLargePhoto} />
+                ) : (
+                  <div style={styles.fallbackLargePhoto}>
+                    {getInitials(activeStudent.name)}
+                  </div>
+                )}
+              </div>
+              <label style={styles.uploadPicLabel} className="interactive-element">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "0.3rem" }}>
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
+                </svg>
+                Change Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePicChange}
+                  style={{ display: "none" }}
+                  disabled={editLoading}
+                />
+              </label>
+            </div>
+
+            <Input
+              label="Scholar Number"
+              type="text"
+              required
+              value={editScholarNum}
+              onChange={(e) => setEditScholarNum(e.target.value)}
+              disabled={editLoading}
+            />
+
+            <Input
+              label="Student Full Name"
+              type="text"
+              required
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              disabled={editLoading}
+            />
+
+            <Input
+              label="Email Address"
+              type="email"
+              required
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              disabled={editLoading}
+            />
+
+            <Input
+              label="Contact Phone"
+              type="text"
+              value={editContact}
+              onChange={(e) => setEditContact(e.target.value)}
+              disabled={editLoading}
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+              <Button type="button" onClick={() => setEditModalOpen(false)} variant="secondary">
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={editLoading}>
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </div>
     );
   }
@@ -856,7 +996,10 @@ function StudentsWorkspace() {
                 >
                   <div style={styles.classInfo}>
                     <h4 style={styles.className}>{cls.name}</h4>
-                    <p style={styles.classSubText}>Grade {cls.grade} • Sec {cls.section}</p>
+                    <p style={styles.classSubText}>
+                      Grade {cls.grade}
+                      {Boolean((cls.section && cls.section !== "A") || (cls.studentsCount && cls.studentsCount > 0)) && ` • Sec ${cls.section}`}
+                    </p>
                     <div style={styles.studentBadge}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: "0.3rem" }}>
                         <path d="M17 21v-2a4 4 0 0 0-3-3.87" /><path d="M9 21v-2a4 4 0 0 0-3-3.87" /><circle cx="9" cy="7" r="4" /><circle cx="17" cy="11" r="3" />
@@ -903,7 +1046,7 @@ function StudentsWorkspace() {
               <option value="">-- Choose Class --</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} (Grade {c.grade} - {c.section})
+                  {formatClassName(c)}
                 </option>
               ))}
             </select>
@@ -941,28 +1084,41 @@ function StudentsWorkspace() {
           </div>
 
           {uploadMode === "single" ? (
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Excel / CSV File</label>
-              <div style={styles.fileDropZone}>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.xlsm"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  style={styles.fileInput}
+            <>
+              <div style={styles.formGroup}>
+                <Input
+                  label="Section Name"
+                  placeholder="e.g. A, B, C"
+                  value={singleSectionName}
+                  onChange={(e) => setSingleSectionName(e.target.value)}
                   required
                   disabled={uploadLoading}
                 />
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                </svg>
-                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                  {uploadFile ? uploadFile.name : "Select excel roster sheet"}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                  Supports XLSX, XLS, CSV format
-                </span>
               </div>
-            </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Excel / CSV File</label>
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.xlsm"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    style={styles.fileInput}
+                    required
+                    disabled={uploadLoading}
+                  />
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                  </svg>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                    {uploadFile ? uploadFile.name : "Select excel roster sheet"}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                    Supports XLSX, XLS, CSV format
+                  </span>
+                </div>
+              </div>
+            </>
           ) : (
             <div style={styles.formGroup}>
               <label style={styles.label}>Roster Files for Sections</label>
@@ -1635,5 +1791,91 @@ const styles: Record<string, React.CSSProperties> = {
     outline: "none",
     cursor: "pointer",
     height: "40px",
+  },
+  topSummaryCard: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: "1.5rem",
+    borderRadius: "var(--radius-md)",
+    backgroundColor: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    boxShadow: "var(--shadow-sm)",
+  },
+  profileRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: "2rem",
+    width: "100%",
+    alignItems: "center",
+  },
+  profileColMain: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+  },
+  cardProfileCol: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  infoLabel: {
+    fontSize: "11px",
+    color: "var(--text-secondary)",
+    textTransform: "uppercase",
+    fontWeight: 600,
+    letterSpacing: "0.05em",
+  },
+  infoValue: {
+    fontSize: "14px",
+    color: "var(--text-primary)",
+    fontWeight: 500,
+  },
+  tabContainer: {
+    display: "flex",
+    gap: "1.5rem",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  tabButton: {
+    backgroundColor: "transparent",
+    border: "none",
+    borderBottom: "3px solid transparent",
+    padding: "0.6rem 0.2rem",
+    fontSize: "0.95rem",
+    cursor: "pointer",
+    transition: "all var(--transition-fast)",
+  },
+  tabContentGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.8rem",
+  },
+  subjectMasterySection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1rem",
+  },
+  tabSectionTitle: {
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    margin: 0,
+    color: "var(--text-primary)",
+  },
+  subjectGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+    gap: "1.2rem",
+  },
+  notesGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: "1.5rem",
+  },
+  aiRecommendationsCard: {
+    backgroundColor: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    padding: "1.2rem",
+    boxShadow: "var(--shadow-sm)",
   }
 };

@@ -166,7 +166,7 @@ export default function Home() {
                       <span style={styles.chartBarLabel}>Thu</span>
                     </div>
                     <div style={styles.chartBarWrapper}>
-                      <div style={{ ...styles.chartBarFill, height: "92%", background: "linear-gradient(to top, var(--primary), var(--secondary))" }}></div>
+                      <div style={{ ...styles.chartBarFill, height: "92%", background: "var(--primary)" }}></div>
                       <span style={styles.chartBarLabel}>Fri</span>
                     </div>
                   </div>
@@ -391,7 +391,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "32px",
     height: "32px",
     borderRadius: "8px",
-    background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
+    background: "var(--primary)",
     color: "#ffffff",
     display: "flex",
     alignItems: "center",
@@ -403,7 +403,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "24px",
     height: "24px",
     borderRadius: "6px",
-    background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
+    background: "var(--primary)",
     color: "#ffffff",
     display: "flex",
     alignItems: "center",
@@ -526,7 +526,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "850px",
     padding: "0.5rem",
     borderRadius: "20px",
-    background: "linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.2) 100%)",
+    background: "rgba(255, 255, 255, 0.4)",
     border: "1px solid rgba(255, 255, 255, 0.5)",
     boxShadow: "0 30px 60px rgba(139, 124, 251, 0.08)",
   },

@@ -1,4 +1,5 @@
 import React from "react";
+import { isHindiText } from "@/utils/helpers";
 
 interface AssessmentCardProps {
   title: string;
@@ -15,10 +16,12 @@ export default function AssessmentCard({
   difficulty,
   onSelect,
 }: AssessmentCardProps) {
+  const isHindi = subject.toLowerCase() === "hindi" || isHindiText(title);
+
   return (
     <div className="card" style={styles.card} onClick={onSelect}>
       <div style={styles.header}>
-        <span style={styles.subject}>{subject}</span>
+        <span style={styles.subject} className={isHindi ? "font-hindi" : ""}>{subject}</span>
         <span 
           style={{
             ...styles.difficultyBadge,
@@ -33,7 +36,7 @@ export default function AssessmentCard({
           {difficulty}
         </span>
       </div>
-      <h3 style={styles.title}>{title}</h3>
+      <h3 style={styles.title} className={isHindi ? "font-hindi" : ""}>{title}</h3>
       <div style={styles.footer}>
         <span style={styles.count}>{questionCount} Questions</span>
         <button style={styles.btn} className="interactive-element">Start Assessment</button>

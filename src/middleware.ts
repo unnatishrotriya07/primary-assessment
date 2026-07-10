@@ -6,9 +6,11 @@ function getUserFromToken(token: string | undefined): any {
   try {
     const parts = token.split(".");
     if (parts.length < 3) return null;
-    // Decode base64 URL safe string in edge environment
+    // Decode base64 URL safe string in edge environment with proper padding
     const rawPayload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(rawPayload));
+    const pad = (4 - (rawPayload.length % 4)) % 4;
+    const paddedPayload = rawPayload + "=".repeat(pad);
+    const payload = JSON.parse(atob(paddedPayload));
     return payload;
   } catch (e) {
     console.error("Failed to decode JWT in middleware:", e);
@@ -90,16 +92,27 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/dashboard",
     "/dashboard/:path*",
+    "/classes",
     "/classes/:path*",
+    "/subjects",
     "/subjects/:path*",
+    "/chapters",
     "/chapters/:path*",
+    "/questions",
     "/questions/:path*",
+    "/assessments",
     "/assessments/:path*",
+    "/reports",
     "/reports/:path*",
+    "/team",
     "/team/:path*",
+    "/students",
     "/students/:path*",
+    "/assessment",
     "/assessment/:path*",
+    "/result",
     "/result/:path*",
   ],
 };

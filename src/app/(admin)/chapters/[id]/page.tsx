@@ -12,6 +12,8 @@ import { ChapterData, ChapterSectionData } from "@/types/chapter.types";
 import { ClassData } from "@/types/class.types";
 import { SubjectData } from "@/types/subject.types";
 import Button from "@/components/common/Button";
+import { isHindiText } from "@/utils/helpers";
+
 
 export default function ChapterReadPage() {
   const router = useRouter();
@@ -515,6 +517,8 @@ export default function ChapterReadPage() {
   }
 
   const bookChapter = chapter.bookChapter;
+  const isHindi = subject?.name?.toLowerCase() === "hindi" || (chapter && isHindiText(chapter.title));
+
 
   return (
     <div style={styles.container}>
@@ -578,15 +582,15 @@ export default function ChapterReadPage() {
 
       {/* Dynamic Breadcrumbs */}
       <div style={styles.breadcrumb}>
-        <Link href="/syllabus?tab=classes" style={styles.breadcrumbLink}>
+        <Link href={`/syllabus?classId=${classData?.id}`} style={styles.breadcrumbLink}>
           {classData?.name || "Classes"}
         </Link>
         <span style={styles.breadcrumbSeparator}>/</span>
-        <Link href="/syllabus?tab=subjects" style={styles.breadcrumbLink}>
+        <Link href={`/syllabus?classId=${classData?.id}&subjectId=${subject?.id}`} style={styles.breadcrumbLink} className={subject?.name?.toLowerCase() === "hindi" ? "font-hindi" : ""}>
           {subject?.name || "Subjects"}
         </Link>
         <span style={styles.breadcrumbSeparator}>/</span>
-        <span style={styles.breadcrumbActive}>Chapter {chapter.number}</span>
+        <span style={styles.breadcrumbActive} className={isHindi ? "font-hindi" : ""}>Chapter {chapter.number}</span>
       </div>
 
       {/* Toast Notification */}
@@ -622,7 +626,7 @@ export default function ChapterReadPage() {
       {/* Main Chapter Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>{chapter.number}. {chapter.title}</h1>
+          <h1 style={styles.title} className={isHindi ? "font-hindi" : ""}>{chapter.number}. {chapter.title}</h1>
           {bookChapter && (
             <div style={styles.metaRow}>
               <span style={styles.metaItem}>
@@ -652,6 +656,7 @@ export default function ChapterReadPage() {
           </Button>
         )}
       </div>
+
 
       {/* Content Layout */}
       {!bookChapter ? (
@@ -709,6 +714,7 @@ export default function ChapterReadPage() {
                   <div style={styles.tocHeader}>Table of Contents</div>
                   {bookChapter.sections?.map((sec) => {
                     const isActive = activeSectionId === sec.id;
+                    const isSecHindi = isHindi || isHindiText(sec.heading);
                     return (
                       <button
                         key={sec.id}
@@ -720,7 +726,7 @@ export default function ChapterReadPage() {
                           borderLeftColor: isActive ? "var(--primary)" : "transparent",
                           backgroundColor: isActive ? "var(--selected-bg)" : "transparent",
                         }}
-                        className="interactive-element"
+                        className={`interactive-element ${isSecHindi ? "font-hindi" : ""}`}
                       >
                         {sec.heading}
                       </button>
@@ -740,22 +746,26 @@ export default function ChapterReadPage() {
                   <h4 style={{ margin: "0 0 0.5rem 0", color: "var(--primary)", fontSize: "0.95rem", fontWeight: 700 }}>
                     Learning Objectives
                   </h4>
-                  <ul style={{ margin: 0, paddingLeft: "1.2rem" }}>
+                  <ul style={{ margin: 0, paddingLeft: "1.2rem" }} className={isHindi ? "font-hindi" : ""}>
                     <li>Understand the core conceptual topics of {chapter.title}.</li>
                     <li>Apply positional vocabulary and practical logic discussed in this unit.</li>
                   </ul>
                 </div>
 
-                {bookChapter.sections?.map((sec) => (
-                  <section key={sec.id} id={`section-${sec.id}`} style={styles.sectionItem}>
-                    <h2 style={styles.sectionHeading}>{sec.heading}</h2>
-                    <div
-                      className="chapter-section-content"
-                      style={styles.sectionHtml}
-                      dangerouslySetInnerHTML={{ __html: renderHighlightedContent(sec.htmlContent, sec.id) }}
-                    />
-                  </section>
-                ))}
+                {bookChapter.sections?.map((sec) => {
+                  const isSecHindi = isHindi || isHindiText(sec.heading) || isHindiText(sec.plainText);
+                  return (
+                    <section key={sec.id} id={`section-${sec.id}`} style={styles.sectionItem} className={isSecHindi ? "font-hindi" : ""}>
+                      <h2 style={styles.sectionHeading} className={isSecHindi ? "font-hindi" : ""}>{sec.heading}</h2>
+                      <div
+                        className={`chapter-section-content ${isSecHindi ? "font-hindi" : ""}`}
+                        style={styles.sectionHtml}
+                        dangerouslySetInnerHTML={{ __html: renderHighlightedContent(sec.htmlContent, sec.id) }}
+                      />
+                    </section>
+                  );
+                })}
+
               </div>
             </div>
           </div>
@@ -780,53 +790,8 @@ export default function ChapterReadPage() {
                   </svg>
                   Create Questions
                 </button>
-
-                <button
-                  style={styles.panelActionBtnDisabled}
-                  disabled
-                  title="Coming Soon"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px", color: "var(--text-muted)" }}>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  Worksheet <span style={styles.disabledBadge}>Coming Soon</span>
-                </button>
-
-                <button
-                  style={styles.panelActionBtnDisabled}
-                  disabled
-                  title="Coming Soon"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px", color: "var(--text-muted)" }}>
-                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  </svg>
-                  Homework <span style={styles.disabledBadge}>Coming Soon</span>
-                </button>
-
-                <button
-                  style={styles.panelActionBtnDisabled}
-                  disabled
-                  title="Coming Soon"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px", color: "var(--text-muted)" }}>
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  Oral Assessment <span style={styles.disabledBadge}>Coming Soon</span>
-                </button>
-
-                <button
-                  style={styles.panelActionBtnDisabled}
-                  disabled
-                  title="Coming Soon"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px", color: "var(--text-muted)" }}>
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  Lesson Plan <span style={styles.disabledBadge}>Future</span>
-                </button>
-
                 <div style={{ height: "1px", backgroundColor: "var(--divider)", margin: "0.5rem 0" }} />
+
 
                 <button style={styles.panelActionBtnGhost} className="interactive-element" onClick={handleCopySummary}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>

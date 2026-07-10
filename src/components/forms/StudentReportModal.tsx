@@ -274,7 +274,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
   },
   reportHeader: {
-    background: "linear-gradient(135deg, var(--primary-light), var(--secondary-light))",
+    background: "var(--primary-light)",
     borderRadius: "var(--radius-md)",
     padding: "1.5rem",
     textAlign: "center",

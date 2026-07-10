@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import interviewService from "@/services/interview.service";
 
 interface ReportCardProps {
   reportId: string;
@@ -26,6 +27,10 @@ interface ReportCardProps {
   recommendation?: string;
   adminNote?: string;
   summary?: string;
+  transcript?: { role: "ai" | "student"; text: string; question_category?: string }[];
+  reportVersion?: string;
+  requiresReview?: boolean;
+  reviewReason?: string;
 }
 
 const SKILL_CONFIG = [
@@ -59,8 +64,65 @@ export default function ReportCard({
   recommendation,
   adminNote,
   summary,
+  transcript,
+  reportVersion,
+  requiresReview,
+  reviewReason,
 }: ReportCardProps) {
   const [showQA, setShowQA] = useState(false);
+  const [showReplay, setShowReplay] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const [localEvaluatedAnswers, setLocalEvaluatedAnswers] = useState<any[]>(evaluatedAnswers || []);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [editedNote, setEditedNote] = useState(adminNote || "");
+
+  React.useEffect(() => {
+    if (evaluatedAnswers) {
+      setLocalEvaluatedAnswers(evaluatedAnswers);
+    }
+  }, [evaluatedAnswers]);
+
+  const updateLocalAnswer = (index: number, key: string, value: any) => {
+    setLocalEvaluatedAnswers(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [key]: value };
+      return copy;
+    });
+  };
+
+  const handleApproveReview = async () => {
+    setIsSubmittingReview(true);
+    try {
+      await interviewService.reviewReport(parseInt(reportId, 10), {
+        evaluated_answers: localEvaluatedAnswers,
+        admin_note: editedNote || adminNote
+      });
+      alert("Evaluation approved and report finalized successfully.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to approve evaluation:", err);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!confirm("Are you sure you want to regenerate this report? This will re-run the AI evaluation pipeline using saved conversation messages.")) return;
+    setIsRegenerating(true);
+    try {
+      await interviewService.regenerateReport(parseInt(reportId, 10));
+      alert("Evaluation regeneration task has been enqueued. Please refresh the page in a few seconds.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to regenerate report:", err);
+      alert("Failed to trigger evaluation regeneration. Please check server connection.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
   
   // Decide whether to render the basic report card or the premium detailed report card
   const isDetailed = scoreCommunication !== undefined;
@@ -85,6 +147,48 @@ export default function ReportCard({
           <p style={styles.reportSub}>Assessed Student: {studentName}</p>
           <span style={styles.id}>Report Reference: #{reportId}</span>
         </div>
+
+        {/* Human Review Banner */}
+        {requiresReview && (
+          <div style={{
+            backgroundColor: "#FEF3C7",
+            border: "1px solid #F59E0B",
+            borderRadius: "12px",
+            padding: "1.25rem 1.5rem",
+            margin: "1.5rem 1.5rem 0",
+            textAlign: "left",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+          }}>
+            <p style={{ margin: 0, fontWeight: 700, color: "#D97706", fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              ⚠️ Human Review Required
+            </p>
+            <p style={{ margin: "0.25rem 0 0.5rem 0", fontSize: "0.88rem", color: "#78350F" }}>
+              Reason: {reviewReason || "Low confidence in speech transcription or educational evaluation."}
+            </p>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "#B45309", lineHeight: "1.5" }}>
+              Please review the conversation replay and question evaluations below. Correct any transcripts, toggle the correctness switch if the AI misgraded, and finalize this report.
+            </p>
+            <button
+              onClick={handleApproveReview}
+              disabled={isSubmittingReview}
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.45rem 1rem",
+                backgroundColor: "var(--success)",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(22,163,74,0.2)",
+                transition: "background 0.15s"
+              }}
+            >
+              {isSubmittingReview ? "Approving..." : "Approve Report"}
+            </button>
+          </div>
+        )}
 
         <div style={styles.body}>
           <div style={styles.ringWrap}>
@@ -176,8 +280,62 @@ export default function ReportCard({
             </div>
           )}
 
+          {/* Collapsible Conversation Replay */}
+          {transcript && transcript.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <button
+                onClick={() => setShowReplay(!showReplay)}
+                style={styles.collapseBtn}
+              >
+                {showReplay ? "Hide Conversation Replay" : "View Conversation Replay"}
+              </button>
+              
+              {showReplay && (
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                  padding: "1.25rem",
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "10px",
+                  marginTop: "1.2rem",
+                  maxHeight: "450px",
+                  overflowY: "auto"
+                }}>
+                  {transcript.map((turn, idx) => {
+                    const isAi = turn.role === "ai";
+                    return (
+                      <div key={idx} style={{
+                        alignSelf: isAi ? "flex-start" : "flex-end",
+                        maxWidth: "80%",
+                        backgroundColor: isAi ? "#ffffff" : "#EFF6FF",
+                        color: "var(--text-primary)",
+                        padding: "0.75rem 1rem",
+                        borderRadius: "10px",
+                        border: isAi ? "1px solid var(--border-color)" : "1px solid #BFDBFE",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                      }}>
+                        <p style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          color: isAi ? "var(--text-secondary)" : "var(--primary)",
+                          marginBottom: "0.25rem",
+                          marginTop: 0
+                        }}>
+                          {isAi ? "Buddy (AI)" : studentName} {turn.question_category ? `• ${turn.question_category}` : ""}
+                        </p>
+                        <p style={{ fontSize: "0.9rem", margin: 0, lineHeight: "1.5" }}>{turn.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Collapsible Q&A Review */}
-          {evaluatedAnswers && evaluatedAnswers.length > 0 && (
+          {localEvaluatedAnswers && localEvaluatedAnswers.length > 0 && (
             <div style={{ marginTop: "1rem" }}>
               <button
                 onClick={() => setShowQA(!showQA)}
@@ -188,48 +346,132 @@ export default function ReportCard({
               
               {showQA && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.2rem" }}>
-                  {evaluatedAnswers.map((item, idx) => (
-                    <div key={idx} style={styles.qaCard}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
-                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)" }}>
-                          Question {idx + 1} ({item.questionType === "mcq" ? "MCQ" : "TITA"})
-                        </span>
-                        <span
-                          style={{
-                            padding: "0.2rem 0.5rem",
-                            borderRadius: "12px",
-                            fontSize: "0.75rem",
-                            fontWeight: 700,
-                            backgroundColor: item.isCorrect ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
-                            color: item.isCorrect ? "var(--success)" : "var(--error)",
-                            border: item.isCorrect ? "1px solid rgba(16, 185, 129, 0.2)" : "1px solid rgba(239, 68, 68, 0.2)",
-                          }}
-                        >
-                          {item.isCorrect ? "Correct" : "Incorrect"}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
-                        {item.question}
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.25rem", fontSize: "0.85rem" }}>
-                        <div style={{ flex: "1 1 200px" }}>
-                          <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Student Answer:</span>{" "}
-                          <span style={{ color: item.isCorrect ? "var(--success)" : "var(--error)" }}>
-                            {item.studentAnswer || "(No answer)"}
+                  {localEvaluatedAnswers.map((item, idx) => {
+                    const isEditing = editingIndex === idx;
+                    return (
+                      <div key={idx} style={styles.qaCard}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)" }}>
+                            Question {idx + 1} ({item.questionType === "mcq" ? "MCQ" : "TITA"})
                           </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            {isEditing ? (
+                              <select
+                                value={item.isCorrect ? "true" : "false"}
+                                onChange={(e) => updateLocalAnswer(idx, "isCorrect", e.target.value === "true")}
+                                style={{
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "6px",
+                                  border: "1px solid var(--border-color)",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  outline: "none"
+                                }}
+                              >
+                                <option value="true">Correct</option>
+                                <option value="false">Incorrect</option>
+                              </select>
+                            ) : (
+                              <span
+                                style={{
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "12px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  backgroundColor: item.isCorrect ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                                  color: item.isCorrect ? "var(--success)" : "var(--error)",
+                                  border: item.isCorrect ? "1px solid rgba(16, 185, 129, 0.2)" : "1px solid rgba(239, 68, 68, 0.2)",
+                                }}
+                              >
+                                {item.isCorrect ? "Correct" : "Incorrect"}
+                              </span>
+                            )}
+                            
+                            <button
+                              onClick={() => setEditingIndex(isEditing ? null : idx)}
+                              style={{
+                                padding: "0.2rem 0.4rem",
+                                backgroundColor: "transparent",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "6px",
+                                fontSize: "0.7rem",
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                color: "var(--text-secondary)"
+                              }}
+                            >
+                              {isEditing ? "Done" : "Edit"}
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ flex: "1 1 200px" }}>
-                          <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Expected Answer:</span>{" "}
-                          <span style={{ color: "var(--text-primary)" }}>{item.expectedAnswer}</span>
+                        
+                        <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", margin: "0.5rem 0 0" }}>
+                          {item.question}
+                        </p>
+                        
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}>
+                          {isEditing ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                                Edit Student Answer:
+                              </label>
+                              <input
+                                type="text"
+                                value={item.studentAnswer || ""}
+                                onChange={(e) => updateLocalAnswer(idx, "studentAnswer", e.target.value)}
+                                style={{
+                                  padding: "0.4rem 0.75rem",
+                                  borderRadius: "8px",
+                                  border: "1px solid var(--border-color)",
+                                  fontSize: "0.85rem",
+                                  outline: "none",
+                                  width: "100%",
+                                  boxSizing: "border-box"
+                                }}
+                              />
+                              
+                              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                                Edit Feedback / Explanation:
+                              </label>
+                              <input
+                                type="text"
+                                value={item.explanation || ""}
+                                onChange={(e) => updateLocalAnswer(idx, "explanation", e.target.value)}
+                                style={{
+                                  padding: "0.4rem 0.75rem",
+                                  borderRadius: "8px",
+                                  border: "1px solid var(--border-color)",
+                                  fontSize: "0.85rem",
+                                  outline: "none",
+                                  width: "100%",
+                                  boxSizing: "border-box"
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", fontSize: "0.85rem" }}>
+                              <div style={{ flex: "1 1 200px" }}>
+                                <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Student Answer:</span>{" "}
+                                <span style={{ color: item.isCorrect ? "var(--success)" : "var(--error)" }}>
+                                  {item.studentAnswer || "(No answer)"}
+                                </span>
+                              </div>
+                              <div style={{ flex: "1 1 200px" }}>
+                                <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Expected Answer:</span>{" "}
+                                <span style={{ color: "var(--text-primary)" }}>{item.expectedAnswer}</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {!isEditing && item.explanation && (
+                            <p style={styles.explanationText}>
+                              <strong>Feedback:</strong> {item.explanation}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      {item.explanation && (
-                        <p style={styles.explanationText}>
-                          <strong>Feedback:</strong> {item.explanation}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -242,6 +484,28 @@ export default function ReportCard({
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
             Completion Duration: {duration}
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "1rem" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>
+              v{reportVersion || "2.0.0"}
+            </span>
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              style={{
+                padding: "0.3rem 0.6rem",
+                backgroundColor: "#ffffff",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                cursor: "pointer",
+                transition: "all 0.15s"
+              }}
+            >
+              {isRegenerating ? "Regenerating..." : "Regenerate Analysis"}
+            </button>
           </div>
         </div>
       </div>
@@ -370,7 +634,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
   },
   reportHeader: {
-    background: "linear-gradient(135deg, var(--primary-light), var(--secondary-light))",
+    background: "var(--primary-light)",
     borderRadius: "var(--radius-md)",
     padding: "1.5rem",
     textAlign: "center",

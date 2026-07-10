@@ -7,219 +7,321 @@ import interviewService, {
     TranscriptEntry,
     AnswerEntry,
 } from "@/services/interview.service";
+import { isHindiText } from "@/utils/helpers";
 
 interface PageProps {
     params: Promise<{ interviewId: string }>;
 }
 
-const CHEERS = [
-    "Thank you. Let's move to the next question.",
-    "Got it. Let's try the next one.",
-    "Okay, let's look at the next question.",
-    "Thank you. Let's proceed to the next one.",
-    "Understood. Let's try the next question.",
-    "All right. Let's look at the next one.",
-    "Thank you. Here is the next question.",
+const ENCOURAGEMENTS = [
+    "That's thoughtful!",
+    "Nice thinking!",
+    "Wonderful!",
+    "You're doing great!",
+    "Let's try another one.",
+    "Awesome effort!",
+    "Keep going!",
 ];
 
 export default function InterviewPage({ params }: PageProps) {
     const { interviewId } = use(params);
     const router = useRouter();
 
+    // Student identity data
     const [studentName, setStudentName] = useState("");
     const [subjectName, setSubjectName] = useState("");
     const [chapterNumber, setChapterNumber] = useState("");
     const [chapterTitle, setChapterTitle] = useState("");
     
+    // Core content lists
     const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [answers, setAnswers] = useState<AnswerEntry[]>([]);
     const [typedText, setTypedText] = useState("");
+    const isHindi = subjectName.toLowerCase() === "hindi" || isHindiText(subjectName) || questions.some(q => isHindiText(q.q));
+
+    // Journey states
+    const [phase, setPhase] = useState<
+        "loading" | "meet_buddy" | "device_setup" | "comfort_conv" | "transition" | "interview" | "generating" | "completed"
+    >("loading");
+    const [comfortIdx, setComfortIdx] = useState(0); // 0: How are you, 1: What did you enjoy, 2: Ready?
     
-    // UI states
+    // Buddy emotional state for animations
+    const [buddyState, setBuddyState] = useState<"silent" | "speaking" | "listening" | "thinking" | "waving" | "completed">("silent");
+    
+    // Interactive features
     const [isRecording, setIsRecording] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [phase, setPhase] = useState<"loading" | "lobby" | "interview" | "generating">("loading");
-
-    // Media states
-    const [cameraEnabled, setCameraEnabled] = useState(true);
-    const [micEnabled, setMicEnabled] = useState(true);
-    const [showKeyboardInput, setShowKeyboardInput] = useState(false);
     const [liveCaption, setLiveCaption] = useState("");
+    const [activeHint, setActiveHint] = useState<string | null>(null);
+    const [showKeyboardInput, setShowKeyboardInput] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
+    const [silenceRetryCount, setSilenceRetryCount] = useState(0);
+    const [speechSupported, setSpeechSupported] = useState(true);
+
+    // Media permissions
+    const [micEnabled, setMicEnabled] = useState(true);
+    const [cameraEnabled, setCameraEnabled] = useState(false);
+    const [micStatus, setMicStatus] = useState<"idle" | "granted" | "denied">("idle");
+    const [cameraStatus, setCameraStatus] = useState<"idle" | "granted" | "denied">("idle");
     const [stream, setStream] = useState<MediaStream | null>(null);
+
+    // Offline / Internet checks
+    const [isOffline, setIsOffline] = useState(false);
 
     // Refs
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const confettiCanvasRef = useRef<HTMLCanvasElement>(null);
     const recognitionRef = useRef<any>(null);
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const isSpeakingRef = useRef(false);
+    const isListeningRef = useRef(false);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+    
+    // Silence / idle timeout refs
     const silenceTimeoutRef = useRef<any>(null);
-    const submitRef = useRef<any>(null);
-    const [voicesLoaded, setVoicesLoaded] = useState(false);
-    const hasRepeatedCurrentRef = useRef(false);
-    const silenceCountRef = useRef(0);
+    const repeatTimeoutRef = useRef<any>(null);
+    const textRef = useRef("");
+    const speechConfidenceRef = useRef<number>(1.0);
+    const currentIdxRef = useRef(0);
+    const comfortIdxRef = useRef(0);
+    const phaseRef = useRef<any>("loading");
+    const answersRef = useRef<AnswerEntry[]>([]);
+    const transcriptRef = useRef<TranscriptEntry[]>([]);
+    const unusedEncouragementsRef = useRef<string[]>([]);
 
-    const micEnabledRef = useRef(micEnabled);
-    const isSpeakingRef = useRef(isSpeaking);
-    const isSubmittingRef = useRef(isSubmitting);
+    // Encouragement history tracking to prevent direct repetition
+    const [unusedEncouragements, setUnusedEncouragements] = useState<string[]>([...ENCOURAGEMENTS]);
 
+    const recordTurn = (
+        role: "ai" | "student",
+        text: string,
+        category?: string,
+        speechConf?: number,
+        qId?: number
+    ) => {
+        const seqNum = transcript.length + 1;
+        interviewService.addMessage(parseInt(interviewId, 10), {
+            role,
+            text,
+            question_category: category,
+            sequence_number: seqNum,
+            question_id: qId,
+            student_response: role === "student" ? text : undefined,
+            buddy_response: role === "ai" ? text : undefined,
+            speech_confidence: speechConf
+        }).catch((err) => console.error("Failed to persist conversation turn:", err));
+    };
+
+    const saveSessionProgress = (
+        idx: number,
+        stateName: string,
+        comfortVal: number,
+        updatedAnswers: AnswerEntry[],
+        isCompleted: boolean = false
+    ) => {
+        interviewService.updateSession(parseInt(interviewId, 10), {
+            current_question_index: idx,
+            session_state: stateName,
+            comfort_index: comfortVal,
+            raw_answers: updatedAnswers,
+            network_status: navigator.onLine ? "online" : "offline",
+            completion_status: isCompleted ? "Completed" : "In Progress"
+        }).catch((err) => console.error("Failed to save progressive session state:", err));
+    };
+
+    // Keep typing string reference for timeouts
     useEffect(() => {
-        micEnabledRef.current = micEnabled;
-    }, [micEnabled]);
+        textRef.current = typedText;
+    }, [typedText]);
 
     useEffect(() => {
         isSpeakingRef.current = isSpeaking;
     }, [isSpeaking]);
 
     useEffect(() => {
-        isSubmittingRef.current = isSubmitting;
-    }, [isSubmitting]);
+        currentIdxRef.current = currentIdx;
+    }, [currentIdx]);
 
-    const updateIsSpeaking = (val: boolean) => {
-        setIsSpeaking(val);
-        isSpeakingRef.current = val;
-    };
-
-    const updateMicEnabled = (val: boolean) => {
-        setMicEnabled(val);
-        micEnabledRef.current = val;
-    };
-
-    const updateIsSubmitting = (val: boolean) => {
-        setIsSubmitting(val);
-        isSubmittingRef.current = val;
-    };
-
-    // Pre-load synthesis voices to prevent first question voice mismatch
     useEffect(() => {
-        if (typeof window === "undefined" || !window.speechSynthesis) return;
-        const loadVoices = () => {
-            const list = window.speechSynthesis.getVoices();
-            if (list.length > 0) {
-                setVoicesLoaded(true);
+        comfortIdxRef.current = comfortIdx;
+    }, [comfortIdx]);
+
+    useEffect(() => {
+        phaseRef.current = phase;
+    }, [phase]);
+
+    useEffect(() => {
+        answersRef.current = answers;
+    }, [answers]);
+
+    useEffect(() => {
+        transcriptRef.current = transcript;
+    }, [transcript]);
+
+    useEffect(() => {
+        unusedEncouragementsRef.current = unusedEncouragements;
+    }, [unusedEncouragements]);
+
+    // Track online/offline listeners
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const handleOnline = () => {
+            setIsOffline(false);
+            if (phase === "interview" && !isSpeakingRef.current && micEnabled) {
+                startSpeechRecognition();
             }
         };
-        loadVoices();
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-    }, []);
+        const handleOffline = () => {
+            setIsOffline(true);
+            if (recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch (_) {}
+            }
+            setIsRecording(false);
+        };
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        setIsOffline(!window.navigator.onLine);
 
-
-    // Cleanup silence timeout on unmount
-    useEffect(() => {
         return () => {
-            if (silenceTimeoutRef.current) {
-                clearTimeout(silenceTimeoutRef.current);
-            }
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
         };
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phase, isSpeaking, micEnabled]);
 
-    // ── Load questions from sessionStorage ───────────────────────────────────
+    // Load session data & recover progress if any
     useEffect(() => {
-        const raw = sessionStorage.getItem(`interview_session_${interviewId}`);
-        if (raw) {
+        let isMounted = true;
+
+        async function initSession() {
+            setPhase("loading");
+            let questionsList: InterviewQuestion[] = [];
+            let sName = "Aarav";
+            let subName = "Fractions";
+            let chNum = "";
+            let chTitle = "";
+
+            const raw = sessionStorage.getItem(`interview_session_${interviewId}`);
+            if (raw) {
+                try {
+                    const data = JSON.parse(raw);
+                    sName = data.student_name || "Aarav";
+                    questionsList = data.questions || [];
+                    subName = data.subject_name || "Fractions";
+                    chNum = data.chapter_number || "";
+                    chTitle = data.chapter_title || "";
+                } catch (_) {}
+            }
+
             try {
-                const data = JSON.parse(raw);
-                setStudentName(data.student_name || "Student");
-                const qs = data.questions || [];
-                setQuestions(qs);
-                setSubjectName(data.subject_name || "");
-                setChapterNumber(data.chapter_number || "");
-                setChapterTitle(data.chapter_title || "");
-                setPhase("lobby");
-                if (qs.length > 0) {
-                    setTranscript([{ role: "ai", text: qs[0].q, question_category: qs[0].category }]);
+                const dbSession = await interviewService.getReport(parseInt(interviewId, 10));
+                if (!isMounted) return;
+
+                sName = dbSession.student_name || sName;
+                setStudentName(sName);
+                setSubjectName(dbSession.assessment_title || subName);
+                
+                if (questionsList.length === 0 && dbSession.questions && dbSession.questions.length > 0) {
+                    questionsList = dbSession.questions;
                 }
-                return;
-            } catch (_) { }
-        }
-        setError("Session data not found. Please use your original invitation link.");
-        setPhase("lobby");
-    }, [interviewId]);
+                setQuestions(questionsList);
 
-    // ── Capture Camera and Mic ───────────────────────────────────────────────
-    useEffect(() => {
-        if (phase !== "interview") return;
+                if (dbSession.status === "In Progress" || dbSession.status === "Transcript Saved") {
+                    if (dbSession.transcript && dbSession.transcript.length > 0) {
+                        setTranscript(dbSession.transcript);
+                    }
+                    if (dbSession.raw_answers && dbSession.raw_answers.length > 0) {
+                        setAnswers(dbSession.raw_answers as any);
+                    }
 
-        let activeStream: MediaStream | null = null;
+                    const savedIdx = dbSession.current_question_index || 0;
+                    setCurrentIdx(savedIdx);
+                    
+                    const savedState = dbSession.session_state || "device_setup";
 
-        async function initMedia() {
-            try {
-                const mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 480, height: 360, facingMode: "user" },
-                    audio: true,
-                });
-                activeStream = mediaStream;
-                setStream(mediaStream);
+                    if (dbSession.completion_status === "Completed") {
+                        setPhase("completed");
+                        setBuddyState("completed");
+                        return;
+                    }
 
-                if (videoRef.current) {
-                    videoRef.current.srcObject = mediaStream;
-                }
+                    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                    if (!SpeechRecognition) {
+                        setSpeechSupported(false);
+                        setPhase("interview");
+                        if (dbSession.transcript && dbSession.transcript.length > 0) {
+                            // already loaded
+                        } else {
+                            const firstQText = questionsList[0]?.q || "Let's begin!";
+                            setTranscript([{ role: "ai", text: firstQText }]);
+                            speakText(firstQText);
+                            recordTurn("ai", firstQText, questionsList[0]?.category);
+                        }
+                        return;
+                    }
 
-                // Web Audio API Visualizer Setup
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                const audioCtx = new AudioContextClass();
-                audioContextRef.current = audioCtx;
-
-                const source = audioCtx.createMediaStreamSource(mediaStream);
-                const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 64;
-                analyserRef.current = analyser;
-                source.connect(analyser);
-
-                drawWaveform();
-
-                // If Buddy finished speaking before we got permission, start speech recognition now
-                if (!isSpeakingRef.current && !isSubmittingRef.current && micEnabledRef.current) {
-                    startSpeechRecognition();
+                    if (savedState === "interview") {
+                        setPhase("interview");
+                        const qText = questionsList[savedIdx]?.q || "Let's continue.";
+                        speakText(qText, () => {
+                            startSpeechRecognition();
+                        });
+                    } else if (savedState === "comfort_conv") {
+                        setPhase("comfort_conv");
+                        const cIdx = dbSession.comfort_index || 0;
+                        setComfortIdx(cIdx);
+                        let comfortQText = "Ready to learn together?";
+                        if (cIdx === 0) comfortQText = `How are you today, ${sName}?`;
+                        else if (cIdx === 1) comfortQText = "What did you enjoy doing today?";
+                        speakText(comfortQText, () => {
+                            startSpeechRecognition();
+                        });
+                    } else {
+                        setPhase("device_setup");
+                        setBuddyState("waving");
+                    }
+                } else if (dbSession.status === "Report Ready" || dbSession.status === "Completed") {
+                    setPhase("completed");
+                    setBuddyState("completed");
+                } else {
+                    setPhase("device_setup");
+                    setBuddyState("waving");
                 }
             } catch (err) {
-                console.warn("First getUserMedia attempt failed (video + audio), trying audio-only fallback...", err);
-                try {
-                    const audioStream = await navigator.mediaDevices.getUserMedia({
-                        audio: true,
-                    });
-                    activeStream = audioStream;
-                    setStream(audioStream);
-                    setCameraEnabled(false);
-                    updateMicEnabled(true);
-
-                    // Web Audio API Visualizer Setup
-                    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                    const audioCtx = new AudioContextClass();
-                    audioContextRef.current = audioCtx;
-
-                    const source = audioCtx.createMediaStreamSource(audioStream);
-                    const analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 64;
-                    analyserRef.current = analyser;
-                    source.connect(analyser);
-
-                    drawWaveform();
-
-                    // If Buddy finished speaking before we got permission, start speech recognition now
-                    if (!isSpeakingRef.current && !isSubmittingRef.current) {
-                        startSpeechRecognition();
-                    }
-                } catch (fallbackErr) {
-                    console.error("Audio-only fallback getUserMedia failed:", fallbackErr);
-                    setError("Microphone access denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
-                    setCameraEnabled(false);
-                    updateMicEnabled(false);
-                }
+                console.error("Failed to recover session from backend:", err);
+                setStudentName(sName);
+                setQuestions(questionsList);
+                setPhase("device_setup");
+                setBuddyState("waving");
             }
         }
 
-        initMedia();
-
+        initSession();
         return () => {
-            if (activeStream) {
-                activeStream.getTracks().forEach((track) => track.stop());
+            isMounted = false;
+        };
+    }, [interviewId]);
+
+    // Handle audio context or stream changes
+    useEffect(() => {
+        if (stream && videoRef.current && cameraEnabled) {
+            videoRef.current.srcObject = stream;
+        }
+    }, [stream, cameraEnabled, phase]);
+
+    // Clean timers on unmount
+    useEffect(() => {
+        return () => {
+            clearSilenceTimers();
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close();
@@ -228,10 +330,117 @@ export default function InterviewPage({ params }: PageProps) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [phase]);
+    }, []);
 
-    // ── Draw Waveform on Canvas ──────────────────────────────────────────────
+    const clearSilenceTimers = () => {
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+        if (repeatTimeoutRef.current) clearTimeout(repeatTimeoutRef.current);
+    };
+
+    // Text to Speech
+    const speakText = useCallback((text: string, onEnd?: () => void) => {
+        if (typeof window === "undefined" || !window.speechSynthesis) {
+            onEnd?.();
+            return;
+        }
+
+        try {
+            window.speechSynthesis.resume();
+            window.speechSynthesis.cancel();
+        } catch (err) {
+            console.error("Error canceling speech synthesis:", err);
+        }
+
+        isListeningRef.current = false;
+        isSpeakingRef.current = true;
+        setBuddyState("speaking");
+        setIsSpeaking(true);
+        setIsRecording(false);
+
+        if (recognitionRef.current) {
+            recognitionRef.current.onend = null;
+            try { recognitionRef.current.stop(); } catch (_) {}
+        }
+
+        // Strip emojis to prevent speech synthesis from pronouncing them
+        const cleanedText = text
+            .replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
+            .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|\p{Emoji_Presentation}/gu, "")
+            .trim();
+
+        const utt = new SpeechSynthesisUtterance(cleanedText);
+        utteranceRef.current = utt;
+        utt.rate = 0.88;
+        utt.pitch = 1.15;
+
+        // Try to fetch google female or Samanth female voice
+        const voices = window.speechSynthesis.getVoices();
+        const voice =
+            voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
+            voices.find((v) => v.lang.startsWith("en") && /female/i.test(v.name)) ||
+            voices[0];
+        if (voice) utt.voice = voice;
+
+        const keepAliveInterval = setInterval(() => {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.pause();
+                window.speechSynthesis.resume();
+            }
+        }, 10000);
+
+        let fired = false;
+        let timeoutId: any = null;
+        const speakStartTime = Date.now();
+        const wordCount = cleanedText.split(/\s+/).length;
+        const estimatedDuration = (wordCount * 550) + 1500; // 550ms per word + 1.5s buffer
+
+        const cleanup = () => {
+            if (fired) return;
+            fired = true;
+            clearInterval(keepAliveInterval);
+            if (timeoutId) clearTimeout(timeoutId);
+
+            // If this is no longer the active utterance, discard the callback!
+            if (utteranceRef.current !== utt) {
+                return;
+            }
+
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            setBuddyState("silent");
+            utteranceRef.current = null;
+
+            // Call onEnd with a small safety delay to prevent mic picking up the end of speech
+            setTimeout(() => {
+                // Double check if another utterance has started in the meantime
+                if (utteranceRef.current === null || utteranceRef.current === utt) {
+                    onEnd?.();
+                }
+            }, 300);
+        };
+
+        utt.onend = cleanup;
+        utt.onerror = cleanup;
+
+        // Add 100ms delay to resolve the SpeechSynthesis hangs in Chrome
+        setTimeout(() => {
+            if (fired) return;
+            try {
+                window.speechSynthesis.speak(utt);
+                
+                const duration = Math.max(8000, (wordCount * 800) + 5000);
+                timeoutId = setTimeout(() => {
+                    cleanup();
+                }, duration);
+            } catch (err) {
+                cleanup();
+            }
+        }, 100);
+    }, []);
+
+    // Draw Waveform on Canvas
     const drawWaveform = () => {
         if (!canvasRef.current || !analyserRef.current) return;
         const canvas = canvasRef.current;
@@ -250,22 +459,15 @@ export default function InterviewPage({ params }: PageProps) {
             const height = canvas.height;
             ctx.clearRect(0, 0, width, height);
 
-            // Draw audio bars
             const barWidth = (width / bufferLength) * 2;
             let barHeight;
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                // Amplify visual effect slightly
                 barHeight = (dataArray[i] / 255) * height * 1.2;
-                
-                // Color matches premium cyan/blue gradient theme
-                ctx.fillStyle = `rgba(34, 211, 238, ${0.4 + (dataArray[i] / 255) * 0.6})`;
-                
-                // Draw symmetric from the center
+                ctx.fillStyle = `rgba(37, 99, 235, ${0.4 + (dataArray[i] / 255) * 0.6})`;
                 const y = (height - barHeight) / 2;
                 ctx.fillRect(x, y, barWidth - 1, barHeight);
-
                 x += barWidth;
             }
         };
@@ -273,174 +475,39 @@ export default function InterviewPage({ params }: PageProps) {
         draw();
     };
 
-    // ── Speak question whenever currentIdx changes ────────────────────────────
-    useEffect(() => {
-        if (phase !== "interview" || questions.length === 0) return;
-        
-        hasRepeatedCurrentRef.current = false; // Reset repeat flag for new question
-
-        let textToSpeak = questions[currentIdx].q;
-        const isMath = (subjectName || "").toLowerCase().includes("math");
-        if (isMath) {
-            textToSpeak = textToSpeak.trim().endsWith(".") 
-                ? `${textToSpeak} Please write down your step-by-step solution.` 
-                : `${textToSpeak}. Please write down your step-by-step solution.`;
-        }
-        if (currentIdx === 0) {
-            // Get greeting time of day (morning, afternoon, evening)
-            const hour = new Date().getHours();
-            let timeOfDay = "day";
-            if (hour < 12) timeOfDay = "morning";
-            else if (hour < 17) timeOfDay = "afternoon";
-            else timeOfDay = "evening";
-
-            const greeting = `Hi! Good ${timeOfDay}. Let's start with your ${subjectName || "Subject"}${chapterNumber ? `, Chapter - ${chapterNumber}` : ""}${chapterTitle ? `, ${chapterTitle}` : ""}. `;
-            textToSpeak = greeting + textToSpeak;
+    // Re-read current question verbally
+    function triggerRepeat() {
+        setTypedText("");
+        setLiveCaption("");
+        let repeatText = "";
+        if (phase === "comfort_conv") {
+            if (comfortIdx === 0) repeatText = `How are you today, ${studentName}?`;
+            else if (comfortIdx === 1) repeatText = "What did you enjoy doing today?";
+            else repeatText = "Ready to learn together?";
+        } else if (phase === "interview") {
+            repeatText = questions[currentIdx]?.q || "";
         }
 
-        // Speak question
-        speakText(textToSpeak, () => {
-            // Once Buddy finishes speaking, automatically open mic if mic is enabled
-            if (micEnabledRef.current) {
+        if (repeatText) {
+            speakText(repeatText, () => {
                 startSpeechRecognition();
-            }
-        });
-        
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentIdx, phase, questions.length, subjectName, chapterNumber, chapterTitle]);
-
-    // ── Text to speech (TTS) ──────────────────────────────────────────────────
-    const speakText = useCallback((text: string, onEnd?: () => void) => {
-        if (!window.speechSynthesis) {
-            onEnd?.();
-            return;
+            });
+        } else {
+            startSpeechRecognition();
         }
+    }
 
-        try {
-            window.speechSynthesis.resume();
-            window.speechSynthesis.cancel();
-        } catch (err) {
-            console.error("Error canceling speech synthesis:", err);
-        }
-
-        updateIsSpeaking(true);
-        setIsRecording(false);
-        if (recognitionRef.current) {
-            recognitionRef.current.onend = null;
-            try { recognitionRef.current.stop(); } catch (_) {}
-        }
-        
-        if (utteranceRef.current) {
-            utteranceRef.current.onstart = null;
-            utteranceRef.current.onend = null;
-            utteranceRef.current.onerror = null;
-        }
-
-        const utt = new SpeechSynthesisUtterance(text);
-        utteranceRef.current = utt;
-
-        utt.rate = 0.88;
-        utt.pitch = 1.15;
-        utt.volume = 1;
-        
-        const voices = window.speechSynthesis.getVoices();
-        const voice =
-            voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /female|woman/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en")) ||
-            voices[0];
-        if (voice) utt.voice = voice;
-
-        // Chrome bug: Speech synthesis stops speaking after 15 seconds.
-        // We call pause and resume periodically to keep it alive.
-        const resumeInterval = setInterval(() => {
-            if (window.speechSynthesis.speaking) {
-                window.speechSynthesis.pause();
-                window.speechSynthesis.resume();
-            }
-        }, 10000);
-
-        let fired = false;
-        let fallbackTimeout: any = null;
-        let onstartFired = false;
-        let onstartTimeout: any = null;
-
-        const onEndOnce = () => {
-            if (fired) return;
-            fired = true;
-            
-            // Clear callbacks immediately to prevent late-firing events
-            utt.onstart = null;
-            utt.onend = null;
-            utt.onerror = null;
-
-            if (onstartTimeout) clearTimeout(onstartTimeout);
-            if (fallbackTimeout) clearTimeout(fallbackTimeout);
-            clearInterval(resumeInterval);
-            updateIsSpeaking(false);
-            if (utteranceRef.current === utt) {
-                utteranceRef.current = null;
-            }
-            onEnd?.();
-        };
-
-        utt.onstart = () => {
-            onstartFired = true;
-            if (onstartTimeout) clearTimeout(onstartTimeout);
-            updateIsSpeaking(true);
-            setIsRecording(false);
-            if (recognitionRef.current) {
-                recognitionRef.current.onend = null;
-                try { recognitionRef.current.stop(); } catch (_) {}
-            }
-        };
-        utt.onend = () => {
-            onEndOnce();
-        };
-        utt.onerror = () => {
-            onEndOnce();
-        };
-
-        // Safety fallback timeout: estimate duration based on 150 words per minute (400ms per word) + 2.5s buffer
-        const wordCount = text.split(/\s+/).length;
-        const estimatedDurationMs = Math.max(3000, (wordCount * 450) + 2500);
-
-        fallbackTimeout = setTimeout(() => {
-            console.warn(`SpeechSynthesis fallback timeout triggered for text: "${text}". Moving ahead.`);
-            onEndOnce();
-        }, estimatedDurationMs);
-
-        onstartTimeout = setTimeout(() => {
-            if (!onstartFired) {
-                console.warn(`SpeechSynthesis failed to start within 1.5 seconds for text: "${text}". Bypassing speech synthesis.`);
-                onEndOnce();
-            }
-        }, 1500);
-
-        try {
-            window.speechSynthesis.speak(utt);
-        } catch (speakErr) {
-            console.error("SpeechSynthesis speak failed:", speakErr);
-            onEndOnce();
-        }
-    }, []);
-
-    // ── Add message to transcript state ──────────────────────────────────────
-    const addMsg = useCallback((role: "ai" | "student", text: string, category?: string) => {
-        setTranscript((prev) => [...prev, { role, text, question_category: category }]);
-    }, []);
-
-    // ── Start STT Speech Recognition ─────────────────────────────────────────
-    const startSpeechRecognition = () => {
-        if (isSpeakingRef.current || isSubmittingRef.current || !micEnabledRef.current) return;
+    // Start Speech recognition
+    function startSpeechRecognition() {
+        if (isSpeakingRef.current || isSubmitting || !micEnabled || isOffline) return;
 
         const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SR) {
-            setError("Speech recognition is not supported in this browser. Please type your answers using the keyboard button below.");
+            setError("Speech recognition is not supported in this browser. Please use the keyboard option.");
             return;
         }
+
+        isListeningRef.current = true;
 
         if (recognitionRef.current) {
             try { recognitionRef.current.stop(); } catch (_) {}
@@ -449,1142 +516,1411 @@ export default function InterviewPage({ params }: PageProps) {
         const rec = new SR();
         rec.lang = "en-US";
         rec.interimResults = true;
-        rec.continuous = true; // Continuous listening so pauses don't cut off the user
-        rec.maxAlternatives = 1;
+        rec.continuous = true;
 
         rec.onstart = () => {
             setIsRecording(true);
+            setBuddyState("listening");
             setLiveCaption("Listening...");
+            resetSilenceTimers();
         };
 
         rec.onresult = (e: any) => {
+            if (!isListeningRef.current || isSpeakingRef.current) {
+                return;
+            }
             let interimTranscript = "";
             let finalTranscript = "";
+            let lastConfidence = 1.0;
             for (let i = 0; i < e.results.length; ++i) {
-                const text = e.results[i][0].transcript;
+                const res = e.results[i][0];
+                const txt = res.transcript;
+                if (res.confidence !== undefined) {
+                    lastConfidence = res.confidence;
+                }
                 if (e.results[i].isFinal) {
-                    finalTranscript += text + " ";
+                    finalTranscript += txt + " ";
                 } else {
-                    interimTranscript += text;
+                    interimTranscript += txt;
                 }
             }
+            speechConfidenceRef.current = lastConfidence;
             const currentSpeech = (finalTranscript + interimTranscript).trim();
             setLiveCaption(currentSpeech);
             setTypedText(currentSpeech);
 
-            if (currentSpeech.length > 0) {
-                silenceCountRef.current = 0;
-                setError("");
-            }
-
-            // Repeat question detection: check if student asks to repeat
             const lowerSpeech = currentSpeech.toLowerCase().trim();
-            const repeatTriggers = [
-                "repeat the question",
-                "repeat please",
-                "can you repeat",
-                "say that again",
-                "say again",
-                "speak again",
-                "repeat question",
-                "what was the question",
-                "pardon me",
-                "didn't hear you",
-                "did not hear"
-            ];
-            const isRepeatRequest = lowerSpeech === "repeat" || repeatTriggers.some(trigger => lowerSpeech.includes(trigger));
-
-            if (isRepeatRequest && !hasRepeatedCurrentRef.current) {
-                console.log("Repeat request detected. Repeating current question...");
-                hasRepeatedCurrentRef.current = true;
-                if (silenceTimeoutRef.current) {
-                    clearTimeout(silenceTimeoutRef.current);
-                }
+            if (
+                lowerSpeech === "repeat" || 
+                lowerSpeech === "repeat the question" || 
+                lowerSpeech === "can you repeat" || 
+                lowerSpeech === "please repeat" ||
+                lowerSpeech === "can you repeat the question" ||
+                lowerSpeech === "repeat please" ||
+                lowerSpeech === "could you repeat the question"
+            ) {
+                clearSilenceTimers();
+                isListeningRef.current = false;
                 if (recognitionRef.current) {
                     recognitionRef.current.onend = null;
-                    recognitionRef.current.onresult = null;
                     try { recognitionRef.current.stop(); } catch (_) {}
                 }
                 setIsRecording(false);
-                setLiveCaption("");
-                setTypedText("");
-
-                let qText = questions[currentIdx].q;
-                const isMath = (subjectName || "").toLowerCase().includes("math");
-                if (isMath) {
-                    qText = qText.trim().endsWith(".") 
-                        ? `${qText} Please write down your step-by-step solution.` 
-                        : `${qText}. Please write down your step-by-step solution.`;
-                }
-                const repeatPrompt = `Sure, let me repeat that. ${qText}`;
-                speakText(repeatPrompt, () => {
-                    if (micEnabledRef.current) {
-                        startSpeechRecognition();
-                    }
-                });
+                triggerRepeat();
                 return;
             }
 
-            // Auto-next silence detection: submit after 4.5 seconds of silence
             if (currentSpeech.length > 0) {
-                if (silenceTimeoutRef.current) {
-                    clearTimeout(silenceTimeoutRef.current);
-                }
-                silenceTimeoutRef.current = setTimeout(() => {
-                    console.log("Silence detected. Auto-submitting response:", currentSpeech);
-                    if (recognitionRef.current) {
-                        recognitionRef.current.onend = null;
-                        recognitionRef.current.onresult = null;
-                        try { recognitionRef.current.stop(); } catch (_) {}
-                    }
-                    setIsRecording(false);
-                    setLiveCaption("");
-                    if (submitRef.current) {
-                        submitRef.current(currentSpeech);
-                    }
-                }, 4500); // 4.5 seconds of silence
+                setError(null);
+                resetSilenceTimers(currentSpeech); // Reset timers since student is actively talking
             }
         };
 
         rec.onerror = (err: any) => {
-            if (err.error === "not-allowed") {
-                console.error("Speech recognition permission denied:", err.error);
-                setError("Microphone permission denied. Please click the camera/mic icon in your address bar to allow microphone access, or use the keyboard fallback.");
-            } else if (err.error === "audio-capture") {
-                console.error("Speech recognition audio capture failed:", err.error);
-                setError("No microphone detected or microphone is busy. Please connect a mic or use the keyboard fallback.");
-            } else if (err.error === "no-speech") {
-                console.log("Speech recognition info: no-speech (user is silent)");
-                silenceCountRef.current += 1;
-                if (silenceCountRef.current >= 3) {
-                    setError("We are having trouble hearing you. Please check if your system microphone is muted or set incorrectly in System Settings, or use the keyboard fallback.");
-                }
-            } else if (err.error === "network") {
-                console.error("Speech recognition network error:", err.error);
-                setError("Speech recognition service connection error. Please verify your internet connection or use the keyboard fallback.");
-            } else {
-                console.error("Speech recognition error:", err.error);
+            if (err.error === "aborted" || err.error === "no-speech") {
+                return; // Suppress aborted error console spam when stop() is called programmatically
             }
-            setIsRecording(false);
+            console.error("Speech recognition error:", err.error);
         };
 
         rec.onend = () => {
             setIsRecording(false);
-            // Auto-restart if mic is enabled, and we aren't speaking or submitting
-            if (micEnabledRef.current && !isSpeakingRef.current && !isSubmittingRef.current) {
-                setTimeout(() => {
-                    // Double check values using refs to ensure state hasn't changed during the delay
-                    if (micEnabledRef.current && !isSpeakingRef.current && !isSubmittingRef.current) {
-                        try { rec.start(); } catch (_) {}
-                    }
-                }, 300);
+            if (isListeningRef.current) {
+                setBuddyState("silent");
+                // Auto restart if mic is enabled and we are not speaking
+                const isSessionActive = phase === "interview" || phase === "comfort_conv";
+                if (micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && isSessionActive) {
+                    setTimeout(() => {
+                        const stillActive = phase === "interview" || phase === "comfort_conv";
+                        if (isListeningRef.current && micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && stillActive) {
+                            try { rec.start(); } catch (_) {}
+                        }
+                    }, 400);
+                }
             }
         };
 
         recognitionRef.current = rec;
         try {
             rec.start();
-        } catch (startErr) {
-            console.error("Failed to start SpeechRecognition:", startErr);
+        } catch (_) {}
+    };
+
+    // Silence timers logic
+    const resetSilenceTimers = (latestSpeech: string = "") => {
+        clearSilenceTimers();
+        if (phase !== "interview" && phase !== "comfort_conv") return;
+
+        const speechToUse = latestSpeech || textRef.current;
+
+        // 6 seconds silence warning
+        silenceTimeoutRef.current = setTimeout(() => {
+            if (speechToUse.length === 0 && isListeningRef.current && !isOffline) {
+                speakText("Take your time. I'm listening 😊", () => {
+                    startSpeechRecognition();
+                });
+            }
+        }, 6000);
+
+        // 12 seconds silence repeat offer
+        repeatTimeoutRef.current = setTimeout(() => {
+            if (speechToUse.length === 0 && isListeningRef.current && !isOffline) {
+                speakText("Would you like me to repeat the question?", () => {
+                    startSpeechRecognition();
+                });
+            }
+        }, 12000);
+
+        // If student has spoken something, auto-submit after 4 seconds of silence
+        if (speechToUse.length > 0 && isListeningRef.current && !isOffline) {
+            silenceTimeoutRef.current = setTimeout(() => {
+                if (textRef.current.length > 0 && isListeningRef.current && !isOffline) {
+                    console.log("[Silence Detection] Auto-submitting due to student silence after response.");
+                    if (phase === "comfort_conv") {
+                        handleComfortSubmit();
+                    } else {
+                        handleAnswerSubmit();
+                    }
+                }
+            }, 4000);
         }
     };
 
-    // ── Submit Answer ────────────────────────────────────────────────────────
-    const handleSubmitAnswer = useCallback((overrideText?: string) => {
-        const text = (overrideText ?? typedText).trim();
-        if (!text || questions.length === 0) return;
-
-        silenceCountRef.current = 0;
-
-        // Clear silence timeout
-        if (silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
-        }
-
-        // Turn off keyboard input overlay if it was open
-        setShowKeyboardInput(false);
-
-        // Turn off active mic
-        if (recognitionRef.current) {
-            recognitionRef.current.onend = null;
-            recognitionRef.current.onresult = null;
-            try { recognitionRef.current.stop(); } catch (_) {}
-        }
-
-        const q = questions[currentIdx];
-        addMsg("student", text, q.category);
-        setTypedText("");
-
-        const newAnswers: AnswerEntry[] = [
-            ...answers,
-            { question_category: q.category, question: q.q, answer: text },
-        ];
-        setAnswers(newAnswers);
-
-        const isLast = currentIdx === questions.length - 1;
-
-        if (isLast) {
-            updateIsSubmitting(true);
-            const goodbye = `Thank you, ${studentName}. You have completed all the questions. Your responses have been saved and submitted.`;
-            addMsg("ai", goodbye);
-
-            const finalTranscript: TranscriptEntry[] = [
-                ...transcript,
-                { role: "student", text, question_category: q.category },
-                { role: "ai", text: goodbye }
-            ];
-
-            speakText(goodbye, () => submitInterview(newAnswers, finalTranscript));
-        } else {
-            const cheer = CHEERS[currentIdx % CHEERS.length];
-            addMsg("ai", cheer);
-            speakText(cheer, () => {
-                const next = currentIdx + 1;
-                setCurrentIdx(next);
-                addMsg("ai", questions[next].q, questions[next].category);
-            });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [typedText, answers, currentIdx, questions, studentName, transcript]);
-
-    // Keep submitRef updated with latest handleSubmitAnswer to prevent stale closure bugs
-    useEffect(() => {
-        submitRef.current = handleSubmitAnswer;
-    }, [handleSubmitAnswer]);
-
-    // ── Submit to Backend ────────────────────────────────────────────────────
-    const submitInterview = async (finalAnswers: AnswerEntry[], finalTranscript: TranscriptEntry[]) => {
-        setPhase("generating");
-        updateIsSubmitting(true);
-
-        // Stop all camera and mic tracks
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-
+    // Advance comfort dialog
+    function handleComfortSubmit() {
         try {
-            const report = await interviewService.submit({
-                interview_id: parseInt(interviewId, 10),
-                transcript: finalTranscript,
-                answers: finalAnswers,
-            });
-            sessionStorage.setItem(`interview_report_${report.id}`, JSON.stringify(report));
-            router.push(`/interview/${report.id}/result`);
-        } catch (e: any) {
-            setError("Failed to submit assessment. Please try again.");
-            setPhase("interview");
-            updateIsSubmitting(false);
+            clearSilenceTimers();
+            const responseText = typedText.trim() || "(silent)";
+            setTypedText("");
+            setLiveCaption("");
+            setActiveHint(null);
+
+            isListeningRef.current = false;
+            if (recognitionRef.current) {
+                recognitionRef.current.onend = null;
+                try { recognitionRef.current.stop(); } catch (_) {}
+            }
+
+            // Persist student's comfort response
+            recordTurn("student", responseText, "Comfort Conversation", speechConfidenceRef.current);
+
+            // Show thinking animation for 1s
+            setBuddyState("thinking");
+            setTimeout(() => {
+                if (comfortIdx === 0) {
+                    setComfortIdx(1);
+                    const nextQ = "What did you enjoy doing today?";
+                    speakText(nextQ, () => {
+                        startSpeechRecognition();
+                    });
+                    recordTurn("ai", nextQ, "Comfort Conversation");
+                    saveSessionProgress(currentIdx, "comfort_conv", 1, answers);
+                } else if (comfortIdx === 1) {
+                    setComfortIdx(2);
+                    const nextQ = "Ready to learn together?";
+                    speakText(nextQ, () => {
+                        startSpeechRecognition();
+                    });
+                    recordTurn("ai", nextQ, "Comfort Conversation");
+                    saveSessionProgress(currentIdx, "comfort_conv", 2, answers);
+                } else {
+                    // Transition phase (Step 5)
+                    setPhase("transition");
+                    setBuddyState("waving");
+                    const transitionSpeech = `Great! Now let's talk about ${chapterTitle || subjectName || "Fractions"}.`;
+                    speakText(transitionSpeech, () => {
+                        setPhase("interview");
+                        setCurrentIdx(0);
+                        const firstQ = questions[0] || { q: "Let's begin!", category: "General" };
+                        setTranscript([{ role: "ai", text: firstQ.q }]);
+                        
+                        const firstQText = firstQ.q;
+                        speakText(firstQText, () => {
+                            startSpeechRecognition();
+                        });
+                        recordTurn("ai", firstQText, firstQ.category);
+                        saveSessionProgress(0, "interview", comfortIdx, answers);
+                    });
+                    recordTurn("ai", transitionSpeech, "Transition");
+                }
+            }, 1000);
+        } catch (err) {
+            console.error("[InterviewPage] Exception in handleComfortSubmit:", err);
+            setError("An unexpected error occurred. Please try again.");
         }
     };
 
-    // ── Call Toggles ─────────────────────────────────────────────────────────
-    const toggleCamera = () => {
-        if (!stream) return;
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) {
-            videoTrack.enabled = !videoTrack.enabled;
-            setCameraEnabled(videoTrack.enabled);
-        }
-    };
-
-    const toggleMic = () => {
-        if (!stream) return;
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-            audioTrack.enabled = !audioTrack.enabled;
-            updateMicEnabled(audioTrack.enabled);
-
-            // Stop/Start recognition accordingly
-            if (!audioTrack.enabled) {
-                if (silenceTimeoutRef.current) {
-                    clearTimeout(silenceTimeoutRef.current);
+    // Request permissions
+    const requestPermission = async (type: "mic" | "camera") => {
+        if (type === "mic") {
+            try {
+                setMicStatus("idle");
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                setMicStatus("granted");
+                setMicEnabled(true);
+                
+                // Set audio track into local stream
+                if (stream) {
+                    stream.addTrack(audioStream.getAudioTracks()[0]);
+                } else {
+                    setStream(audioStream);
                 }
-                if (recognitionRef.current) {
-                    recognitionRef.current.onend = null;
-                    try { recognitionRef.current.stop(); } catch (_) {}
+
+                // Web Audio API Visualizer Setup
+                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                const audioCtx = new AudioContextClass();
+                audioContextRef.current = audioCtx;
+
+                const source = audioCtx.createMediaStreamSource(audioStream);
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+                analyserRef.current = analyser;
+                source.connect(analyser);
+
+                setTimeout(() => {
+                    drawWaveform();
+                }, 100);
+
+                if (questions.length === 0) {
+                    setError("Session data is empty. Please verify your invitation link.");
+                    return;
                 }
-                setIsRecording(false);
-            } else if (!isSpeaking && !isSubmitting) {
-                startSpeechRecognition();
+
+                // If camera is already granted or not needed, advance
+                const readyText = `Awesome! Everything is ready. Let's start working on the assessment questions.`;
+                speakText(readyText, () => {
+                    setPhase("interview");
+                    setCurrentIdx(0);
+                    setTranscript([{ role: "ai", text: questions[0]?.q || "" }]);
+                    
+                    const firstQText = questions[0]?.q || "Let's begin!";
+                    speakText(firstQText, () => {
+                        startSpeechRecognition();
+                    });
+                    recordTurn("ai", firstQText, questions[0]?.category);
+                });
+                recordTurn("ai", readyText, "Device Setup");
+            } catch (_) {
+                setMicStatus("denied");
+                setMicEnabled(false);
+                setError("Microphone is required. Please check your browser bar.");
+            }
+        } else {
+            try {
+                setCameraStatus("idle");
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                setCameraStatus("granted");
+                setCameraEnabled(true);
+
+                if (stream) {
+                    stream.addTrack(videoStream.getVideoTracks()[0]);
+                    // Re-trigger srcObject assignment immediately
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                    }
+                } else {
+                    setStream(videoStream);
+                }
+            } catch (_) {
+                setCameraStatus("denied");
+                setCameraEnabled(false);
             }
         }
     };
 
-    const handleManualNext = useCallback(() => {
-        if (isSpeaking || isSubmitting) return;
+    // Submit individual question answers
+    function handleAnswerSubmit() {
+        try {
+            if (questions.length === 0) {
+                console.error("[InterviewPage] questions list is empty inside handleAnswerSubmit!");
+                setError("No questions loaded. Please restart the session.");
+                return;
+            }
+            clearSilenceTimers();
+            const text = textRef.current.trim();
+            setTypedText("");
+            setLiveCaption("");
+            setActiveHint(null);
+
+            isListeningRef.current = false;
+            if (recognitionRef.current) {
+                recognitionRef.current.onend = null;
+                try { recognitionRef.current.stop(); } catch (_) {}
+            }
+
+            if (!text) {
+                const nextRetry = silenceRetryCount + 1;
+                setSilenceRetryCount(nextRetry);
+
+                if (nextRetry >= 3) {
+                    setSilenceRetryCount(0);
+                    speakText("I'm having a bit of trouble hearing you. Let's try typing the answer instead!", () => {
+                        setShowKeyboardInput(true);
+                    });
+                } else {
+                    // Speech not recognized fallback (Step 12)
+                    speakText("Oops. I couldn't hear you clearly. Can you try once more?", () => {
+                        startSpeechRecognition();
+                    });
+                }
+                return;
+            }
+
+            setSilenceRetryCount(0);
+
+            const activeCurrentIdx = currentIdxRef.current;
+            const activeComfortIdx = comfortIdxRef.current;
+            const activeTranscript = transcriptRef.current;
+            const activeAnswers = answersRef.current;
+
+            const q = questions[activeCurrentIdx] || questions[0] || { category: "General", q: "Question", id: undefined };
+            
+            // Persist student turn
+            recordTurn("student", text, q.category, speechConfidenceRef.current, q.id);
+
+            // Setup transcript items
+            const newTranscript: TranscriptEntry[] = [
+                ...activeTranscript,
+                { role: "student", text, question_category: q.category }
+            ];
+            setTranscript(newTranscript);
+
+            const newAnswers: AnswerEntry[] = [
+                ...activeAnswers,
+                { question_category: q.category, question: q.q, answer: text }
+            ];
+            setAnswers(newAnswers);
+
+            // Save progressive state immediately
+            saveSessionProgress(activeCurrentIdx, "interview", activeComfortIdx, newAnswers);
+
+            // Transition: Thinking Bubble (Step 10)
+            setBuddyState("thinking");
+
+            setTimeout(() => {
+                const isLast = activeCurrentIdx >= questions.length - 1;
+                
+                if (isLast) {
+                    // Submit interview to backend
+                    submitSession(newAnswers, newTranscript);
+                } else {
+                    // Select a random, non-repeating encouragement
+                    let phrase = "";
+                    let updatedPool = [...unusedEncouragementsRef.current];
+                    if (updatedPool.length === 0) {
+                        updatedPool = [...ENCOURAGEMENTS];
+                    }
+                    const randIndex = Math.floor(Math.random() * updatedPool.length);
+                    phrase = updatedPool[randIndex] || "Great job!";
+                    updatedPool.splice(randIndex, 1);
+                    setUnusedEncouragements(updatedPool);
+
+                    const next = activeCurrentIdx + 1;
+                    const nextQ = questions[next] || { q: "Let's continue.", category: "General" };
+                    const nextQText = nextQ.q;
+                    
+                    // Add AI next prompt
+                    setTranscript([
+                        ...newTranscript,
+                        { role: "ai", text: nextQText, question_category: nextQ.category }
+                    ]);
+                    
+                    setCurrentIdx(next);
+                    
+                    // Speak encouragement first, then the next question
+                    const promptSpeech = `${phrase}. Let's look at the next one. ${nextQText}`;
+                    speakText(promptSpeech, () => {
+                        startSpeechRecognition();
+                    });
+                    recordTurn("ai", promptSpeech, nextQ.category);
+                    saveSessionProgress(next, "interview", activeComfortIdx, newAnswers);
+                }
+            }, 1500);
+        } catch (err) {
+            console.error("[InterviewPage] Exception in handleAnswerSubmit:", err);
+            setError("An unexpected error occurred. Please try again.");
+        }
+    };
+
+    // Finalize session submission
+    const submitSession = async (finalAnswers: AnswerEntry[], finalTranscript: TranscriptEntry[]) => {
+        // Transition student to completion page immediately (0 seconds wait)
+        setPhase("completed");
+        setBuddyState("completed");
+        triggerConfetti();
         
-        // Clear silence timeout
-        if (silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
+        // Record final turnaround turn
+        const completionText = `Thank you ${studentName}! I loved talking with you. Your teacher will now understand how you're learning and help you even more. See you soon!`;
+        recordTurn("ai", completionText, "Completion");
+
+        if (stream) {
+            stream.getTracks().forEach((t) => t.stop());
         }
 
-        // Stop recognition
-        if (recognitionRef.current) {
-            recognitionRef.current.onend = null;
-            recognitionRef.current.onresult = null;
-            try { recognitionRef.current.stop(); } catch (_) {}
-        }
-        setIsRecording(false);
+        try {
+            // Save progressive state as completed
+            saveSessionProgress(currentIdx, "interview", comfortIdx, finalAnswers, true);
 
-        // Submit the answer
-        handleSubmitAnswer(typedText);
+            // Fire-and-forget background queue trigger
+            interviewService.submit({
+                interview_id: parseInt(interviewId, 10),
+                transcript: finalTranscript,
+                answers: finalAnswers,
+            }).then((report) => {
+                sessionStorage.setItem(`interview_report_${report.id}`, JSON.stringify(report));
+            }).catch((err) => {
+                console.error("Async evaluation pipeline trigger failed:", err);
+            });
+        } catch (err) {
+            console.error("Failed to submit session to backend:", err);
+        }
+    };
+
+    // Confetti simulation trigger
+    const triggerConfetti = () => {
+        setTimeout(() => {
+            const canvas = confettiCanvasRef.current;
+            if (!canvas) return;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+
+            const colors = ["#2563EB", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"];
+            const particles = Array.from({ length: 110 }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 4,
+                d: Math.random() * canvas.height,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                tilt: Math.random() * 10 - 5,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+                tiltAngle: 0
+            }));
+
+            let animationId: number;
+            const draw = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p) => {
+                    p.tiltAngle += p.tiltAngleIncremental;
+                    p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+                    p.x += Math.sin(p.tiltAngle);
+                    p.tilt = Math.sin(p.tiltAngle - p.r / 2) * 8;
+
+                    ctx.beginPath();
+                    ctx.lineWidth = p.r / 2;
+                    ctx.strokeStyle = p.color;
+                    ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+                    ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                    ctx.stroke();
+                });
+                animationId = requestAnimationFrame(draw);
+            };
+            draw();
+
+            return () => cancelAnimationFrame(animationId);
+        }, 100);
+    };
+
+    // Trigger help/hints (Step 7)
+    const triggerHint = () => {
+        setTypedText("");
         setLiveCaption("");
-    }, [isSpeaking, isSubmitting, handleSubmitAnswer, typedText]);
+        const hintText = questions[currentIdx]?.hint || "Think about what fractions represent: equal pieces of a whole shape.";
+        const fullHint = `Let's think together! ${hintText}`;
+        setActiveHint(fullHint);
+        speakText(fullHint, () => {
+            setActiveHint(null);
+            startSpeechRecognition();
+        });
+    };
 
-    // ── Screen rendering branches ────────────────────────────────────────────
+    // Return to main app dashboard
+    const handleReturnHome = () => {
+        router.push("/");
+    };
 
-    if (phase === "loading") {
+    // Render speech bubbles
+    const getBuddySpeechText = () => {
+        if (phase === "meet_buddy") {
+            return `Hi ${studentName}! I'm Buddy 😊 Today we'll chat together about something you recently learned. Don't worry. There are no marks or difficult exams. Just answer naturally. I'm excited to meet you!`;
+        }
+        if (phase === "device_setup") {
+            return "Buddy loves listening! Please allow your microphone so we can talk together. Camera is optional.";
+        }
+        if (phase === "comfort_conv") {
+            if (comfortIdx === 0) return `How are you today, ${studentName}?`;
+            if (comfortIdx === 1) return "What did you enjoy doing today?";
+            return "Ready to learn together?";
+        }
+        if (phase === "transition") {
+            return `Great! Now let's talk about ${chapterTitle || subjectName || "Fractions"}.`;
+        }
+        if (phase === "interview") {
+            if (buddyState === "thinking") return "Hmm... Let me think...";
+            if (activeHint) return activeHint;
+            return questions[currentIdx]?.q || "Let's begin!";
+        }
+        if (phase === "generating") {
+            return "Thinking... saving our conversation...";
+        }
+        if (phase === "completed") {
+            return `🎉 Thank you ${studentName}! I loved talking with you. Your teacher will now understand how you're learning and help you even more. See you soon! 👋`;
+        }
+        return "";
+    };
+
+    // Render Visual Progress growing path (Step 9)
+    const renderVisualProgress = () => {
+        if (phase !== "interview" || questions.length === 0) return null;
+        const pct = (currentIdx / (questions.length - 1)) * 100;
+        
         return (
-            <div style={s.centerScreen}>
-                <div className="spinner" style={{ marginBottom: "1.5rem" }} />
-                <h3 style={{ fontFamily: "var(--font-heading)" }}>Connecting call...</h3>
-                <p style={{ color: "var(--text-secondary)" }}>Setting up secure virtual room.</p>
-            </div>
-        );
-    }
+            <div style={styles.pathOuter}>
+                <div style={styles.pathLineBg} />
+                <div style={{ ...styles.pathLineFill, width: `${pct}%` }} />
+                
+                <div style={{ ...styles.pathNode, left: "5%" }} title="Home">🏡</div>
+                <div style={{ ...styles.pathNode, left: "35%" }} title="Tree">🌳</div>
+                <div style={{ ...styles.pathNode, left: "65%" }} title="Flower">🌼</div>
+                <div style={{ ...styles.pathNode, left: "95%" }} title="School">🏫</div>
 
-    if (phase === "lobby") {
-        return (
-            <div style={s.centerScreen}>
-                <div style={s.lobbyCard} className="glass-panel animate-fade-in">
-                    <div style={s.lobbyAvatarCircle}>
-                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
-                            <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
-                            <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-                            <path d="M21.5 12v6" />
-                        </svg>
-                    </div>
-                    <h2 style={s.lobbyTitle}>Classroom Assessment</h2>
-                    <p style={s.lobbySubtitle}>
-                        Hi <strong style={{ color: "var(--primary)" }}>{studentName}</strong>, your assessment is ready to begin for <span style={{ color: "var(--primary)" }}>{subjectName || "your assessment"}</span>{chapterNumber ? ` (Chapter - ${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ""})` : ""}!
-                    </p>
-                    <div style={s.lobbyInstructions}>
-                        <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "var(--text-primary)" }}>Tips before you start:</p>
-                        <ul style={{ paddingLeft: "1.2rem", margin: 0, textAlign: "left", fontSize: "0.9rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                            <li>Make sure you are in a quiet room.</li>
-                            <li>Each question will be read aloud. Listen carefully!</li>
-                            <li>Speak clearly into your microphone when you answer.</li>
-                        </ul>
-                    </div>
-                    <button
-                        onClick={() => {
-                            // Unlock SpeechSynthesis synchronously within user gesture
-                            if (typeof window !== "undefined" && window.speechSynthesis) {
-                                try {
-                                    const unlockUtt = new SpeechSynthesisUtterance("");
-                                    window.speechSynthesis.speak(unlockUtt);
-                                } catch (e) {
-                                    console.warn("Failed to unlock speech synthesis:", e);
-                                }
-                            }
-                            setPhase("interview");
-                        }}
-                        style={s.lobbyStartBtn}
-                        className="interactive-element"
-                    >
-                        Start Assessment
-                    </button>
+                {/* Animated walking Buddy dot representation */}
+                <div style={{ ...styles.pathBuddyWalker, left: `calc(${pct}% - 14px)` }}>
+                    <div style={styles.pathBuddyDot} />
                 </div>
             </div>
         );
-    }
-
-    if (phase === "generating") {
-        return (
-            <div style={s.centerScreen}>
-                <div style={s.callConnectingRipple}>
-                    <div style={s.rippleCircle}></div>
-                    <div style={s.rippleCenter}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                    </div>
-                </div>
-                <h3 style={{ fontFamily: "var(--font-heading)", marginTop: "2rem", marginBottom: "0.5rem" }}>
-                    Submitting your assessment...
-                </h3>
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>
-                    Please wait while your answers are being processed and saved.
-                </p>
-            </div>
-        );
-    }
-
-    if (error && questions.length === 0) {
-        return (
-            <div style={s.centerScreen}>
-                <div style={s.errorBadge}>✕</div>
-                <p style={{ color: "var(--danger)", margin: "1rem 0" }}>{error}</p>
-                <button onClick={() => router.push("/")} style={s.btnControlClose}>
-                    Return to Portal
-                </button>
-            </div>
-        );
-    }
-
-    const currentQ = questions[currentIdx];
+    };
 
     return (
-        <div style={s.pageContainer}>
-            {/* Header / Room Status */}
-            <div style={s.roomHeader}>
-                <div style={s.logoArea}>
-                    <span style={s.callIndicatorPulse}></span>
-                    <span style={s.logoText}>Oral Assessment Room</span>
-                </div>
-                <div style={s.progressChip}>
-                    Question {currentIdx + 1} of {questions.length}
-                </div>
-            </div>
+        <div style={styles.appStage}>
+            {/* Embedded CSS Animations */}
+            <style>{`
+                @keyframes scaleGlow {
+                    0%, 100% { transform: scale(1); opacity: 0.25; }
+                    50% { transform: scale(1.15); opacity: 0.55; }
+                }
+                @keyframes mouthTalk {
+                    0%, 100% { transform: scaleY(1); }
+                    50% { transform: scaleY(0.2); }
+                }
+                @keyframes pupilBlink {
+                    0%, 90%, 100% { transform: scaleY(1); }
+                    95% { transform: scaleY(0.1); }
+                }
+                @keyframes floatCard {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-6px); }
+                }
+                @keyframes armWave {
+                    0%, 100% { transform: rotate(0deg); }
+                    50% { transform: rotate(-20deg); }
+                }
+                @keyframes pulseDot {
+                    0%, 100% { opacity: 0.3; }
+                    50% { opacity: 1; }
+                }
+            `}</style>
 
-            {/* Main Stage Grid */}
-            <div style={s.callGrid} className="interview-call-grid">
-                {/* AI Panel (Large View) */}
-                <div style={s.aiVideoPanel} className="interview-ai-video-panel">
-                    <div style={s.aiFaceContainer}>
-                        {/* Glowing backdrop rings */}
-                        <div style={{
-                            ...s.avatarGlowRing,
-                            ...(isSpeaking ? s.ringSpeakingPulse : {})
-                        }} />
-                        <div style={s.aiAvatarCircle}>
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary)" }}>
-                                <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
-                                <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-                                <path d="M21.5 12v6" />
+            {/* Confetti canvas overlay */}
+            {phase === "completed" && (
+                <canvas ref={confettiCanvasRef} style={styles.confettiOverlay} />
+            )}
+
+            {/* Offline Alert Cover */}
+            {isOffline && (
+                <div style={styles.offlineBoxCover}>
+                    <div style={styles.offlineInnerCard}>
+                        <span style={styles.offlineIcon}>📶</span>
+                        <h3 style={styles.offlineTitle}>Internet break...</h3>
+                        <p style={styles.offlineText}>
+                            Looks like our internet is taking a short break. Don't worry, we will continue exactly where we stopped.
+                        </p>
+                        <div className="spinner" style={{ margin: "1.5rem auto 0 auto" }} />
+                    </div>
+                </div>
+            )}
+
+            {/* Main Stage Grid Container */}
+            <div style={styles.stageGrid}>
+                {/* Visual Progress Bar (Step 9) */}
+                {renderVisualProgress()}
+
+                {/* Buddy & Speech bubble Section or Split Layout depending on phase */}
+                {phase === "interview" ? (
+                    <div style={styles.splitGrid}>
+                        {/* Left Panel: Bot */}
+                        <div style={styles.panelCard}>
+                            {/* Speech bubble */}
+                            <div style={{ textAlign: "center", width: "100%" }}>
+                                <p style={styles.speechText} className={isHindi ? "font-hindi" : ""}>
+                                    {getBuddySpeechText()}
+                                </p>
+                                {buddyState === "thinking" && (
+                                    <div style={styles.thinkDotRow}>
+                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite" }} />
+                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite 0.2s" }} />
+                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite 0.4s" }} />
+                                    </div>
+                                )}
+                                {liveCaption && isRecording && (
+                                    <p style={styles.liveCaptionText}>&ldquo;{liveCaption}&rdquo;</p>
+                                )}
+                            </div>
+
+                            {/* Buddy avatar SVG container */}
+                            <div style={styles.avatarBox}>
+                                {isSpeaking && (
+                                    <div style={{ ...styles.glowRing, animation: "scaleGlow 1.8s infinite" }} />
+                                )}
+                                {isRecording && (
+                                    <div style={{ ...styles.glowRing, animation: "scaleGlow 1.4s infinite", borderColor: "#10B981" }} />
+                                )}
+
+                                <svg width="150" height="150" viewBox="0 0 100 100" style={styles.buddySvgMain}>
+                                    {/* Head/Face base */}
+                                    <circle cx="50" cy="55" r="26" fill="#BFDBFE" stroke="#2563EB" strokeWidth="2.5" />
+                                    
+                                    {/* Graduation Cap */}
+                                    <path d="M22 38 L50 24 L78 38 L50 52 Z" fill="#1E3A8A" stroke="#1E40AF" strokeWidth="2" />
+                                    <rect x="47" y="38" width="6" height="15" fill="#1E3A8A" />
+                                    <circle cx="50" cy="53" r="3.5" fill="#F59E0B" />
+                                    <path d="M70 38 L78 48 L78 53" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" />
+                                    <circle cx="78" cy="54" r="2" fill="#F59E0B" />
+
+                                    {/* Eyes (Blinking animation) */}
+                                    <g style={{ transformOrigin: "50% 53%", animation: "pupilBlink 6s infinite" }}>
+                                        <ellipse cx="42" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                                        <ellipse cx="58" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                                    </g>
+
+                                    {/* Cheeks */}
+                                    <circle cx="36" cy="59" r="3" fill="#F87171" opacity="0.65" />
+                                    <circle cx="64" cy="59" r="3" fill="#F87171" opacity="0.65" />
+
+                                    {/* Mouth (Talking animation) */}
+                                    {isSpeaking ? (
+                                        <ellipse cx="50" cy="62" rx="3.5" ry="4.5" fill="#1E3A8A" style={{ transformOrigin: "50% 62%", animation: "mouthTalk 0.5s infinite" }} />
+                                    ) : (
+                                        <path d="M45 61 Q50 67 55 61" fill="none" stroke="#1E3A8A" strokeWidth="2.5" strokeLinecap="round" />
+                                    )}
+
+                                    {/* Arm (Waving animation) */}
+                                    {buddyState === "waving" || buddyState === "completed" ? (
+                                        <path d="M24 64 C20 60 14 62 16 68 L24 72" fill="none" stroke="#2563EB" strokeWidth="3.5" strokeLinecap="round"
+                                              style={{ transformOrigin: "24px 68px", animation: "armWave 1s infinite ease" }} />
+                                    ) : null}
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Right Panel: Student camera / Waveform */}
+                        <div style={styles.panelCard}>
+                            {cameraEnabled ? (
+                                <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px", border: "1px solid #E5E7EB" }} />
+                            ) : (
+                                <div style={{
+                                    width: "120px",
+                                    height: "120px",
+                                    borderRadius: "50%",
+                                    backgroundColor: "var(--primary-light)",
+                                    border: "1px solid var(--border-color)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "3rem",
+                                    fontWeight: 700,
+                                    color: "var(--primary)"
+                                }}>
+                                    {studentName ? studentName[0].toUpperCase() : "S"}
+                                </div>
+                            )}
+
+                            {/* Name Label */}
+                            <div style={{
+                                position: "absolute",
+                                bottom: "1rem",
+                                left: "1rem",
+                                backgroundColor: "#2563EB",
+                                padding: "0.4rem 0.8rem",
+                                borderRadius: "8px",
+                                fontSize: "0.85rem",
+                                fontWeight: 600,
+                                color: "#ffffff",
+                                zIndex: 3
+                            }}>
+                                {studentName} (You)
+                            </div>
+
+                            {/* Audio visualizer canvas */}
+                            <canvas
+                                ref={canvasRef}
+                                width={120}
+                                height={36}
+                                style={{
+                                    position: "absolute",
+                                    bottom: "1.2rem",
+                                    right: "1.2rem",
+                                    width: "80px",
+                                    height: "24px",
+                                    pointerEvents: "none",
+                                    zIndex: 3
+                                }}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    /* Default Setup View */
+                    <div style={styles.buddyZone}>
+                        {/* Speech bubble */}
+                        <div style={styles.bubbleBox}>
+                            <div style={styles.bubbleArrow} />
+                            <p style={styles.speechText}>
+                                {getBuddySpeechText()}
+                            </p>
+                        </div>
+
+                        {/* Buddy avatar SVG container */}
+                        <div style={styles.avatarBox}>
+                            <svg width="180" height="180" viewBox="0 0 100 100" style={styles.buddySvgMain}>
+                                <circle cx="50" cy="55" r="26" fill="#BFDBFE" stroke="#2563EB" strokeWidth="2.5" />
+                                <path d="M22 38 L50 24 L78 38 L50 52 Z" fill="#1E3A8A" stroke="#1E40AF" strokeWidth="2" />
+                                <rect x="47" y="38" width="6" height="15" fill="#1E3A8A" />
+                                <circle cx="50" cy="53" r="3.5" fill="#F59E0B" />
+                                <ellipse cx="42" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                                <ellipse cx="58" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                                <path d="M45 61 Q50 67 55 61" fill="none" stroke="#1E3A8A" strokeWidth="2.5" strokeLinecap="round" />
                             </svg>
                         </div>
                     </div>
-                    
-                    {/* Status Text overlay */}
-                    <div style={s.statusPill}>
-                        {isSpeaking ? (
-                            <>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
-                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                </svg>
-                                Reading question...
-                            </>
-                        ) : isRecording ? (
-                            <>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
-                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                                </svg>
-                                Listening for answer...
-                            </>
-                        ) : (
-                            <>
-                                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--primary)", marginRight: 6, animation: "pulse-glow 1.5s infinite", verticalAlign: "middle" }}></span>
-                                Ready
-                            </>
-                        )}
-                    </div>
+                )}
 
-                    {/* Question Subtitles overlay */}
-                    <div style={s.questionSubtitleBox}>
-                        <p style={s.questionText}>{currentQ?.q || "Initializing..."}</p>
-                        {currentQ && (subjectName || "").toLowerCase().includes("math") && (
-                            <p style={{
-                                fontSize: "0.95rem",
-                                color: "var(--primary)",
-                                fontWeight: "bold",
-                                marginTop: "0.5rem",
-                                fontStyle: "italic"
-                            }}>
-                                Please write down your step-by-step solution.
-                            </p>
-                        )}
-                        {currentQ && (
-                            <button
-                                onClick={() => {
-                                    if (window.speechSynthesis) {
-                                        try { window.speechSynthesis.cancel(); } catch (_) {}
-                                    }
-                                    if (recognitionRef.current) {
-                                        try { recognitionRef.current.stop(); } catch (_) {}
-                                    }
-                                    let readText = questions[currentIdx].q;
-                                    const isMath = (subjectName || "").toLowerCase().includes("math");
-                                    if (isMath) {
-                                        readText = readText.trim().endsWith(".") 
-                                            ? `${readText} Please write down your step-by-step solution.` 
-                                            : `${readText}. Please write down your step-by-step solution.`;
-                                    }
-                                    speakText(readText, () => {
-                                        if (micEnabledRef.current) {
-                                            startSpeechRecognition();
-                                        }
-                                    });
-                                }}
-                                style={s.readAloudBtn}
-                                className="interactive-element"
-                                title="Read Question Aloud"
-                                disabled={isSpeaking || isSubmitting}
-                            >
-                                {isSpeaking ? (
-                                    <>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
-                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                        </svg>
-                                        Speaking...
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, display: "inline-block", verticalAlign: "middle" }}>
-                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                        </svg>
-                                        Read Aloud
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Picture in Picture Student Video */}
-                <div style={s.studentPip} className="interview-student-pip">
-                    {cameraEnabled ? (
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            style={s.pipVideo}
-                        />
-                    ) : (
-                        <div style={s.pipPlaceholder}>
-                            <span style={s.placeholderInitials}>
-                                {studentName ? studentName[0].toUpperCase() : "S"}
-                            </span>
-                        </div>
-                    )}
-                    
-                    {/* Name Label */}
-                    <div style={s.studentLabel}>
-                        {studentName} (You)
-                    </div>
-
-                    {/* Audio Canvas visualizer overlay */}
-                    <canvas
-                        ref={canvasRef}
-                        width={120}
-                        height={36}
-                        style={s.waveCanvas}
-                        className="interview-wave-canvas"
-                    />
-                </div>
-            </div>
-
-            {/* Live Caption Overlays for Speech-to-Text */}
-            {liveCaption && (
-                <div style={s.liveCaptionOverlay} className="animate-fade-in">
-                    <p style={s.captionText}>&ldquo;{liveCaption}&rdquo;</p>
-                </div>
-            )}
-
-            {/* Top Error Banner */}
-            {error && <div style={s.errorToast}>{error}</div>}
-
-            {/* Keyboard Input Fallback Panel */}
-            {showKeyboardInput && (
-                <div style={s.keyboardPanelOverlay}>
-                    <div style={s.keyboardModal} className="animate-fade-in">
-                        <div style={s.modalHeader}>
-                            <h4 style={{ margin: 0 }}>Type Your Answer</h4>
-                            <button
-                                style={s.modalCloseBtn}
-                                onClick={() => setShowKeyboardInput(false)}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                        <p style={s.modalInstruction}>
-                            If your microphone isn't working, you can type your answer below:
-                        </p>
-                        <div style={s.modalInputRow}>
-                            <input
-                                type="text"
-                                style={s.modalInput}
-                                placeholder="Type answer here..."
-                                value={typedText}
-                                onChange={(e) => setTypedText(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" && typedText.trim()) handleSubmitAnswer();
-                                }}
-                                autoFocus
-                            />
-                            <button
+                {/* Center stage display per phase */}
+                <div style={styles.interactiveArea}>
+                    {phase === "device_setup" && (
+                        <div style={styles.setupContainer}>
+                            <div 
                                 style={{
-                                    ...s.modalSendBtn,
-                                    ...(!typedText.trim() ? { backgroundColor: "rgba(2, 132, 199, 0.4)", cursor: "not-allowed" } : {})
+                                    ...styles.setupCard,
+                                    borderColor: micStatus === "granted" ? "#10B981" : "#E5E7EB"
                                 }}
-                                onClick={() => typedText.trim() && handleSubmitAnswer()}
-                                disabled={!typedText.trim()}
+                                onClick={() => requestPermission("mic")}
                             >
-                                Submit
-                            </button>
+                                <span style={styles.setupCardIcon}>🎤</span>
+                                <div style={styles.setupCardText}>
+                                    <h4 style={styles.setupCardTitle}>Microphone</h4>
+                                    <p style={styles.setupCardSub}>Required to speak answers</p>
+                                </div>
+                                <span style={{
+                                    ...styles.setupCardBadge,
+                                    backgroundColor: micStatus === "granted" ? "#E6F4EA" : "#F3F4F6",
+                                    color: micStatus === "granted" ? "#137333" : "#374151"
+                                }}>
+                                    {micStatus === "granted" ? "Allowed" : "Allow mic"}
+                                </span>
+                            </div>
+
+                            <div 
+                                style={{
+                                    ...styles.setupCard,
+                                    borderColor: cameraStatus === "granted" ? "#2563EB" : "#E5E7EB"
+                                }}
+                                onClick={() => requestPermission("camera")}
+                            >
+                                <span style={styles.setupCardIcon}>📷</span>
+                                <div style={styles.setupCardText}>
+                                    <h4 style={styles.setupCardTitle}>Camera</h4>
+                                    <p style={styles.setupCardSub}>Optional visual companion</p>
+                                </div>
+                                <span style={{
+                                    ...styles.setupCardBadge,
+                                    backgroundColor: cameraStatus === "granted" ? "#EFF6FF" : "#F3F4F6",
+                                    color: cameraStatus === "granted" ? "#1E40AF" : "#374151"
+                                }}>
+                                    {cameraStatus === "granted" ? "Allowed" : "Optional"}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {phase === "interview" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%", maxWidth: "680px", margin: "0 auto" }}>
+                            {/* Status label: Listening / Speaking / Keyboard */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
+                                <span style={{ 
+                                    fontSize: "13px", 
+                                    fontWeight: "600",
+                                    color: isSpeaking ? "#2563EB" : (isRecording ? "#16A34A" : "#6B7280"),
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px"
+                                }}>
+                                    {isSpeaking && (
+                                        <>
+                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#2563EB", display: "inline-block" }} />
+                                            🔊 Buddy is speaking...
+                                        </>
+                                    )}
+                                    {!isSpeaking && isRecording && (
+                                        <>
+                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#16A34A", display: "inline-block", animation: "pulseDot 1.2s infinite" }} />
+                                            🎤 Listening... Speak your answer.
+                                        </>
+                                    )}
+                                    {!isSpeaking && !isRecording && (
+                                        <>
+                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#9CA3AF", display: "inline-block" }} />
+                                            ⌨️ Keyboard mode (Type or click mic to talk)
+                                        </>
+                                    )}
+                                </span>
+                                
+                                {activeHint && (
+                                    <span style={{ fontSize: "12px", color: "#D97706", fontWeight: "600" }}>
+                                        💡 Hint visible
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Main Input Text Area & Submit Button Row */}
+                            <div style={{ display: "flex", gap: "12px" }}>
+                                <textarea
+                                    style={{
+                                        flex: 1,
+                                        height: "64px",
+                                        border: "1px solid #D1D5DB",
+                                        borderRadius: "10px",
+                                        padding: "12px 16px",
+                                        fontSize: "15px",
+                                        fontFamily: isHindi ? "var(--font-hindi), sans-serif" : "Inter, sans-serif",
+                                        resize: "none",
+                                        outline: "none",
+                                        transition: "border-color 0.15s ease",
+                                        borderColor: isFocused ? "#2563EB" : "#D1D5DB",
+                                        boxShadow: isFocused ? "0 0 0 3px rgba(37, 99, 235, 0.15)" : "none"
+                                    }}
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
+                                    placeholder={isHindi ? "अपना उत्तर यहाँ लिखें या बोलें..." : "Type or speak your answer here..."}
+                                    value={typedText}
+                                    onChange={(e) => setTypedText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            if (typedText.trim() && !isSpeaking && !isSubmitting) {
+                                                handleAnswerSubmit();
+                                            }
+                                        }
+                                    }}
+                                    disabled={isSpeaking || isSubmitting}
+                                    autoFocus
+                                />
+                                
+                                <button 
+                                    style={{
+                                        height: "64px",
+                                        padding: "0 28px",
+                                        backgroundColor: (typedText.trim() && !isSpeaking && !isSubmitting) ? "#2563EB" : "#D1D5DB",
+                                        color: "#FFFFFF",
+                                        border: "none",
+                                        borderRadius: "10px",
+                                        fontWeight: "600",
+                                        fontSize: "15px",
+                                        cursor: (typedText.trim() && !isSpeaking && !isSubmitting) ? "pointer" : "default",
+                                        transition: "all 0.15s ease",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                    }}
+                                    onClick={() => {
+                                        if (typedText.trim() && !isSpeaking && !isSubmitting) {
+                                            handleAnswerSubmit();
+                                        }
+                                    }}
+                                    disabled={!typedText.trim() || isSpeaking || isSubmitting}
+                                >
+                                    Submit
+                                </button>
+                            </div>
+
+                            {/* Secondary Controls: Mic toggle, Repeat question, Hint toggle */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
+                                <div style={{ display: "flex", gap: "10px" }}>
+                                    {speechSupported && (
+                                        <button
+                                            style={{
+                                                backgroundColor: "#FFFFFF",
+                                                border: "1px solid #E5E7EB",
+                                                borderRadius: "10px",
+                                                padding: "6px 14px",
+                                                fontSize: "13px",
+                                                fontWeight: "600",
+                                                color: isRecording ? "#EF4444" : "#2563EB",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "6px",
+                                                height: "36px"
+                                            }}
+                                            onClick={() => {
+                                                if (isRecording) {
+                                                    isListeningRef.current = false;
+                                                    setIsRecording(false);
+                                                    if (recognitionRef.current) {
+                                                        recognitionRef.current.onend = null;
+                                                        try { recognitionRef.current.stop(); } catch (_) {}
+                                                    }
+                                                } else {
+                                                    setMicEnabled(true);
+                                                    startSpeechRecognition();
+                                                }
+                                            }}
+                                            disabled={isSpeaking}
+                                        >
+                                            {isRecording ? "🔴 Stop Listening" : "🎤 Start Listening"}
+                                        </button>
+                                    )}
+
+                                    <button
+                                        style={{
+                                            backgroundColor: "#FFFFFF",
+                                            border: "1px solid #E5E7EB",
+                                            borderRadius: "10px",
+                                            padding: "6px 14px",
+                                            fontSize: "13px",
+                                            fontWeight: "600",
+                                            color: "#374151",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            height: "36px"
+                                        }}
+                                        onClick={triggerRepeat}
+                                        disabled={isSpeaking}
+                                    >
+                                        🔁 Repeat Question
+                                    </button>
+                                </div>
+
+                                {questions[currentIdx]?.hint && (
+                                    <button
+                                        style={{
+                                            backgroundColor: "#FEF3C7",
+                                            border: "1px solid #FDE68A",
+                                            borderRadius: "10px",
+                                            padding: "6px 14px",
+                                            fontSize: "13px",
+                                            fontWeight: "600",
+                                            color: "#D97706",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            height: "36px"
+                                        }}
+                                        onClick={triggerHint}
+                                        disabled={isSpeaking}
+                                    >
+                                        💡 Get Hint
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {phase === "completed" && (
+                        <button style={styles.ctaButton} onClick={() => router.push(`/interview/${interviewId}/result`)}>
+                            View Results
+                        </button>
+                    )}
                 </div>
-            )}
 
-            {/* Call Control Bar */}
-            <div style={s.controlBar}>
-                {/* Mute Mic Button */}
-                <button
-                    style={{
-                        ...s.controlBtn,
-                        ...(micEnabled ? s.btnActive : s.btnMuted)
-                    }}
-                    onClick={toggleMic}
-                    title={micEnabled ? "Mute Microphone" : "Unmute Microphone"}
-                    disabled={isSubmitting}
-                >
-                    {micEnabled ? (
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
-                        </svg>
-                    ) : (
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.79 1.79C13.43 15.89 12.74 16 12 16c-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z" />
-                        </svg>
-                    )}
-                </button>
-
-                {/* Toggle Camera Button */}
-                <button
-                    style={{
-                        ...s.controlBtn,
-                        ...(cameraEnabled ? s.btnActive : s.btnMuted)
-                    }}
-                    onClick={toggleCamera}
-                    title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
-                    disabled={isSubmitting}
-                >
-                    {cameraEnabled ? (
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-                        </svg>
-                    ) : (
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2zM15 16H5v-8h1.73l8 8H15z" />
-                        </svg>
-                    )}
-                </button>
-
-                {/* Keyboard Input Button */}
-                <button
-                    style={{ ...s.controlBtn, ...s.btnKeyboard }}
-                    onClick={() => {
-                        setTypedText(liveCaption || "");
-                        setShowKeyboardInput(true);
-                    }}
-                    title="Type Answer Instead"
-                    disabled={isSubmitting}
-                >
-                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v-2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v-2zm0-3h-2V8h2v2zm3 4h-2v-2h2v-2zm0-3h-2V8h2v2z" />
-                    </svg>
-                </button>
-
-                {/* Manual Next Question Button (Call Style Mute/End) */}
-                <button
-                    style={{ ...s.controlBtn, ...s.btnEndCall }}
-                    onClick={handleManualNext}
-                    disabled={isSubmitting}
-                    title="Submit Answer"
-                >
-                    <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>Next →</span>
-                </button>
+                {/* Error Banner Toast */}
+                {error && <div style={styles.errorToast}>{error}</div>}
             </div>
         </div>
     );
 }
 
-// ── Immersive CSS Styles ──────────────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-    pageContainer: {
+const styles: Record<string, React.CSSProperties> = {
+    appStage: {
         width: "100vw",
         height: "100vh",
-        backgroundColor: "transparent",
-        color: "var(--text-primary)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
+        backgroundColor: "#F8FAFC",
         position: "fixed",
         top: 0,
         left: 0,
-        fontFamily: "var(--font-sans), system-ui, -apple-system, sans-serif",
-    },
-    roomHeader: {
-        height: "60px",
-        padding: "0 1.5rem",
+        fontFamily: "var(--font-sans), system-ui, sans-serif",
         display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        borderBottom: "1px solid var(--border-color)",
-        zIndex: 10,
-        backgroundColor: "var(--bg-surface)",
-        backdropFilter: "blur(8px)",
-    },
-    logoArea: {
-        display: "flex",
-        alignItems: "center",
-        gap: "0.75rem",
-    },
-    callIndicatorPulse: {
-        width: "10px",
-        height: "10px",
-        borderRadius: "50%",
-        backgroundColor: "var(--secondary)",
-        boxShadow: "0 0 10px var(--secondary)",
-        animation: "pulse 1.8s infinite",
-    },
-    logoText: {
-        fontSize: "0.95rem",
-        fontWeight: 700,
-        letterSpacing: "0.03em",
-        color: "var(--text-primary)",
-    },
-    progressChip: {
-        padding: "0.4rem 0.8rem",
-        borderRadius: "9999px",
-        backgroundColor: "var(--primary-light)",
-        border: "1px solid var(--border-color)",
-        fontSize: "0.8rem",
-        fontWeight: 600,
-        color: "var(--primary)",
-    },
-    callGrid: {
-        flex: 1,
-        display: "flex",
-        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: "1.5rem",
-        padding: "1.5rem",
-        boxSizing: "border-box",
-        width: "100%",
-        maxWidth: "1200px",
-        margin: "0 auto",
+        overflow: "hidden"
     },
-    aiVideoPanel: {
+    splitGrid: {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+        justifyContent: "center",
+        gap: "1.5rem",
+        width: "100%",
+        maxWidth: "960px",
+        boxSizing: "border-box",
+        padding: "0 1rem"
+    },
+    panelCard: {
         flex: 1,
-        height: "80%",
-        maxHeight: "560px",
-        borderRadius: "24px",
-        backgroundColor: "var(--glass-bg)",
-        border: "1px solid var(--glass-border)",
-        boxShadow: "var(--glass-shadow)",
+        height: "420px",
+        borderRadius: "16px",
+        backgroundColor: "#ffffff",
+        border: "1px solid #E5E7EB",
+        boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         position: "relative",
         overflow: "hidden",
-        backdropFilter: "blur(12px)",
+        padding: "2rem",
+        boxSizing: "border-box"
     },
-    aiFaceContainer: {
+    confettiOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 50,
+        pointerEvents: "none"
+    },
+    offlineBoxCover: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(15,23,42,0.4)",
+        backdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000
+    },
+    offlineInnerCard: {
+        backgroundColor: "#ffffff",
+        border: "1px solid #E5E7EB",
+        borderRadius: "16px",
+        padding: "2.5rem",
+        textAlign: "center",
+        maxWidth: "420px",
+        boxShadow: "0 12px 32px rgba(15,23,42,0.14)"
+    },
+    offlineIcon: {
+        fontSize: "3rem",
+        display: "block",
+        marginBottom: "1rem"
+    },
+    offlineTitle: {
+        fontSize: "1.4rem",
+        fontWeight: 700,
+        marginBottom: "0.5rem",
+        color: "#111827"
+    },
+    offlineText: {
+        fontSize: "0.95rem",
+        color: "#6B7280",
+        lineHeight: "1.5"
+    },
+    stageGrid: {
+        width: "90%",
+        maxWidth: "800px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "2.5rem"
+    },
+    pathOuter: {
+        position: "relative",
+        width: "100%",
+        height: "50px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 10%",
+        boxSizing: "border-box",
+        marginBottom: "1rem"
+    },
+    pathLineBg: {
+        position: "absolute",
+        left: "10%",
+        right: "10%",
+        height: "4px",
+        backgroundColor: "#E5E7EB",
+        zIndex: 1,
+        borderRadius: "2px"
+    },
+    pathLineFill: {
+        position: "absolute",
+        left: "10%",
+        height: "4px",
+        backgroundColor: "#2563EB",
+        zIndex: 2,
+        borderRadius: "2px",
+        transition: "width 0.6s ease"
+    },
+    pathNode: {
+        position: "absolute",
+        zIndex: 3,
+        fontSize: "1.5rem",
+        transform: "translateY(-50%)",
+        top: "50%"
+    },
+    pathBuddyWalker: {
+        position: "absolute",
+        top: "50%",
+        transform: "translateY(-50%)",
+        zIndex: 4,
+        transition: "left 0.6s ease"
+    },
+    pathBuddyDot: {
+        width: "14px",
+        height: "14px",
+        backgroundColor: "#2563EB",
+        borderRadius: "50%",
+        border: "3px solid #ffffff",
+        boxShadow: "0 2px 4px rgba(37,99,235,0.4)"
+    },
+    buddyZone: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "1.5rem",
+        width: "100%"
+    },
+    bubbleBox: {
+        backgroundColor: "#ffffff",
+        border: "1px solid #E5E7EB",
+        borderRadius: "14px",
+        padding: "1.5rem 2rem",
+        position: "relative",
+        boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
+        width: "100%",
+        maxWidth: "600px",
+        textAlign: "center"
+    },
+    bubbleArrow: {
+        position: "absolute",
+        bottom: "-10px",
+        left: "50%",
+        transform: "translateX(-50%) rotate(45deg)",
+        width: "20px",
+        height: "20px",
+        backgroundColor: "#ffffff",
+        borderRight: "1px solid #E5E7EB",
+        borderBottom: "1px solid #E5E7EB",
+        zIndex: 1
+    },
+    speechText: {
+        fontSize: "1.2rem",
+        fontWeight: 500,
+        color: "#111827",
+        lineHeight: "1.6",
+        margin: 0
+    },
+    thinkDotRow: {
+        display: "flex",
+        justifyContent: "center",
+        gap: "0.25rem",
+        marginTop: "0.75rem"
+    },
+    thinkDot: {
+        width: "6px",
+        height: "6px",
+        backgroundColor: "#2563EB",
+        borderRadius: "50%"
+    },
+    liveCaptionText: {
+        fontSize: "1.05rem",
+        fontStyle: "italic",
+        color: "#6B7280",
+        marginTop: "1rem",
+        borderTop: "1px solid #F1F5F9",
+        paddingTop: "0.75rem"
+    },
+    avatarBox: {
         position: "relative",
         width: "180px",
         height: "180px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        marginBottom: "2rem",
+        justifyContent: "center"
     },
-    aiAvatarCircle: {
-        width: "120px",
-        height: "120px",
+    glowRing: {
+        position: "absolute",
+        width: "160px",
+        height: "160px",
         borderRadius: "50%",
-        backgroundColor: "var(--primary-light)",
-        border: "1px solid var(--border-color)",
+        border: "2px solid #2563EB",
+        pointerEvents: "none"
+    },
+    buddySvgMain: {
+        zIndex: 5,
+        overflow: "visible"
+    },
+    interactiveArea: {
+        width: "100%",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2,
+        justifyContent: "center"
     },
-    aiAvatarEmoji: {
-        fontSize: "4.5rem",
-    },
-    avatarGlowRing: {
-        display: "none",
-    },
-    ringSpeakingPulse: {
-        display: "none",
-    },
-    statusPill: {
-        padding: "0.35rem 0.9rem",
-        borderRadius: "9999px",
-        backgroundColor: "var(--primary-light)",
-        border: "1px solid var(--border-color)",
-        fontSize: "0.8rem",
-        fontWeight: 600,
-        letterSpacing: "0.02em",
-        color: "var(--text-secondary)",
-        marginBottom: "1rem",
-    },
-    questionSubtitleBox: {
-        width: "85%",
-        maxWidth: "720px",
-        textAlign: "center",
-        padding: "1rem 1.5rem",
-        borderRadius: "16px",
-        backgroundColor: "var(--bg-surface)",
-        border: "1px solid var(--border-color)",
-    },
-    questionText: {
-        fontSize: "1.25rem",
-        fontWeight: 600,
-        lineHeight: 1.5,
-        color: "var(--text-primary)",
-        margin: 0,
-    },
-    readAloudBtn: {
-        marginTop: "0.75rem",
-        padding: "0.4rem 1rem",
-        borderRadius: "20px",
-        border: "1px solid var(--primary)",
-        backgroundColor: "var(--primary-light)",
-        color: "var(--primary)",
-        fontSize: "0.85rem",
+    ctaButton: {
+        padding: "0.9rem 2.5rem",
+        backgroundColor: "#2563EB",
+        border: "none",
+        borderRadius: "10px",
+        color: "#ffffff",
+        fontSize: "1.1rem",
         fontWeight: 600,
         cursor: "pointer",
-        transition: "all 0.2s ease",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.4rem",
+        boxShadow: "0 4px 6px -1px rgba(37,99,235,0.2)",
+        transition: "background 0.2s"
     },
-    studentPip: {
-        flex: 1,
-        height: "80%",
-        maxHeight: "560px",
-        borderRadius: "24px",
-        backgroundColor: "var(--glass-bg)",
-        border: "1px solid var(--glass-border)",
-        boxShadow: "var(--glass-shadow)",
+    setupContainer: {
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        overflow: "hidden",
-        backdropFilter: "blur(12px)",
-        transition: "all 0.3s ease",
-    },
-    pipVideo: {
+        gap: "1.5rem",
         width: "100%",
-        height: "100%",
-        objectFit: "cover",
+        maxWidth: "500px",
+        flexDirection: "column"
     },
-    pipPlaceholder: {
-        width: "100%",
-        height: "100%",
+    setupCard: {
+        backgroundColor: "#ffffff",
+        border: "1.5px solid #E5E7EB",
+        borderRadius: "14px",
+        padding: "1.25rem 1.5rem",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-hover) 100%)",
-    },
-    placeholderInitials: {
-        width: "120px",
-        height: "120px",
-        borderRadius: "50%",
-        backgroundColor: "var(--primary-light)",
-        border: "1px solid var(--border-color)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "3rem",
-        fontWeight: 700,
-        color: "var(--primary)",
-    },
-    studentLabel: {
-        position: "absolute",
-        bottom: "1rem",
-        left: "1rem",
-        backgroundColor: "var(--primary)",
-        padding: "0.4rem 0.8rem",
-        borderRadius: "8px",
-        fontSize: "0.85rem",
-        fontWeight: 600,
-        color: "#ffffff",
-        zIndex: 3,
-    },
-    waveCanvas: {
-        position: "absolute",
-        bottom: "1rem",
-        right: "1rem",
-        width: "80px",
-        height: "24px",
-        pointerEvents: "none",
-        zIndex: 3,
-    },
-    liveCaptionOverlay: {
-        position: "absolute",
-        bottom: "120px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        backgroundColor: "var(--glass-bg)",
-        padding: "0.75rem 2rem",
-        borderRadius: "9999px",
-        border: "1px solid var(--glass-border)",
-        boxShadow: "var(--glass-shadow)",
-        zIndex: 8,
-        maxWidth: "80%",
-        textAlign: "center",
-    },
-    captionText: {
-        fontSize: "1.1rem",
-        fontWeight: 500,
-        color: "var(--text-primary)",
-        margin: 0,
-        fontStyle: "italic",
-    },
-    controlBar: {
-        height: "80px",
-        display: "flex",
-        justifyContent: "center",
         alignItems: "center",
         gap: "1.25rem",
-        zIndex: 10,
-        backgroundColor: "var(--bg-surface)",
-        borderTop: "1px solid var(--border-color)",
-    },
-    controlBtn: {
-        width: "48px",
-        height: "48px",
-        borderRadius: "50%",
-        border: "none",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         cursor: "pointer",
-        color: "var(--text-primary)",
-        transition: "all 0.25s ease",
+        transition: "all 0.2s ease"
     },
-    btnActive: {
-        backgroundColor: "var(--secondary-light)",
-        border: "1px solid var(--border-color)",
-        color: "var(--text-primary)",
+    setupCardIcon: {
+        fontSize: "2rem"
     },
-    btnMuted: {
-        backgroundColor: "#ef4444",
-        boxShadow: "0 0 10px rgba(239, 68, 68, 0.4)",
+    setupCardText: {
+        flexGrow: 1
     },
-    btnKeyboard: {
-        backgroundColor: "var(--secondary-light)",
-        border: "1px solid var(--border-color)",
+    setupCardTitle: {
+        fontSize: "1.1rem",
+        fontWeight: 600,
+        color: "#111827",
+        margin: 0
     },
-    btnEndCall: {
-        width: "90px",
-        borderRadius: "24px",
-        backgroundColor: "var(--primary)",
-        boxShadow: "var(--shadow-sm)",
-        color: "#ffffff",
+    setupCardSub: {
+        fontSize: "0.85rem",
+        color: "#6B7280",
+        margin: "0.15rem 0 0 0"
     },
-    centerScreen: {
-        width: "100vw",
-        height: "100vh",
-        backgroundColor: "transparent",
+    setupCardBadge: {
+        padding: "0.4rem 0.8rem",
+        borderRadius: "999px",
+        fontSize: "0.8rem",
+        fontWeight: 600
+    },
+    inputConsole: {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        color: "var(--text-primary)",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        zIndex: 100,
+        gap: "1.5rem",
+        width: "100%"
     },
-    callConnectingRipple: {
-        position: "relative",
-        width: "100px",
-        height: "100px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+    videoBox: {
+        width: "120px",
+        height: "90px",
+        borderRadius: "12px",
+        overflow: "hidden",
+        border: "2px solid #E5E7EB",
+        backgroundColor: "#000000",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
     },
-    rippleCircle: {
-        position: "absolute",
+    videoStream: {
         width: "100%",
         height: "100%",
-        borderRadius: "50%",
-        border: "3px solid var(--secondary)",
-        animation: "ripple 1.5s infinite ease-out",
+        objectFit: "cover"
     },
-    rippleCenter: {
-        fontSize: "3.5rem",
-        zIndex: 2,
-    },
-    errorBadge: {
-        width: "64px",
-        height: "64px",
-        borderRadius: "50%",
-        backgroundColor: "rgba(239, 68, 68, 0.15)",
-        color: "#ef4444",
-        border: "2px solid #ef4444",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "2rem",
-        fontWeight: "bold",
-    },
-    btnControlClose: {
-        padding: "0.6rem 1.5rem",
-        borderRadius: "8px",
-        border: "none",
-        backgroundColor: "var(--primary)",
-        color: "#ffffff",
+    hintTriggerBtn: {
+        backgroundColor: "#EFF6FF",
+        border: "1px dashed #BFDBFE",
+        borderRadius: "10px",
+        padding: "0.6rem 1.25rem",
+        color: "#2563EB",
+        fontSize: "0.95rem",
+        fontWeight: 600,
         cursor: "pointer",
-        fontWeight: 600,
+        transition: "background 0.2s"
     },
-    errorToast: {
-        position: "fixed",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        backgroundColor: "var(--error)",
+    actionRow: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "1rem",
+        width: "100%",
+        maxWidth: "360px"
+    },
+    actionBtnConsole: {
+        width: "100%",
+        padding: "1rem 2rem",
+        border: "none",
+        borderRadius: "10px",
         color: "#ffffff",
-        padding: "0.6rem 1.5rem",
-        borderRadius: "8px",
-        zIndex: 1000,
-        boxShadow: "var(--shadow-sm)",
-        fontSize: "0.9rem",
+        fontSize: "1.05rem",
         fontWeight: 600,
+        cursor: "pointer",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+        transition: "background 0.2s ease"
     },
-    keyboardPanelOverlay: {
+    keyboardSwitchBtn: {
+        background: "none",
+        border: "none",
+        color: "#6B7280",
+        fontSize: "0.9rem",
+        fontWeight: 500,
+        cursor: "pointer",
+        textDecoration: "underline"
+    },
+    modalBackdrop: {
         position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.6)",
+        backgroundColor: "rgba(15,23,42,0.4)",
+        backdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1000,
-        backdropFilter: "blur(4px)",
+        zIndex: 1000
     },
-    keyboardModal: {
-        backgroundColor: "var(--bg-surface)",
-        border: "1px solid var(--border-color)",
-        borderRadius: "20px",
+    modalBox: {
+        backgroundColor: "#ffffff",
+        border: "1px solid #E5E7EB",
+        borderRadius: "16px",
+        padding: "1.75rem",
         width: "90%",
-        maxWidth: "500px",
-        padding: "1.5rem",
-        boxShadow: "var(--shadow-lg)",
+        maxWidth: "460px",
+        boxShadow: "0 12px 32px rgba(15,23,42,0.14)"
     },
     modalHeader: {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: "1rem",
-        color: "var(--text-primary)",
+        marginBottom: "0.75rem",
+        color: "#111827"
     },
-    modalCloseBtn: {
+    modalClose: {
         background: "none",
         border: "none",
-        color: "var(--text-muted)",
         fontSize: "1.1rem",
-        cursor: "pointer",
+        color: "#9CA3AF",
+        cursor: "pointer"
     },
-    modalInstruction: {
+    modalDesc: {
         fontSize: "0.85rem",
-        color: "var(--text-secondary)",
-        marginBottom: "1.25rem",
-        lineHeight: 1.4,
+        color: "#6B7280",
+        lineHeight: "1.4",
+        marginBottom: "1.5rem"
     },
     modalInputRow: {
         display: "flex",
-        gap: "0.75rem",
+        gap: "0.75rem"
     },
     modalInput: {
-        flex: 1,
-        backgroundColor: "var(--bg-app)",
-        border: "1px solid var(--border-color)",
+        flexGrow: 1,
+        border: "1px solid #E5E7EB",
         borderRadius: "10px",
         padding: "0.75rem 1rem",
-        color: "var(--text-primary)",
-        outline: "none",
         fontSize: "0.95rem",
+        outline: "none"
     },
     modalSendBtn: {
-        backgroundColor: "var(--primary)",
+        backgroundColor: "#2563EB",
         border: "none",
         borderRadius: "10px",
-        padding: "0 1.25rem",
+        padding: "0 1.5rem",
         color: "#ffffff",
         fontWeight: 600,
-        cursor: "pointer",
-        transition: "background 0.2s",
+        cursor: "pointer"
     },
-    lobbyCard: {
-        width: "90%",
-        maxWidth: "500px",
-        padding: "2.5rem",
-        backgroundColor: "var(--glass-bg)",
-        border: "1px solid var(--glass-border)",
-        borderRadius: "24px",
-        boxShadow: "var(--glass-shadow)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        backdropFilter: "blur(12px)",
-    },
-    lobbyAvatarCircle: {
-        width: "100px",
-        height: "100px",
-        borderRadius: "50%",
-        background: "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-        border: "3px solid var(--glass-border)",
-        boxShadow: "0 10px 30px rgba(139, 124, 251, 0.25)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: "1.5rem",
-    },
-    lobbyTitle: {
-        fontFamily: "var(--font-heading)",
-        fontSize: "1.6rem",
-        fontWeight: 700,
-        marginBottom: "0.5rem",
-        color: "var(--text-primary)",
-    },
-    lobbySubtitle: {
-        fontSize: "1rem",
-        color: "var(--text-secondary)",
-        marginBottom: "1.5rem",
-        textAlign: "center",
-    },
-    lobbyInstructions: {
-        backgroundColor: "var(--primary-light)",
-        border: "1px solid var(--border-color)",
-        borderRadius: "16px",
-        padding: "1.2rem",
-        width: "100%",
-        textAlign: "left",
-        marginBottom: "2rem",
-        color: "var(--text-secondary)",
-    },
-    lobbyStartBtn: {
-        width: "100%",
-        padding: "0.9rem 1.5rem",
-        borderRadius: "14px",
-        border: "none",
+    errorToast: {
+        position: "fixed",
+        top: "24px",
+        backgroundColor: "#DC2626",
         color: "#ffffff",
-        fontWeight: 700,
-        fontSize: "1.05rem",
-        cursor: "pointer",
-        boxShadow: "var(--shadow-sm)",
-        transition: "all 0.25s ease",
-        backgroundColor: "var(--primary)",
-    },
+        padding: "0.75rem 1.5rem",
+        borderRadius: "10px",
+        boxShadow: "0 4px 10px rgba(220,38,38,0.25)",
+        zIndex: 1100,
+        fontSize: "0.9rem",
+        fontWeight: 600
+    }
 };

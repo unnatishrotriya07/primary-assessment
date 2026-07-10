@@ -15,6 +15,11 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
   const [user, setUser] = useState<any>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -87,14 +92,14 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
 
     const firstSec = activeParts[0];
 
+    // Safely check client URL search params after mounting
+    let currentTab = "";
+    if (isClient && typeof window !== "undefined") {
+      currentTab = new URLSearchParams(window.location.search).get("tab") || "";
+    }
+
     if (firstSec === "syllabus" || firstSec === "classes" || firstSec === "subjects" || firstSec === "chapters") {
       crumbs.push({ label: "Academics", href: "/syllabus?tab=classes" });
-      
-      // Determine tab if visible in URL query
-      let currentTab = "";
-      if (typeof window !== "undefined") {
-        currentTab = new URLSearchParams(window.location.search).get("tab") || "";
-      }
       
       if (firstSec === "subjects" || currentTab === "subjects") {
         crumbs.push({ label: "Subjects", href: "/syllabus?tab=subjects" });
@@ -104,11 +109,6 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
         crumbs.push({ label: "Classes", href: "/syllabus?tab=classes" });
       }
     } else if (firstSec === "assessments") {
-      let currentTab = "";
-      if (typeof window !== "undefined") {
-        currentTab = new URLSearchParams(window.location.search).get("tab") || "";
-      }
-      
       if (currentTab === "questions") {
         crumbs.push({ label: "Academics", href: "/syllabus?tab=classes" });
         crumbs.push({ label: "Question Library", href: "/assessments?tab=questions" });

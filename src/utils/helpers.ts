@@ -69,3 +69,45 @@ export function extractErrorMessage(err: any, fallback: string = "An unexpected 
   
   return fallback;
 }
+
+/**
+ * Formats class name to hide default 'A' section suffix if the class doesn't have students.
+ */
+export function formatClassName(cls: { name: string; section?: string; studentsCount?: number } | null | undefined): string {
+  if (!cls) return "";
+  const section = cls.section || "";
+  const studentCount = cls.studentsCount ?? 0;
+  
+  if ((section === "A" && studentCount === 0) || !section) {
+    return cls.name;
+  }
+  return `${cls.name} (${section})`;
+}
+
+/**
+ * Formats class name from direct parameters to hide default 'A' section if student count is 0.
+ */
+export function formatClassDisplayName(name: string, section?: string, studentsCount?: number): string {
+  const sec = section || "";
+  const count = studentsCount ?? 0;
+  if ((sec === "A" && count === 0) || !sec) {
+    return name;
+  }
+  return `${name} (${sec})`;
+}
+
+/**
+ * Detects if a text contains Hindi (Devanagari) characters
+ */
+export function isHindiText(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return /[\u0900-\u097F]/.test(text);
+}
+
+/**
+ * Returns the CSS class name 'font-hindi' if the text is Hindi or if explicitly marked
+ */
+export function getFontClass(text?: string | null, isHindiSubject?: boolean): string {
+  return (isHindiSubject || isHindiText(text)) ? "font-hindi" : "";
+}
+

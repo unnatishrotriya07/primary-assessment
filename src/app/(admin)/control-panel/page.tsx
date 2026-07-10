@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import { STORAGE_KEYS } from "@/utils/constants";
 import Button from "@/components/common/Button";
@@ -13,9 +13,35 @@ export default function ControlPanelPage() {
   const [user, setUser] = useState<any>(null);
   const [diagnostics, setDiagnostics] = useState<SystemDiagnostics | null>(null);
 
-  // States
   const [isTranscriptModalOpen, setIsTranscriptModalOpen] = useState(false);
   const [selectedTranscript, setSelectedTranscript] = useState<any>(null);
+  const [visibleCount, setVisibleCount] = useState(5);
+  const observerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!diagnostics || !diagnostics.transcripts) return;
+    if (visibleCount >= diagnostics.transcripts.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + 5, diagnostics.transcripts.length));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = observerRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [diagnostics, visibleCount]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -192,7 +218,7 @@ export default function ControlPanelPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {diagnostics.transcripts?.map((t) => (
+                    {diagnostics.transcripts?.slice(0, visibleCount).map((t) => (
                       <tr key={t.id} style={styles.tableRow}>
                         <td style={styles.td}><strong>{t.studentName}</strong></td>
                         <td style={styles.td_secondary}>{t.schoolName}</td>
@@ -224,6 +250,22 @@ export default function ControlPanelPage() {
                     ))}
                   </tbody>
                 </table>
+
+                {diagnostics.transcripts && visibleCount < diagnostics.transcripts.length && (
+                  <div
+                    ref={observerRef}
+                    style={{
+                      padding: "1rem",
+                      textAlign: "center",
+                      color: "var(--text-secondary)",
+                      fontSize: "0.85rem",
+                      borderTop: "1px solid var(--divider)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Loading more transcripts...
+                  </div>
+                )}
               </div>
             </div>
 
@@ -307,19 +349,67 @@ export default function ControlPanelPage() {
               <span>School: <strong>{selectedTranscript.schoolName}</strong></span>
               <span style={{ marginLeft: "1.5rem" }}>Accuracy Score: <strong style={{ color: "var(--success)" }}>{selectedTranscript.score}%</strong></span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", maxHeight: "300px", overflowY: "auto", paddingRight: "4px" }}>
-              {selectedTranscript.dialogue.map((d: any, idx: number) => (
-                <div key={idx} style={{
-                  padding: "0.75rem",
-                  borderRadius: "10px",
-                  backgroundColor: d.speaker === "AI Examiner" ? "var(--bg-app)" : "var(--primary-light)",
-                  borderLeft: d.speaker === "AI Examiner" ? "3px solid var(--text-muted)" : "3px solid var(--primary)",
-                }}>
-                  <strong style={{ fontSize: "0.8rem", display: "block", color: "var(--text-secondary)", marginBottom: "2px" }}>{d.speaker}</strong>
-                  <span style={{ fontSize: "0.85rem" }}>{d.text}</span>
-                </div>
-              ))}
-            </div>
+            <iframe
+              srcDoc={`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta charset="utf-8">
+                    <style>
+                      body {
+                        font-family: Inter, system-ui, sans-serif;
+                        margin: 0;
+                        padding: 4px;
+                        background-color: #ffffff;
+                        color: #111827;
+                      }
+                      .bubble {
+                        padding: 12px;
+                        border-radius: 10px;
+                        margin-bottom: 12px;
+                        font-size: 0.85rem;
+                        line-height: 1.5;
+                      }
+                      .ai {
+                        background-color: #F8FAFC;
+                        border-left: 3px solid #9CA3AF;
+                      }
+                      .student {
+                        background-color: #EFF6FF;
+                        border-left: 3px solid #2563EB;
+                      }
+                      .speaker {
+                        font-size: 0.8rem;
+                        display: block;
+                        color: #6B7280;
+                        font-weight: 600;
+                        margin-bottom: 4px;
+                      }
+                      .text {
+                        color: #111827;
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    ${selectedTranscript.dialogue.map((d: any) => `
+                      <div class="bubble ${d.speaker === 'AI Examiner' ? 'ai' : 'student'}">
+                        <strong class="speaker">${d.speaker}</strong>
+                        <span class="text">${d.text}</span>
+                      </div>
+                    `).join('')}
+                  </body>
+                </html>
+              `}
+              style={{
+                width: "100%",
+                height: "300px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "10px",
+                padding: "8px",
+                boxSizing: "border-box"
+              }}
+              title="Transcript Dialogue"
+            />
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
               <Button onClick={() => setIsTranscriptModalOpen(false)}>Close Transcript</Button>
             </div>

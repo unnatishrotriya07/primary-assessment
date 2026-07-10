@@ -194,41 +194,6 @@ export default function AssignAssessmentModal({
             </Button>
           </div>
 
-          <div style={{ ...styles.sectionHeader, marginTop: "0.5rem" }}>
-            Student Access Links
-          </div>
-
-          <div style={styles.linksTableContainer}>
-            <table style={styles.linksTable}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Student Name</th>
-                  <th style={styles.th}>Email Address</th>
-                  <th style={styles.th}>Assessment URL / Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {successData.map((sa) => {
-                  const isCopied = copiedId === String(sa.id);
-                  return (
-                    <tr key={sa.id} style={styles.tableRow}>
-                      <td style={styles.td}>{sa.studentName}</td>
-                      <td style={styles.td}>{sa.studentEmail}</td>
-                      <td style={styles.td}>
-                        <Button
-                          onClick={() => handleCopyLink(sa.assessmentLink, String(sa.id))}
-                          variant={isCopied ? "success" : "secondary"}
-                          style={styles.copyCellBtn}
-                        >
-                          {isCopied ? "Copied!" : "Copy Link"}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
 
           <div style={styles.successActions}>
             <Button onClick={onClose} variant="secondary" style={{ width: "100%" }}>
