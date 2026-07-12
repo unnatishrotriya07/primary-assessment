@@ -157,6 +157,29 @@ const interviewService = {
         api.post<InterviewReport>(`/interviews/${interviewId}/session`, payload),
 
     /**
+     * V2 Real-Time Conversation Engine turn execution.
+     */
+    executeTurn: (
+        interviewId: number,
+        payload: {
+            student_response: string;
+            network_status: string;
+            audio_url?: string;
+        }
+    ): Promise<{
+        next_speech: string;
+        next_state: string;
+        hints_remaining: number;
+        followups_remaining: number;
+        active_hint: string | null;
+        questions?: any[];
+        current_question_index: number;
+        comfort_index: number;
+        completion_status: string;
+    }> =>
+        api.post(`/interviews/${interviewId}/turn`, payload),
+
+    /**
      * Teacher: review and approve evaluation report.
      */
     reviewReport: (

@@ -8,6 +8,7 @@ import interviewService, {
     AnswerEntry,
 } from "@/services/interview.service";
 import { isHindiText } from "@/utils/helpers";
+import { voiceService, microphoneService } from "@/services/voice";
 
 interface PageProps {
     params: Promise<{ interviewId: string }>;
@@ -87,6 +88,9 @@ export default function InterviewPage({ params }: PageProps) {
     // Silence / idle timeout refs
     const silenceTimeoutRef = useRef<any>(null);
     const repeatTimeoutRef = useRef<any>(null);
+    const autoSubmitTimeoutRef = useRef<any>(null);
+    const gracePeriodTimeoutRef = useRef<any>(null);
+    const isSubmittingRef = useRef(false);
     const textRef = useRef("");
     const speechConfidenceRef = useRef<number>(1.0);
     const currentIdxRef = useRef(0);
@@ -174,15 +178,13 @@ export default function InterviewPage({ params }: PageProps) {
         if (typeof window === "undefined") return;
         const handleOnline = () => {
             setIsOffline(false);
-            if (phase === "interview" && !isSpeakingRef.current && micEnabled) {
+            if ((phase === "interview" || phase === "comfort_conv") && !isSpeakingRef.current && micEnabled) {
                 startSpeechRecognition();
             }
         };
         const handleOffline = () => {
             setIsOffline(true);
-            if (recognitionRef.current) {
-                try { recognitionRef.current.stop(); } catch (_) {}
-            }
+            voiceService.stopListening();
             setIsRecording(false);
         };
         window.addEventListener("online", handleOnline);
@@ -202,6 +204,19 @@ export default function InterviewPage({ params }: PageProps) {
 
         async function initSession() {
             setPhase("loading");
+            try {
+                await voiceService.initialize({
+                    mode: "auto",
+                    sttProvider: "browser",
+                    ttsProvider: "browser",
+                    language: "en-US"
+                });
+                const isSpeechEnabled = voiceService.isSpeechSupported();
+                setSpeechSupported(isSpeechEnabled);
+            } catch (err) {
+                console.error("Failed to initialize VoiceService:", err);
+                setSpeechSupported(false);
+            }
             let questionsList: InterviewQuestion[] = [];
             let sName = "Aarav";
             let subName = "Fractions";
@@ -320,12 +335,8 @@ export default function InterviewPage({ params }: PageProps) {
     useEffect(() => {
         return () => {
             clearSilenceTimers();
-            if (window.speechSynthesis) {
-                window.speechSynthesis.cancel();
-            }
-            if (audioContextRef.current) {
-                audioContextRef.current.close();
-            }
+            voiceService.cancelAll();
+            microphoneService.stopStream();
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
@@ -333,111 +344,52 @@ export default function InterviewPage({ params }: PageProps) {
     }, []);
 
     const clearSilenceTimers = () => {
-        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
-        if (repeatTimeoutRef.current) clearTimeout(repeatTimeoutRef.current);
+        if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+        }
+        if (repeatTimeoutRef.current) {
+            clearTimeout(repeatTimeoutRef.current);
+            repeatTimeoutRef.current = null;
+        }
+        if (autoSubmitTimeoutRef.current) {
+            clearTimeout(autoSubmitTimeoutRef.current);
+            autoSubmitTimeoutRef.current = null;
+        }
+        if (gracePeriodTimeoutRef.current) {
+            clearTimeout(gracePeriodTimeoutRef.current);
+            gracePeriodTimeoutRef.current = null;
+        }
     };
 
     // Text to Speech
     const speakText = useCallback((text: string, onEnd?: () => void) => {
-        if (typeof window === "undefined" || !window.speechSynthesis) {
-            onEnd?.();
-            return;
-        }
-
-        try {
-            window.speechSynthesis.resume();
-            window.speechSynthesis.cancel();
-        } catch (err) {
-            console.error("Error canceling speech synthesis:", err);
-        }
-
         isListeningRef.current = false;
         isSpeakingRef.current = true;
         setBuddyState("speaking");
         setIsSpeaking(true);
         setIsRecording(false);
 
-        if (recognitionRef.current) {
-            recognitionRef.current.onend = null;
-            try { recognitionRef.current.stop(); } catch (_) {}
-        }
-
-        // Strip emojis to prevent speech synthesis from pronouncing them
-        const cleanedText = text
-            .replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
-            .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|\p{Emoji_Presentation}/gu, "")
-            .trim();
-
-        const utt = new SpeechSynthesisUtterance(cleanedText);
-        utteranceRef.current = utt;
-        utt.rate = 0.88;
-        utt.pitch = 1.15;
-
-        // Try to fetch google female or Samanth female voice
-        const voices = window.speechSynthesis.getVoices();
-        const voice =
-            voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
-            voices.find((v) => v.lang.startsWith("en") && /female/i.test(v.name)) ||
-            voices[0];
-        if (voice) utt.voice = voice;
-
-        const keepAliveInterval = setInterval(() => {
-            if (window.speechSynthesis.speaking) {
-                window.speechSynthesis.pause();
-                window.speechSynthesis.resume();
+        voiceService.speak(text, {
+            onStart: () => {},
+            onEnd: () => {
+                setIsSpeaking(false);
+                isSpeakingRef.current = false;
+                setBuddyState("silent");
+                setTimeout(() => {
+                    if (!isSpeakingRef.current) {
+                        onEnd?.();
+                    }
+                }, 300);
+            },
+            onError: (err) => {
+                console.error("Speak error:", err);
+                setIsSpeaking(false);
+                isSpeakingRef.current = false;
+                setBuddyState("silent");
+                onEnd?.();
             }
-        }, 10000);
-
-        let fired = false;
-        let timeoutId: any = null;
-        const speakStartTime = Date.now();
-        const wordCount = cleanedText.split(/\s+/).length;
-        const estimatedDuration = (wordCount * 550) + 1500; // 550ms per word + 1.5s buffer
-
-        const cleanup = () => {
-            if (fired) return;
-            fired = true;
-            clearInterval(keepAliveInterval);
-            if (timeoutId) clearTimeout(timeoutId);
-
-            // If this is no longer the active utterance, discard the callback!
-            if (utteranceRef.current !== utt) {
-                return;
-            }
-
-            setIsSpeaking(false);
-            isSpeakingRef.current = false;
-            setBuddyState("silent");
-            utteranceRef.current = null;
-
-            // Call onEnd with a small safety delay to prevent mic picking up the end of speech
-            setTimeout(() => {
-                // Double check if another utterance has started in the meantime
-                if (utteranceRef.current === null || utteranceRef.current === utt) {
-                    onEnd?.();
-                }
-            }, 300);
-        };
-
-        utt.onend = cleanup;
-        utt.onerror = cleanup;
-
-        // Add 100ms delay to resolve the SpeechSynthesis hangs in Chrome
-        setTimeout(() => {
-            if (fired) return;
-            try {
-                window.speechSynthesis.speak(utt);
-                
-                const duration = Math.max(8000, (wordCount * 800) + 5000);
-                timeoutId = setTimeout(() => {
-                    cleanup();
-                }, duration);
-            } catch (err) {
-                cleanup();
-            }
-        }, 100);
+        });
     }, []);
 
     // Draw Waveform on Canvas
@@ -501,110 +453,97 @@ export default function InterviewPage({ params }: PageProps) {
     function startSpeechRecognition() {
         if (isSpeakingRef.current || isSubmitting || !micEnabled || isOffline) return;
 
-        const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SR) {
-            setError("Speech recognition is not supported in this browser. Please use the keyboard option.");
-            return;
-        }
-
         isListeningRef.current = true;
 
-        if (recognitionRef.current) {
-            try { recognitionRef.current.stop(); } catch (_) {}
-        }
-
-        const rec = new SR();
-        rec.lang = "en-US";
-        rec.interimResults = true;
-        rec.continuous = true;
-
-        rec.onstart = () => {
-            setIsRecording(true);
-            setBuddyState("listening");
-            setLiveCaption("Listening...");
-            resetSilenceTimers();
-        };
-
-        rec.onresult = (e: any) => {
-            if (!isListeningRef.current || isSpeakingRef.current) {
-                return;
-            }
-            let interimTranscript = "";
-            let finalTranscript = "";
-            let lastConfidence = 1.0;
-            for (let i = 0; i < e.results.length; ++i) {
-                const res = e.results[i][0];
-                const txt = res.transcript;
-                if (res.confidence !== undefined) {
-                    lastConfidence = res.confidence;
+        voiceService.startListening({
+            onStart: () => {
+                setIsRecording(true);
+                setBuddyState("listening");
+                setLiveCaption("Listening...");
+                resetSilenceTimers();
+            },
+            onResult: (currentSpeech, isFinal, confidence) => {
+                if (!isListeningRef.current || isSpeakingRef.current) {
+                    return;
                 }
-                if (e.results[i].isFinal) {
-                    finalTranscript += txt + " ";
-                } else {
-                    interimTranscript += txt;
-                }
-            }
-            speechConfidenceRef.current = lastConfidence;
-            const currentSpeech = (finalTranscript + interimTranscript).trim();
-            setLiveCaption(currentSpeech);
-            setTypedText(currentSpeech);
 
-            const lowerSpeech = currentSpeech.toLowerCase().trim();
-            if (
-                lowerSpeech === "repeat" || 
-                lowerSpeech === "repeat the question" || 
-                lowerSpeech === "can you repeat" || 
-                lowerSpeech === "please repeat" ||
-                lowerSpeech === "can you repeat the question" ||
-                lowerSpeech === "repeat please" ||
-                lowerSpeech === "could you repeat the question"
-            ) {
-                clearSilenceTimers();
-                isListeningRef.current = false;
-                if (recognitionRef.current) {
-                    recognitionRef.current.onend = null;
-                    try { recognitionRef.current.stop(); } catch (_) {}
+                // Instantly clear grace period countdown if child starts talking again
+                if (gracePeriodTimeoutRef.current) {
+                    clearTimeout(gracePeriodTimeoutRef.current);
+                    gracePeriodTimeoutRef.current = null;
+                    console.log("[Silence Detection] Speech detected. Grace period cleared.");
                 }
+
+                speechConfidenceRef.current = confidence ?? 1.0;
+                setLiveCaption(currentSpeech);
+                setTypedText(currentSpeech);
+
+                const lowerSpeech = currentSpeech.toLowerCase().trim();
+                const keywords = [
+                    "repeat the question",
+                    "can you say it again",
+                    "dobara bolna",
+                    "dobara bolie",
+                    "say it again",
+                    "please repeat",
+                    "can you repeat",
+                    "repeat please",
+                    "could you repeat",
+                    "what did you say"
+                ];
+                const matchesCommand = keywords.some(kw => lowerSpeech.includes(kw));
+
+                if (matchesCommand) {
+                    clearSilenceTimers();
+                    isListeningRef.current = false;
+                    voiceService.stopListening();
+                    setIsRecording(false);
+                    triggerRepeat();
+                    return;
+                }
+
+                if (currentSpeech.length > 0) {
+                    setError(null);
+                    resetSilenceTimers(currentSpeech);
+                }
+            },
+            onSpeechEnd: () => {
+                console.log("[Silence Detection] Speech ended. Starting 15-second grace period countdown...");
+                if (gracePeriodTimeoutRef.current) clearTimeout(gracePeriodTimeoutRef.current);
+                
+                gracePeriodTimeoutRef.current = setTimeout(() => {
+                    const activeState = phaseRef.current;
+                    if (isListeningRef.current && !isOffline && (activeState === "interview" || activeState === "comfort_conv")) {
+                        console.log("[Silence Detection] Grace period expired. Auto-submitting current answer...");
+                        const text = textRef.current.trim();
+                        setSilenceRetryCount(0);
+                        submitTurnLocal(text || "(No spoken response)");
+                    }
+                }, 15000); // 15-second grace period
+            },
+            onError: (err) => {
+                console.error("Speech recognition error:", err);
+            },
+            onEnd: () => {
                 setIsRecording(false);
-                triggerRepeat();
-                return;
-            }
-
-            if (currentSpeech.length > 0) {
-                setError(null);
-                resetSilenceTimers(currentSpeech); // Reset timers since student is actively talking
-            }
-        };
-
-        rec.onerror = (err: any) => {
-            if (err.error === "aborted" || err.error === "no-speech") {
-                return; // Suppress aborted error console spam when stop() is called programmatically
-            }
-            console.error("Speech recognition error:", err.error);
-        };
-
-        rec.onend = () => {
-            setIsRecording(false);
-            if (isListeningRef.current) {
-                setBuddyState("silent");
-                // Auto restart if mic is enabled and we are not speaking
-                const isSessionActive = phase === "interview" || phase === "comfort_conv";
-                if (micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && isSessionActive) {
-                    setTimeout(() => {
-                        const stillActive = phase === "interview" || phase === "comfort_conv";
-                        if (isListeningRef.current && micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && stillActive) {
-                            try { rec.start(); } catch (_) {}
-                        }
-                    }, 400);
+                if (isListeningRef.current) {
+                    setBuddyState("silent");
+                    const isSessionActive = phase === "interview" || phase === "comfort_conv";
+                    if (micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && isSessionActive) {
+                        setTimeout(() => {
+                            const stillActive = phase === "interview" || phase === "comfort_conv";
+                            if (isListeningRef.current && micEnabled && !isSpeakingRef.current && !isSubmitting && !isOffline && stillActive) {
+                                startSpeechRecognition();
+                            }
+                        }, 400);
+                    }
                 }
             }
-        };
-
-        recognitionRef.current = rec;
-        try {
-            rec.start();
-        } catch (_) {}
-    };
+        }, {
+            interviewId: parseInt(interviewId as string, 10),
+            questionIndex: currentIdx
+        });
+    }
 
     // Silence timers logic
     const resetSilenceTimers = (latestSpeech: string = "") => {
@@ -613,129 +552,203 @@ export default function InterviewPage({ params }: PageProps) {
 
         const speechToUse = latestSpeech || textRef.current;
 
-        // 6 seconds silence warning
+        // 8-Second Nudge: if no speech is heard for 8 consecutive seconds
         silenceTimeoutRef.current = setTimeout(() => {
             if (speechToUse.length === 0 && isListeningRef.current && !isOffline) {
-                speakText("Take your time. I'm listening 😊", () => {
+                speakText("Take your time, tell me whatever you remember!", () => {
                     startSpeechRecognition();
                 });
             }
-        }, 6000);
-
-        // 12 seconds silence repeat offer
-        repeatTimeoutRef.current = setTimeout(() => {
-            if (speechToUse.length === 0 && isListeningRef.current && !isOffline) {
-                speakText("Would you like me to repeat the question?", () => {
-                    startSpeechRecognition();
-                });
-            }
-        }, 12000);
-
-        // If student has spoken something, auto-submit after 4 seconds of silence
-        if (speechToUse.length > 0 && isListeningRef.current && !isOffline) {
-            silenceTimeoutRef.current = setTimeout(() => {
-                if (textRef.current.length > 0 && isListeningRef.current && !isOffline) {
-                    console.log("[Silence Detection] Auto-submitting due to student silence after response.");
-                    if (phase === "comfort_conv") {
-                        handleComfortSubmit();
-                    } else {
-                        handleAnswerSubmit();
-                    }
-                }
-            }, 4000);
-        }
+        }, 8000);
     };
 
-    // Advance comfort dialog
-    function handleComfortSubmit() {
+    // Execute local turn
+    const submitTurnLocal = async (responseText: string) => {
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        setIsSubmitting(true);
+
         try {
             clearSilenceTimers();
-            const responseText = typedText.trim() || "(silent)";
             setTypedText("");
             setLiveCaption("");
             setActiveHint(null);
 
             isListeningRef.current = false;
-            if (recognitionRef.current) {
-                recognitionRef.current.onend = null;
-                try { recognitionRef.current.stop(); } catch (_) {}
-            }
+            voiceService.stopListening();
 
-            // Persist student's comfort response
-            recordTurn("student", responseText, "Comfort Conversation", speechConfidenceRef.current);
-
-            // Show thinking animation for 1s
             setBuddyState("thinking");
-            setTimeout(() => {
-                if (comfortIdx === 0) {
+
+            const activeState = phaseRef.current;
+            const currentIdxVal = currentIdxRef.current;
+            const comfortIdxVal = comfortIdxRef.current;
+            const answersVal = answersRef.current;
+            const transcriptVal = transcriptRef.current;
+
+            if (activeState === "comfort_conv") {
+                const nextComfortIdx = comfortIdxVal + 1;
+                let nextSpeech = "";
+                
+                const updatedTranscript = [
+                    ...transcriptVal,
+                    { role: "student" as const, text: responseText, question_category: "comfort_conv" }
+                ];
+
+                if (nextComfortIdx === 1) {
+                    nextSpeech = "What did you enjoy doing today?";
+                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "comfort_conv" });
                     setComfortIdx(1);
-                    const nextQ = "What did you enjoy doing today?";
-                    speakText(nextQ, () => {
+                    setTranscript(updatedTranscript);
+                    setBuddyState("speaking");
+                    speakText(nextSpeech, () => {
                         startSpeechRecognition();
                     });
-                    recordTurn("ai", nextQ, "Comfort Conversation");
-                    saveSessionProgress(currentIdx, "comfort_conv", 1, answers);
-                } else if (comfortIdx === 1) {
+                } else if (nextComfortIdx === 2) {
+                    nextSpeech = "Ready to learn together?";
+                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "comfort_conv" });
                     setComfortIdx(2);
-                    const nextQ = "Ready to learn together?";
-                    speakText(nextQ, () => {
+                    setTranscript(updatedTranscript);
+                    setBuddyState("speaking");
+                    speakText(nextSpeech, () => {
                         startSpeechRecognition();
                     });
-                    recordTurn("ai", nextQ, "Comfort Conversation");
-                    saveSessionProgress(currentIdx, "comfort_conv", 2, answers);
                 } else {
-                    // Transition phase (Step 5)
-                    setPhase("transition");
-                    setBuddyState("waving");
-                    const transitionSpeech = `Great! Now let's talk about ${chapterTitle || subjectName || "Fractions"}.`;
-                    speakText(transitionSpeech, () => {
+                    // Transition to interview phase
+                    const firstQ = questions[0];
+                    if (firstQ) {
+                        nextSpeech = firstQ.q;
+                        updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: firstQ.category });
                         setPhase("interview");
                         setCurrentIdx(0);
-                        const firstQ = questions[0] || { q: "Let's begin!", category: "General" };
-                        setTranscript([{ role: "ai", text: firstQ.q }]);
-                        
-                        const firstQText = firstQ.q;
-                        speakText(firstQText, () => {
+                        setTranscript(updatedTranscript);
+                        setBuddyState("speaking");
+                        speakText(nextSpeech, () => {
                             startSpeechRecognition();
                         });
-                        recordTurn("ai", firstQText, firstQ.category);
-                        saveSessionProgress(0, "interview", comfortIdx, answers);
-                    });
-                    recordTurn("ai", transitionSpeech, "Transition");
+                    } else {
+                        nextSpeech = "Let's begin the assessment.";
+                        updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "interview" });
+                        setPhase("interview");
+                        setCurrentIdx(0);
+                        setTranscript(updatedTranscript);
+                        setBuddyState("speaking");
+                        speakText(nextSpeech, () => {
+                            startSpeechRecognition();
+                        });
+                    }
                 }
-            }, 1000);
+
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
+            } else if (activeState === "interview") {
+                const currentQuestion = questions[currentIdxVal];
+                const nextIdx = currentIdxVal + 1;
+
+                const newAnswerEntry = {
+                    question_category: currentQuestion?.category || "Assessment Content",
+                    question: currentQuestion?.q || "",
+                    answer: responseText
+                };
+                const updatedAnswers = [...answersVal, newAnswerEntry];
+                setAnswers(updatedAnswers);
+
+                const updatedTranscript = [
+                    ...transcriptVal,
+                    { role: "student" as const, text: responseText, question_category: currentQuestion?.category }
+                ];
+
+                if (nextIdx < questions.length) {
+                    const nextQuestion = questions[nextIdx];
+                    const nextSpeech = nextQuestion.q;
+                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: nextQuestion.category });
+                    
+                    setCurrentIdx(nextIdx);
+                    setTranscript(updatedTranscript);
+                    setBuddyState("speaking");
+                    
+                    speakText(nextSpeech, () => {
+                        startSpeechRecognition();
+                    });
+
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                } else {
+                    const goodbyeText = "Fantastic job! We are all done today. Thank you for sharing your learning journey with me!";
+                    updatedTranscript.push({ role: "ai" as const, text: goodbyeText, question_category: "GOODBYE" });
+                    
+                    setTranscript(updatedTranscript);
+                    setPhase("completed");
+                    setBuddyState("completed");
+                    triggerConfetti();
+
+                    speakText(goodbyeText);
+                    if (stream) {
+                        stream.getTracks().forEach((t) => t.stop());
+                    }
+
+                    try {
+                        const finalPayload = {
+                            interview_id: parseInt(interviewId, 10),
+                            transcript: updatedTranscript,
+                            answers: updatedAnswers
+                        };
+                        
+                        await interviewService.submit(finalPayload);
+                        
+                        setTimeout(async () => {
+                            try {
+                                const finalReport = await interviewService.getReport(parseInt(interviewId, 10));
+                                sessionStorage.setItem(`interview_report_${finalReport.id}`, JSON.stringify(finalReport));
+                            } catch (err) {
+                                console.error("Failed to load completed report:", err);
+                            }
+                        }, 2000);
+                    } catch (submitErr) {
+                        console.error("Failed to submit final payload:", submitErr);
+                        setError("Failed to submit the assessment. Please check your connection.");
+                    }
+
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                }
+            }
         } catch (err) {
-            console.error("[InterviewPage] Exception in handleComfortSubmit:", err);
+            console.error("[InterviewPage] Exception in submitTurnLocal:", err);
             setError("An unexpected error occurred. Please try again.");
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
         }
     };
+
+    function handleComfortSubmit() {
+        const responseText = typedText.trim() || "(silent)";
+        submitTurnLocal(responseText);
+    }
+
+    function handleNextQuestionClick() {
+        const text = textRef.current.trim();
+        setSilenceRetryCount(0);
+        submitTurnLocal(text || "(No spoken response)");
+    }
 
     // Request permissions
     const requestPermission = async (type: "mic" | "camera") => {
         if (type === "mic") {
             try {
                 setMicStatus("idle");
-                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioStream = await microphoneService.startStream();
                 setMicStatus("granted");
                 setMicEnabled(true);
                 
-                // Set audio track into local stream
                 if (stream) {
                     stream.addTrack(audioStream.getAudioTracks()[0]);
                 } else {
                     setStream(audioStream);
                 }
 
-                // Web Audio API Visualizer Setup
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                const audioCtx = new AudioContextClass();
-                audioContextRef.current = audioCtx;
-
-                const source = audioCtx.createMediaStreamSource(audioStream);
-                const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 64;
+                // Expose AnalyserNode for local visualizer drawing loop
+                const analyser = microphoneService.getAnalyser();
                 analyserRef.current = analyser;
-                source.connect(analyser);
 
                 setTimeout(() => {
                     drawWaveform();
@@ -746,20 +759,20 @@ export default function InterviewPage({ params }: PageProps) {
                     return;
                 }
 
-                // If camera is already granted or not needed, advance
-                const readyText = `Awesome! Everything is ready. Let's start working on the assessment questions.`;
-                speakText(readyText, () => {
-                    setPhase("interview");
-                    setCurrentIdx(0);
-                    setTranscript([{ role: "ai", text: questions[0]?.q || "" }]);
-                    
-                    const firstQText = questions[0]?.q || "Let's begin!";
-                    speakText(firstQText, () => {
-                        startSpeechRecognition();
-                    });
-                    recordTurn("ai", firstQText, questions[0]?.category);
+                // Start with the meet_buddy/comfort_conv phase
+                setPhase("comfort_conv");
+                setComfortIdx(0);
+                
+                const firstGreeting = `Awesome! Everything is ready. Let's start. Hi ${studentName}! I'm Buddy 😊 Today we'll chat together about something you recently learned. Don't worry, there are no marks or exams. Just answer naturally.`;
+                const firstQText = `How are you today, ${studentName}?`;
+                const combinedSpeechText = `${firstGreeting} ${firstQText}`;
+                
+                setTranscript([{ role: "ai", text: firstQText }]);
+                
+                speakText(combinedSpeechText, () => {
+                    startSpeechRecognition();
                 });
-                recordTurn("ai", readyText, "Device Setup");
+                recordTurn("ai", firstQText, "comfort_conv");
             } catch (_) {
                 setMicStatus("denied");
                 setMicEnabled(false);
@@ -790,151 +803,27 @@ export default function InterviewPage({ params }: PageProps) {
 
     // Submit individual question answers
     function handleAnswerSubmit() {
-        try {
-            if (questions.length === 0) {
-                console.error("[InterviewPage] questions list is empty inside handleAnswerSubmit!");
-                setError("No questions loaded. Please restart the session.");
-                return;
+        const text = textRef.current.trim();
+        if (!text) {
+            const nextRetry = silenceRetryCount + 1;
+            setSilenceRetryCount(nextRetry);
+
+            if (nextRetry >= 3) {
+                setSilenceRetryCount(0);
+                speakText("I'm having a bit of trouble hearing you. Let's try typing the answer instead!", () => {
+                    setShowKeyboardInput(true);
+                });
+            } else {
+                speakText("Oops. I couldn't hear you clearly. Can you try once more?", () => {
+                    startSpeechRecognition();
+                });
             }
-            clearSilenceTimers();
-            const text = textRef.current.trim();
-            setTypedText("");
-            setLiveCaption("");
-            setActiveHint(null);
-
-            isListeningRef.current = false;
-            if (recognitionRef.current) {
-                recognitionRef.current.onend = null;
-                try { recognitionRef.current.stop(); } catch (_) {}
-            }
-
-            if (!text) {
-                const nextRetry = silenceRetryCount + 1;
-                setSilenceRetryCount(nextRetry);
-
-                if (nextRetry >= 3) {
-                    setSilenceRetryCount(0);
-                    speakText("I'm having a bit of trouble hearing you. Let's try typing the answer instead!", () => {
-                        setShowKeyboardInput(true);
-                    });
-                } else {
-                    // Speech not recognized fallback (Step 12)
-                    speakText("Oops. I couldn't hear you clearly. Can you try once more?", () => {
-                        startSpeechRecognition();
-                    });
-                }
-                return;
-            }
-
-            setSilenceRetryCount(0);
-
-            const activeCurrentIdx = currentIdxRef.current;
-            const activeComfortIdx = comfortIdxRef.current;
-            const activeTranscript = transcriptRef.current;
-            const activeAnswers = answersRef.current;
-
-            const q = questions[activeCurrentIdx] || questions[0] || { category: "General", q: "Question", id: undefined };
-            
-            // Persist student turn
-            recordTurn("student", text, q.category, speechConfidenceRef.current, q.id);
-
-            // Setup transcript items
-            const newTranscript: TranscriptEntry[] = [
-                ...activeTranscript,
-                { role: "student", text, question_category: q.category }
-            ];
-            setTranscript(newTranscript);
-
-            const newAnswers: AnswerEntry[] = [
-                ...activeAnswers,
-                { question_category: q.category, question: q.q, answer: text }
-            ];
-            setAnswers(newAnswers);
-
-            // Save progressive state immediately
-            saveSessionProgress(activeCurrentIdx, "interview", activeComfortIdx, newAnswers);
-
-            // Transition: Thinking Bubble (Step 10)
-            setBuddyState("thinking");
-
-            setTimeout(() => {
-                const isLast = activeCurrentIdx >= questions.length - 1;
-                
-                if (isLast) {
-                    // Submit interview to backend
-                    submitSession(newAnswers, newTranscript);
-                } else {
-                    // Select a random, non-repeating encouragement
-                    let phrase = "";
-                    let updatedPool = [...unusedEncouragementsRef.current];
-                    if (updatedPool.length === 0) {
-                        updatedPool = [...ENCOURAGEMENTS];
-                    }
-                    const randIndex = Math.floor(Math.random() * updatedPool.length);
-                    phrase = updatedPool[randIndex] || "Great job!";
-                    updatedPool.splice(randIndex, 1);
-                    setUnusedEncouragements(updatedPool);
-
-                    const next = activeCurrentIdx + 1;
-                    const nextQ = questions[next] || { q: "Let's continue.", category: "General" };
-                    const nextQText = nextQ.q;
-                    
-                    // Add AI next prompt
-                    setTranscript([
-                        ...newTranscript,
-                        { role: "ai", text: nextQText, question_category: nextQ.category }
-                    ]);
-                    
-                    setCurrentIdx(next);
-                    
-                    // Speak encouragement first, then the next question
-                    const promptSpeech = `${phrase}. Let's look at the next one. ${nextQText}`;
-                    speakText(promptSpeech, () => {
-                        startSpeechRecognition();
-                    });
-                    recordTurn("ai", promptSpeech, nextQ.category);
-                    saveSessionProgress(next, "interview", activeComfortIdx, newAnswers);
-                }
-            }, 1500);
-        } catch (err) {
-            console.error("[InterviewPage] Exception in handleAnswerSubmit:", err);
-            setError("An unexpected error occurred. Please try again.");
-        }
-    };
-
-    // Finalize session submission
-    const submitSession = async (finalAnswers: AnswerEntry[], finalTranscript: TranscriptEntry[]) => {
-        // Transition student to completion page immediately (0 seconds wait)
-        setPhase("completed");
-        setBuddyState("completed");
-        triggerConfetti();
-        
-        // Record final turnaround turn
-        const completionText = `Thank you ${studentName}! I loved talking with you. Your teacher will now understand how you're learning and help you even more. See you soon!`;
-        recordTurn("ai", completionText, "Completion");
-
-        if (stream) {
-            stream.getTracks().forEach((t) => t.stop());
+            return;
         }
 
-        try {
-            // Save progressive state as completed
-            saveSessionProgress(currentIdx, "interview", comfortIdx, finalAnswers, true);
-
-            // Fire-and-forget background queue trigger
-            interviewService.submit({
-                interview_id: parseInt(interviewId, 10),
-                transcript: finalTranscript,
-                answers: finalAnswers,
-            }).then((report) => {
-                sessionStorage.setItem(`interview_report_${report.id}`, JSON.stringify(report));
-            }).catch((err) => {
-                console.error("Async evaluation pipeline trigger failed:", err);
-            });
-        } catch (err) {
-            console.error("Failed to submit session to backend:", err);
-        }
-    };
+        setSilenceRetryCount(0);
+        submitTurnLocal(text);
+    }
 
     // Confetti simulation trigger
     const triggerConfetti = () => {
@@ -1109,7 +998,7 @@ export default function InterviewPage({ params }: PageProps) {
                 {renderVisualProgress()}
 
                 {/* Buddy & Speech bubble Section or Split Layout depending on phase */}
-                {phase === "interview" ? (
+                {(phase === "interview" || phase === "comfort_conv") ? (
                     <div style={styles.splitGrid}>
                         {/* Left Panel: Bot */}
                         <div style={styles.panelCard}>
@@ -1305,7 +1194,7 @@ export default function InterviewPage({ params }: PageProps) {
                         </div>
                     )}
 
-                    {phase === "interview" && (
+                    {(phase === "interview" || phase === "comfort_conv") && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%", maxWidth: "680px", margin: "0 auto" }}>
                             {/* Status label: Listening / Speaking / Keyboard */}
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
@@ -1369,8 +1258,8 @@ export default function InterviewPage({ params }: PageProps) {
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
-                                            if (typedText.trim() && !isSpeaking && !isSubmitting) {
-                                                handleAnswerSubmit();
+                                            if (!isSpeaking && !isSubmitting) {
+                                                handleNextQuestionClick();
                                             }
                                         }
                                     }}
@@ -1382,26 +1271,26 @@ export default function InterviewPage({ params }: PageProps) {
                                     style={{
                                         height: "64px",
                                         padding: "0 28px",
-                                        backgroundColor: (typedText.trim() && !isSpeaking && !isSubmitting) ? "#2563EB" : "#D1D5DB",
+                                        backgroundColor: (!isSpeaking && !isSubmitting) ? "#2563EB" : "#D1D5DB",
                                         color: "#FFFFFF",
                                         border: "none",
                                         borderRadius: "10px",
                                         fontWeight: "600",
                                         fontSize: "15px",
-                                        cursor: (typedText.trim() && !isSpeaking && !isSubmitting) ? "pointer" : "default",
+                                        cursor: (!isSpeaking && !isSubmitting) ? "pointer" : "default",
                                         transition: "all 0.15s ease",
                                         display: "flex",
                                         alignItems: "center",
                                         justifyContent: "center"
                                     }}
                                     onClick={() => {
-                                        if (typedText.trim() && !isSpeaking && !isSubmitting) {
-                                            handleAnswerSubmit();
+                                        if (!isSpeaking && !isSubmitting) {
+                                            handleNextQuestionClick();
                                         }
                                     }}
-                                    disabled={!typedText.trim() || isSpeaking || isSubmitting}
+                                    disabled={isSpeaking || isSubmitting}
                                 >
-                                    Submit
+                                    Next Question
                                 </button>
                             </div>
 
@@ -1428,10 +1317,7 @@ export default function InterviewPage({ params }: PageProps) {
                                                 if (isRecording) {
                                                     isListeningRef.current = false;
                                                     setIsRecording(false);
-                                                    if (recognitionRef.current) {
-                                                        recognitionRef.current.onend = null;
-                                                        try { recognitionRef.current.stop(); } catch (_) {}
-                                                    }
+                                                    voiceService.stopListening();
                                                 } else {
                                                     setMicEnabled(true);
                                                     startSpeechRecognition();
