@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/common/Button";
 import authService from "@/services/auth.service";
 import { extractErrorMessage } from "@/utils/helpers";
+import { STORAGE_KEYS } from "@/utils/constants";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -75,11 +76,18 @@ export default function SignupPage() {
 
       // Save generated tenant ID for Step 3
       setGeneratedTenantId(response.tenantId || "Unknown ID");
+
+      // Auto login after successful signup
+      const loginResponse = await authService.login({ email, password });
+      localStorage.setItem(STORAGE_KEYS.TOKEN, loginResponse.token);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(loginResponse.user));
+      document.cookie = `token=${loginResponse.token}; path=/; max-age=86400; SameSite=Lax`;
+
       setStep(3);
       
       // Auto-redirect after 15 seconds as a fallback
       setTimeout(() => {
-        router.push("/login");
+        router.push("/dashboard");
       }, 15000);
     } catch (err: any) {
       setError(extractErrorMessage(err, "Failed to register school. Email might be already in use."));
@@ -418,10 +426,10 @@ export default function SignupPage() {
               <Button
                 type="button"
                 variant="primary"
-                onClick={() => router.push("/login")}
+                onClick={() => router.push("/dashboard")}
                 style={styles.actionBtn}
               >
-                Go to console login
+                Go to Dashboard
               </Button>
             </div>
           )}

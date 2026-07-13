@@ -742,6 +742,7 @@ export default function InterviewPage({ params }: PageProps) {
                 
                 if (stream) {
                     stream.addTrack(audioStream.getAudioTracks()[0]);
+                    setStream(new MediaStream(stream.getTracks()));
                 } else {
                     setStream(audioStream);
                 }
@@ -749,30 +750,6 @@ export default function InterviewPage({ params }: PageProps) {
                 // Expose AnalyserNode for local visualizer drawing loop
                 const analyser = microphoneService.getAnalyser();
                 analyserRef.current = analyser;
-
-                setTimeout(() => {
-                    drawWaveform();
-                }, 100);
-
-                if (questions.length === 0) {
-                    setError("Session data is empty. Please verify your invitation link.");
-                    return;
-                }
-
-                // Start with the meet_buddy/comfort_conv phase
-                setPhase("comfort_conv");
-                setComfortIdx(0);
-                
-                const firstGreeting = `Awesome! Everything is ready. Let's start. Hi ${studentName}! I'm Buddy 😊 Today we'll chat together about something you recently learned. Don't worry, there are no marks or exams. Just answer naturally.`;
-                const firstQText = `How are you today, ${studentName}?`;
-                const combinedSpeechText = `${firstGreeting} ${firstQText}`;
-                
-                setTranscript([{ role: "ai", text: firstQText }]);
-                
-                speakText(combinedSpeechText, () => {
-                    startSpeechRecognition();
-                });
-                recordTurn("ai", firstQText, "comfort_conv");
             } catch (_) {
                 setMicStatus("denied");
                 setMicEnabled(false);
@@ -787,6 +764,7 @@ export default function InterviewPage({ params }: PageProps) {
 
                 if (stream) {
                     stream.addTrack(videoStream.getVideoTracks()[0]);
+                    setStream(new MediaStream(stream.getTracks()));
                     // Re-trigger srcObject assignment immediately
                     if (videoRef.current) {
                         videoRef.current.srcObject = stream;
@@ -797,8 +775,43 @@ export default function InterviewPage({ params }: PageProps) {
             } catch (_) {
                 setCameraStatus("denied");
                 setCameraEnabled(false);
+                setError("Camera is required. Please check your browser bar.");
             }
         }
+    };
+
+    // Start assessment after permissions granted
+    const startAssessment = () => {
+        if (questions.length === 0) {
+            setError("Session data is empty. Please verify your invitation link.");
+            return;
+        }
+
+        if (micStatus !== "granted" || cameraStatus !== "granted") {
+            setError("Both microphone and camera must be allowed to start.");
+            return;
+        }
+
+        // Start directly with the interview phase
+        setPhase("interview");
+        setCurrentIdx(0);
+
+        // Expose AnalyserNode for local visualizer drawing loop
+        setTimeout(() => {
+            drawWaveform();
+        }, 200);
+        
+        const introText = `Hi ${studentName}! Let's start learning together today. We will talk about ${chapterTitle || subjectName || "Fractions"}.`;
+        const firstQText = questions[0]?.q || "Let's begin!";
+        const combinedSpeechText = `${introText} ${firstQText}`;
+        
+        setTranscript([{ role: "ai", text: firstQText }]);
+        
+        speakText(combinedSpeechText, () => {
+            startSpeechRecognition();
+        });
+        recordTurn("ai", firstQText, questions[0]?.category);
+        saveSessionProgress(0, "interview", 0, answers, false);
     };
 
     // Submit individual question answers
@@ -896,7 +909,7 @@ export default function InterviewPage({ params }: PageProps) {
             return `Hi ${studentName}! I'm Buddy 😊 Today we'll chat together about something you recently learned. Don't worry. There are no marks or difficult exams. Just answer naturally. I'm excited to meet you!`;
         }
         if (phase === "device_setup") {
-            return "Buddy loves listening! Please allow your microphone so we can talk together. Camera is optional.";
+            return "Please allow your microphone and camera to start the assessment. Both must be enabled.";
         }
         if (phase === "comfort_conv") {
             if (comfortIdx === 0) return `How are you today, ${studentName}?`;
@@ -1150,6 +1163,44 @@ export default function InterviewPage({ params }: PageProps) {
                 <div style={styles.interactiveArea}>
                     {phase === "device_setup" && (
                         <div style={styles.setupContainer}>
+                            {cameraEnabled && (
+                                <div style={{
+                                    width: "100%",
+                                    height: "200px",
+                                    borderRadius: "14px",
+                                    overflow: "hidden",
+                                    border: "1.5px solid #E5E7EB",
+                                    backgroundColor: "#000000",
+                                    position: "relative",
+                                    marginBottom: "0.5rem"
+                                }}>
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        playsInline 
+                                        muted 
+                                        style={{ 
+                                            width: "100%", 
+                                            height: "100%", 
+                                            objectFit: "cover" 
+                                        }} 
+                                    />
+                                    <div style={{
+                                        position: "absolute",
+                                        bottom: "0.75rem",
+                                        left: "0.75rem",
+                                        backgroundColor: "rgba(17, 24, 39, 0.7)",
+                                        padding: "0.25rem 0.6rem",
+                                        borderRadius: "6px",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 500,
+                                        color: "#ffffff",
+                                    }}>
+                                        Camera Preview
+                                    </div>
+                                </div>
+                            )}
+
                             <div 
                                 style={{
                                     ...styles.setupCard,
@@ -1174,23 +1225,43 @@ export default function InterviewPage({ params }: PageProps) {
                             <div 
                                 style={{
                                     ...styles.setupCard,
-                                    borderColor: cameraStatus === "granted" ? "#2563EB" : "#E5E7EB"
+                                    borderColor: cameraStatus === "granted" ? "#10B981" : "#E5E7EB"
                                 }}
                                 onClick={() => requestPermission("camera")}
                             >
                                 <span style={styles.setupCardIcon}>📷</span>
                                 <div style={styles.setupCardText}>
                                     <h4 style={styles.setupCardTitle}>Camera</h4>
-                                    <p style={styles.setupCardSub}>Optional visual companion</p>
+                                    <p style={styles.setupCardSub}>Required for the assessment</p>
                                 </div>
                                 <span style={{
                                     ...styles.setupCardBadge,
-                                    backgroundColor: cameraStatus === "granted" ? "#EFF6FF" : "#F3F4F6",
-                                    color: cameraStatus === "granted" ? "#1E40AF" : "#374151"
+                                    backgroundColor: cameraStatus === "granted" ? "#E6F4EA" : "#F3F4F6",
+                                    color: cameraStatus === "granted" ? "#137333" : "#374151"
                                 }}>
-                                    {cameraStatus === "granted" ? "Allowed" : "Optional"}
+                                    {cameraStatus === "granted" ? "Allowed" : "Allow camera"}
                                 </span>
                             </div>
+
+                            <button
+                                style={{
+                                    ...styles.ctaButton,
+                                    width: "100%",
+                                    marginTop: "1rem",
+                                    height: "48px",
+                                    backgroundColor: (micStatus === "granted" && cameraStatus === "granted") ? "#2563EB" : "#9CA3AF",
+                                    cursor: (micStatus === "granted" && cameraStatus === "granted") ? "pointer" : "not-allowed",
+                                    opacity: (micStatus === "granted" && cameraStatus === "granted") ? 1 : 0.6,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "8px"
+                                }}
+                                disabled={!(micStatus === "granted" && cameraStatus === "granted")}
+                                onClick={startAssessment}
+                            >
+                                Start Assessment
+                            </button>
                         </div>
                     )}
 

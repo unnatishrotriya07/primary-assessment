@@ -69,7 +69,7 @@ export default function LoginPage() {
 
           <div style={styles.formHeader}>
             <h1 style={styles.formTitle} className="gradient-text">Welcome Back</h1>
-            <p style={styles.formSubtitle}>Sign in to your school console or access your assessment</p>
+            <p style={styles.formSubtitle}>Sign in to your school console</p>
           </div>
 
           <LoginForm />
