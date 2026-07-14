@@ -32,7 +32,7 @@ export default function AssessmentsClient() {
 
   // Search & filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeStateFilter, setActiveStateFilter] = useState("All"); // All, Live, Upcoming, Draft, Completed, Needs Review
+  const [activeStateFilter, setActiveStateFilter] = useState("All"); // All, Live, Upcoming, Completed, Needs Review
   const [copiedAsmtId, setCopiedAsmtId] = useState<string | null>(null);
 
   // Fetch teacher's name
@@ -124,17 +124,11 @@ export default function AssessmentsClient() {
   }, [refreshKey]);
 
   // Translate DB status to User-Friendly Display Status
-  const getDisplayStatus = (item: AssessmentData): "Live" | "Upcoming" | "Draft" | "Completed" => {
+  const getDisplayStatus = (item: AssessmentData): "Live" | "Upcoming" | "Completed" => {
     if (item.status === "Active") return "Live";
     if (item.status === "Completed") return "Completed";
-    if (item.status === "Scheduled") {
-      // If it doesn't have any students assigned, it is a Draft
-      if (!item.assignedStudents || item.assignedStudents.length === 0) {
-        return "Draft";
-      }
-      return "Upcoming";
-    }
-    return (item.status as any) || "Draft";
+    if (item.status === "Scheduled") return "Upcoming";
+    return (item.status as any) || "Live";
   };
 
   const handleCopyShareableLink = async (e: React.MouseEvent, assessmentId: string) => {
@@ -282,7 +276,6 @@ export default function AssessmentsClient() {
   // Section divisions for the grid
   const liveAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Live");
   const upcomingAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Upcoming");
-  const draftAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Draft");
   const completedAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Completed");
 
   // Recently Generated: Top 3 newest assessments by creation time
@@ -294,33 +287,7 @@ export default function AssessmentsClient() {
     })
     .slice(0, 3);
 
-  // Seeded AI Suggestions (aligned with Grade 3 curriculum)
-  const aiSuggestions = [
-    {
-      id: "sug-1",
-      title: "Equivalent Fractions Diagnostic",
-      subject: "Mathematics",
-      grade: "Grade 3",
-      questionsCount: 5,
-      description: "Visual fractions focus on numerator & denominator naming.",
-    },
-    {
-      id: "sug-2",
-      title: "Measurement & Standard Units",
-      subject: "Mathematics",
-      grade: "Grade 3",
-      questionsCount: 6,
-      description: "Covers lengths in cm/m and weights in grams.",
-    },
-    {
-      id: "sug-3",
-      title: "Reading Comprehension: Autumn Story",
-      subject: "English",
-      grade: "Grade 3",
-      questionsCount: 4,
-      description: "Focuses on retrieval, inference, and main idea.",
-    }
-  ];
+
 
   return (
     <div style={styles.container}>
@@ -533,7 +500,7 @@ export default function AssessmentsClient() {
 
               {/* State Filter Buttons */}
               <div style={styles.stateFilterRow}>
-                {["All", "Live", "Upcoming", "Draft", "Completed", "Needs Review"].map((state) => {
+                {["All", "Live", "Upcoming", "Completed", "Needs Review"].map((state) => {
                   const isActive = activeStateFilter === state;
                   return (
                     <button
@@ -605,26 +572,7 @@ export default function AssessmentsClient() {
                     </div>
                   )}
 
-                  {/* Section 3: Draft Assessments */}
-                  {draftAssessments.length > 0 && (
-                    <div style={styles.workspaceSection}>
-                      <h3 style={styles.sectionTitle}>Draft Assessments</h3>
-                      <div style={styles.cardsGrid}>
-                        {draftAssessments.map(item => (
-                          <AssessmentGridCard 
-                            key={item.id} 
-                            item={item} 
-                            subjectsMap={subjectsMap}
-                            classesMap={classesMap}
-                            displayStatus="Draft"
-                            copiedAsmtId={copiedAsmtId}
-                            onCopyShare={handleCopyShareableLink}
-                            searchMatch={renderSearchMatchInfo(item)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* Section 4: Completed Assessments */}
                   {completedAssessments.length > 0 && (
@@ -680,31 +628,7 @@ export default function AssessmentsClient() {
                     </div>
                   )}
 
-                  {/* Section 6: AI Suggestions */}
-                  <div style={styles.workspaceSection}>
-                    <h3 style={{ ...styles.sectionTitle, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      AI Suggestions
-                      <span style={styles.curatedBadge}>Curated Grade 3</span>
-                    </h3>
-                    <div style={styles.cardsGrid}>
-                      {aiSuggestions.map(sug => (
-                        <div key={sug.id} style={styles.suggestedCard}>
-                          <div style={styles.sugHeader}>
-                            <span style={styles.sugSubject}>{sug.subject} • {sug.grade}</span>
-                            <span style={styles.sugCount}>{sug.questionsCount} Questions</span>
-                          </div>
-                          <h4 style={styles.sugTitle}>{sug.title}</h4>
-                          <p style={styles.sugDescription}>{sug.description}</p>
-                          <button 
-                            onClick={() => setIsModalOpen(true)} 
-                            style={styles.sugCreateBtn}
-                          >
-                            Create Suggestion
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+
                 </>
               )}
             </div>
@@ -740,7 +664,7 @@ interface AssessmentGridCardProps {
   item: AssessmentData;
   subjectsMap: Record<string, string>;
   classesMap: Record<string, string>;
-  displayStatus: "Live" | "Upcoming" | "Draft" | "Completed";
+  displayStatus: "Live" | "Upcoming" | "Completed";
   copiedAsmtId: string | null;
   onCopyShare: (e: React.MouseEvent, id: string) => void;
   searchMatch?: React.ReactNode;
@@ -771,8 +695,6 @@ function AssessmentGridCard({
         return { bg: "#DCFCE7", color: "#16A34A", border: "#BBF7D0" };
       case "Upcoming":
         return { bg: "#FEF3C7", color: "#D97706", border: "#FDE68A" };
-      case "Draft":
-        return { bg: "#F1F5F9", color: "#475569", border: "#E2E8F0" };
     }
   };
 

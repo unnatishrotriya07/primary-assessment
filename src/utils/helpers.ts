@@ -70,30 +70,13 @@ export function extractErrorMessage(err: any, fallback: string = "An unexpected 
   return fallback;
 }
 
-/**
- * Formats class name to hide default 'A' section suffix if the class doesn't have students.
- */
 export function formatClassName(cls: { name: string; section?: string; studentsCount?: number } | null | undefined): string {
   if (!cls) return "";
-  const section = cls.section || "";
-  const studentCount = cls.studentsCount ?? 0;
-  
-  if ((section === "A" && studentCount === 0) || !section) {
-    return cls.name;
-  }
-  return `${cls.name} (${section})`;
+  return cls.name;
 }
 
-/**
- * Formats class name from direct parameters to hide default 'A' section if student count is 0.
- */
 export function formatClassDisplayName(name: string, section?: string, studentsCount?: number): string {
-  const sec = section || "";
-  const count = studentsCount ?? 0;
-  if ((sec === "A" && count === 0) || !sec) {
-    return name;
-  }
-  return `${name} (${sec})`;
+  return name;
 }
 
 /**

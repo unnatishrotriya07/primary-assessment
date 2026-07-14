@@ -203,64 +203,35 @@ function StudentsWorkspace() {
   // Handle excel upload submit
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (uploadMode === "single") {
-      if (!uploadClassId || !uploadFile || !singleSectionName.trim()) {
-        setUploadError("Please select a class, specify a section, and choose an Excel/CSV file.");
-        return;
-      }
-      setUploadLoading(true);
-      setUploadError("");
-      setUploadSuccess("");
-      try {
-        const res = await studentService.uploadMultipleSections(uploadClassId, [
-          { file: uploadFile, section: singleSectionName.trim() }
-        ]);
-        setUploadSuccess(res.message || "Roster imported successfully!");
-        loadClasses(); // Refresh class roster student counts
+    if (!uploadClassId) {
+      setUploadError("Please select a class.");
+      return;
+    }
+    if (selectedSectionFiles.length === 0) {
+      setUploadError("Please select at least one student roster file.");
+      return;
+    }
+    setUploadLoading(true);
+    setUploadError("");
+    setUploadSuccess("");
+    try {
+      const res = await studentService.uploadMultipleSections(
+        uploadClassId,
+        selectedSectionFiles.map(sf => ({ file: sf.file, section: "A" }))
+      );
+      setUploadSuccess(res.message || "Roster imported successfully!");
+      loadClasses(); // Refresh class roster student counts
 
-        // Reload active students list if we're currently viewing that class
-        const newClassId = String(res.results?.[0]?.classId || uploadClassId);
-        if (classIdParam === newClassId || classIdParam === uploadClassId) {
-          const data = await studentService.getByClass(newClassId);
-          setStudents(data);
-        }
-        setTimeout(() => setUploadModalOpen(false), 2000);
-      } catch (err: any) {
-        setUploadError(extractErrorMessage(err, "Excel import failed. Check file column schema."));
-      } finally {
-        setUploadLoading(false);
+      // Reload active students list if we're currently viewing that class
+      if (classIdParam === uploadClassId) {
+        const data = await studentService.getByClass(uploadClassId);
+        setStudents(data);
       }
-    } else {
-      if (!uploadClassId) {
-        setUploadError("Please select a base class template.");
-        return;
-      }
-      if (selectedSectionFiles.length === 0) {
-        setUploadError("Please select at least one section roster file.");
-        return;
-      }
-      if (selectedSectionFiles.some((sf) => !sf.section.trim())) {
-        setUploadError("Please specify section names for all files.");
-        return;
-      }
-      setUploadLoading(true);
-      setUploadError("");
-      setUploadSuccess("");
-      try {
-        const res = await studentService.uploadMultipleSections(uploadClassId, selectedSectionFiles);
-        setUploadSuccess(res.message || "All section rosters imported successfully!");
-        loadClasses(); // Refresh class counts
-
-        if (classIdParam) {
-          const data = await studentService.getByClass(classIdParam);
-          setStudents(data);
-        }
-        setTimeout(() => setUploadModalOpen(false), 2500);
-      } catch (err: any) {
-        setUploadError(extractErrorMessage(err, "Bulk section upload failed."));
-      } finally {
-        setUploadLoading(false);
-      }
+      setTimeout(() => setUploadModalOpen(false), 2000);
+    } catch (err: any) {
+      setUploadError(extractErrorMessage(err, "Excel import failed. Check file column schema."));
+    } finally {
+      setUploadLoading(false);
     }
   };
 
@@ -669,20 +640,6 @@ function StudentsWorkspace() {
 
           <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
             <select
-              value={sectionFilter}
-              onChange={(e) => {
-                setSectionFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={styles.filterSelect}
-            >
-              <option value="">All Sections</option>
-              <option value="A">Section A</option>
-              <option value="B">Section B</option>
-              <option value="C">Section C</option>
-            </select>
-
-            <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               style={styles.filterSelect}
@@ -804,136 +761,68 @@ function StudentsWorkspace() {
             {uploadError && <div style={styles.modalError}>{uploadError}</div>}
             {uploadSuccess && <div style={styles.modalSuccess}>{uploadSuccess}</div>}
 
-            <div style={styles.uploadModeToggle}>
-              <button
-                type="button"
-                onClick={() => setUploadMode("single")}
-                style={{
-                  ...styles.toggleBtn,
-                  backgroundColor: uploadMode === "single" ? "var(--primary)" : "transparent",
-                  color: uploadMode === "single" ? "#ffffff" : "var(--text-secondary)",
-                  borderRight: "1px solid var(--border-color)",
-                }}
-              >
-                Single Section
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadMode("multiple")}
-                style={{
-                  ...styles.toggleBtn,
-                  backgroundColor: uploadMode === "multiple" ? "var(--primary)" : "transparent",
-                  color: uploadMode === "multiple" ? "#ffffff" : "var(--text-secondary)",
-                }}
-              >
-                Multiple Sections (Bulk Upload)
-              </button>
-            </div>
-
-            {uploadMode === "single" ? (
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Excel / CSV File</label>
-                <div style={styles.fileDropZone}>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.xlsm"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    style={styles.fileInput}
-                    required
-                    disabled={uploadLoading}
-                  />
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                  </svg>
-                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                    {uploadFile ? uploadFile.name : "Select excel roster sheet"}
-                  </span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                    Supports XLSX, XLS, CSV format
-                  </span>
-                </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Excel / CSV Files</label>
+              <div style={styles.fileDropZone}>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.xlsm"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const newItems = files.map((file) => {
+                      const id = Math.random().toString(36).substring(7);
+                      return {
+                        id,
+                        file,
+                        section: "A",
+                      };
+                    });
+                    setSelectedSectionFiles((prev) => [...prev, ...newItems]);
+                  }}
+                  style={styles.fileInput}
+                  disabled={uploadLoading}
+                />
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+                </svg>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                  Select / Drop roster sheet files
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                  Supports XLSX, XLS, CSV format
+                </span>
               </div>
-            ) : (
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Roster Files for Sections</label>
-                <div style={styles.fileDropZone}>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.xlsm"
-                    multiple
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      const newItems = files.map((file, idx) => {
-                        const id = Math.random().toString(36).substring(7);
-                        return {
-                          id,
-                          file,
-                          section: detectSectionName(file.name, selectedSectionFiles.length + idx),
-                        };
-                      });
-                      setSelectedSectionFiles((prev) => [...prev, ...newItems]);
-                    }}
-                    style={styles.fileInput}
-                    disabled={uploadLoading}
-                  />
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                  </svg>
-                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                    Select / Drop Multiple Section Files
-                  </span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                    Select one file for each section (e.g. A.xlsx, B.xlsx)
-                  </span>
-                </div>
 
-                {selectedSectionFiles.length > 0 && (
-                  <div style={styles.filesListContainer}>
-                    <h5 style={styles.filesListTitle}>Uploaded Files & Section Mapping</h5>
-                    {selectedSectionFiles.map((sf, index) => (
-                      <div key={sf.id} style={styles.fileItemRow}>
-                        <div style={styles.fileItemInfo}>
-                          <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
-                          <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
-                        </div>
-                        <div style={styles.fileItemActions}>
-                          <div style={styles.sectionInputWrapper}>
-                            <span style={styles.sectionInputLabel}>Section:</span>
-                            <input
-                              type="text"
-                              value={sf.section}
-                              onChange={(e) => {
-                                const newSec = e.target.value.toUpperCase().slice(0, 5);
-                                setSelectedSectionFiles((prev) =>
-                                  prev.map((item) => (item.id === sf.id ? { ...item, section: newSec } : item))
-                                );
-                              }}
-                              style={styles.sectionInput}
-                              placeholder="e.g. B"
-                              required
-                              disabled={uploadLoading}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
-                            }}
-                            style={styles.fileRemoveBtn}
-                            title="Remove file"
-                            disabled={uploadLoading}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        </div>
+              {selectedSectionFiles.length > 0 && (
+                <div style={styles.filesListContainer}>
+                  <h5 style={styles.filesListTitle}>Selected Files</h5>
+                  {selectedSectionFiles.map((sf) => (
+                    <div key={sf.id} style={styles.fileItemRow}>
+                      <div style={styles.fileItemInfo}>
+                        <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
+                        <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                      <div style={styles.fileItemActions}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
+                          }}
+                          style={styles.fileRemoveBtn}
+                          title="Remove file"
+                          disabled={uploadLoading}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div style={styles.infoBox}>
               <h5 style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>File Columns Format Hint</h5>
@@ -998,7 +887,6 @@ function StudentsWorkspace() {
                     <h4 style={styles.className}>{cls.name}</h4>
                     <p style={styles.classSubText}>
                       Grade {cls.grade}
-                      {Boolean((cls.section && cls.section !== "A") || (cls.studentsCount && cls.studentsCount > 0)) && ` • Sec ${cls.section}`}
                     </p>
                     <div style={styles.studentBadge}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: "0.3rem" }}>
@@ -1033,9 +921,7 @@ function StudentsWorkspace() {
           {uploadSuccess && <div style={styles.modalSuccess}>{uploadSuccess}</div>}
 
           <div style={styles.formGroup}>
-            <label style={styles.label}>
-              {uploadMode === "single" ? "Select Class" : "Select Base Class Template"}
-            </label>
+            <label style={styles.label}>Select Class</label>
             <select
               value={uploadClassId}
               onChange={(e) => setUploadClassId(e.target.value)}
@@ -1050,156 +936,70 @@ function StudentsWorkspace() {
                 </option>
               ))}
             </select>
-            {uploadMode === "multiple" && (
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-                Subjects, grade and class name will be copied from this base class to create new sections.
-              </p>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Excel / CSV Files</label>
+            <div style={styles.fileDropZone}>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,.xlsm"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  const newItems = files.map((file) => {
+                    const id = Math.random().toString(36).substring(7);
+                    return {
+                      id,
+                      file,
+                      section: "A",
+                    };
+                  });
+                  setSelectedSectionFiles((prev) => [...prev, ...newItems]);
+                }}
+                style={styles.fileInput}
+                disabled={uploadLoading}
+              />
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
+              </svg>
+              <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                Select / Drop roster sheet files
+              </span>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                Supports XLSX, XLS, CSV format
+              </span>
+            </div>
+
+            {selectedSectionFiles.length > 0 && (
+              <div style={styles.filesListContainer}>
+                <h5 style={styles.filesListTitle}>Selected Files</h5>
+                {selectedSectionFiles.map((sf) => (
+                  <div key={sf.id} style={styles.fileItemRow}>
+                    <div style={styles.fileItemInfo}>
+                      <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
+                      <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                    <div style={styles.fileItemActions}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
+                        }}
+                        style={styles.fileRemoveBtn}
+                        title="Remove file"
+                        disabled={uploadLoading}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          <div style={styles.uploadModeToggle}>
-            <button
-              type="button"
-              onClick={() => setUploadMode("single")}
-              style={{
-                ...styles.toggleBtn,
-                backgroundColor: uploadMode === "single" ? "var(--primary)" : "transparent",
-                color: uploadMode === "single" ? "#ffffff" : "var(--text-secondary)",
-                borderRight: "1px solid var(--border-color)",
-              }}
-            >
-              Single Section
-            </button>
-            <button
-              type="button"
-              onClick={() => setUploadMode("multiple")}
-              style={{
-                ...styles.toggleBtn,
-                backgroundColor: uploadMode === "multiple" ? "var(--primary)" : "transparent",
-                color: uploadMode === "multiple" ? "#ffffff" : "var(--text-secondary)",
-              }}
-            >
-              Multiple Sections (Bulk Upload)
-            </button>
-          </div>
-
-          {uploadMode === "single" ? (
-            <>
-              <div style={styles.formGroup}>
-                <Input
-                  label="Section Name"
-                  placeholder="e.g. A, B, C"
-                  value={singleSectionName}
-                  onChange={(e) => setSingleSectionName(e.target.value)}
-                  required
-                  disabled={uploadLoading}
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Excel / CSV File</label>
-                <div style={styles.fileDropZone}>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.xlsm"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    style={styles.fileInput}
-                    required
-                    disabled={uploadLoading}
-                  />
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                  </svg>
-                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                    {uploadFile ? uploadFile.name : "Select excel roster sheet"}
-                  </span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                    Supports XLSX, XLS, CSV format
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Roster Files for Sections</label>
-              <div style={styles.fileDropZone}>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.xlsm"
-                  multiple
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    const newItems = files.map((file, idx) => {
-                      const id = Math.random().toString(36).substring(7);
-                      return {
-                        id,
-                        file,
-                        section: detectSectionName(file.name, selectedSectionFiles.length + idx),
-                      };
-                    });
-                    setSelectedSectionFiles((prev) => [...prev, ...newItems]);
-                  }}
-                  style={styles.fileInput}
-                  disabled={uploadLoading}
-                />
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "0.5rem" }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><polyline points="9 15 12 12 15 15" />
-                </svg>
-                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                  Select / Drop Multiple Section Files
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                  Select one file for each section (e.g. A.xlsx, B.xlsx)
-                </span>
-              </div>
-
-              {selectedSectionFiles.length > 0 && (
-                <div style={styles.filesListContainer}>
-                  <h5 style={styles.filesListTitle}>Uploaded Files & Section Mapping</h5>
-                  {selectedSectionFiles.map((sf, index) => (
-                    <div key={sf.id} style={styles.fileItemRow}>
-                      <div style={styles.fileItemInfo}>
-                        <span style={styles.fileItemName} title={sf.file.name}>{sf.file.name}</span>
-                        <span style={styles.fileItemSize}>({(sf.file.size / 1024).toFixed(1)} KB)</span>
-                      </div>
-                      <div style={styles.fileItemActions}>
-                        <div style={styles.sectionInputWrapper}>
-                          <span style={styles.sectionInputLabel}>Section:</span>
-                          <input
-                            type="text"
-                            value={sf.section}
-                            onChange={(e) => {
-                              const newSec = e.target.value.toUpperCase().slice(0, 5);
-                              setSelectedSectionFiles((prev) =>
-                                prev.map((item) => (item.id === sf.id ? { ...item, section: newSec } : item))
-                              );
-                            }}
-                            style={styles.sectionInput}
-                            placeholder="e.g. B"
-                            required
-                            disabled={uploadLoading}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedSectionFiles((prev) => prev.filter((item) => item.id !== sf.id));
-                          }}
-                          style={styles.fileRemoveBtn}
-                          title="Remove file"
-                          disabled={uploadLoading}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           <div style={styles.infoBox}>
             <h5 style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>File Columns Format Hint</h5>
