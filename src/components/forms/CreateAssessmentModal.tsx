@@ -42,7 +42,7 @@ export default function CreateAssessmentModal({
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [selectedChapterId, setSelectedChapterId] = useState<string>("");
-  const [questionCount, setQuestionCount] = useState<number>(25);
+  const [questionCount, setQuestionCount] = useState<number | "">("");
 
   // AI preparation progress states
   const [prepStep, setPrepStep] = useState(0);
@@ -206,7 +206,7 @@ export default function CreateAssessmentModal({
               chapterId: selectedChapterId,
               difficulty: "medium", // Inferred
               cognitiveLevel: "applying", // Inferred
-              count: questionCount,
+              count: questionCount || 5,
               regenerate: true,
               previewOnly: true,
               session: session,
@@ -405,7 +405,7 @@ export default function CreateAssessmentModal({
       // Pre-save to local session variable for fallback logic
       (window as any)._wizardQuestionIds = savedIds;
 
-      // Pre-create the active assessment so we have access to the link & preview on the next screen
+      // Create the active assessment
       const todayStr = new Date().toISOString().split("T")[0];
       const createdAssessment = await assessmentService.create({
         title: assessmentTitle.trim() || `${subjects.find(s => String(s.id) === selectedSubjectId)?.name || "Subject"} Assessment`,
@@ -418,9 +418,26 @@ export default function CreateAssessmentModal({
         questionsToAsk: savedIds.length,
       });
 
-      setCreatedAssessmentId(Number(createdAssessment.id));
-      setSelectedStudentIds(students.map(s => Number(s.id)));
-      setStep("assignment");
+      const newAssessmentId = Number(createdAssessment.id);
+      setCreatedAssessmentId(newAssessmentId);
+
+      // Automatically assign to all students of the class
+      const targetStudentIds = students.map(s => Number(s.id));
+      if (targetStudentIds.length === 0) {
+        setError("This class has no students. Please add students to the class before assigning assessments.");
+        return;
+      }
+
+      const res = await assessmentService.assignAssessmentBulk({
+        assessmentId: newAssessmentId,
+        studentIds: targetStudentIds,
+      });
+
+      setSuccessData(res);
+      setStep("success");
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (err: any) {
       setError(extractErrorMessage(err, "Failed to save selected questions."));
     } finally {
@@ -662,8 +679,9 @@ export default function CreateAssessmentModal({
                   type="number"
                   min={1}
                   max={30}
+                  placeholder="5"
                   value={questionCount}
-                  onChange={(e) => setQuestionCount(parseInt(e.target.value, 10) || 25)}
+                  onChange={(e) => setQuestionCount(e.target.value === "" ? "" : parseInt(e.target.value, 10) || "")}
                   style={styles.formTextInput}
                 />
               </div>
@@ -911,7 +929,7 @@ export default function CreateAssessmentModal({
                 Back
               </Button>
               <Button onClick={handleReviewContinue} loading={loading}>
-                Continue to Assignment
+                Create Assessment
               </Button>
             </div>
           </div>

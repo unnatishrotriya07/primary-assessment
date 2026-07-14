@@ -81,7 +81,7 @@ export default function ClassesTable({ refreshTrigger = 0 }: ClassesTableProps) 
     );
   }
 
-  const hasSections = classes.some((c) => (c.section && c.section !== "A") || (c.studentsCount && c.studentsCount > 0));
+  const hasSections = false;
 
   return (
     <div style={styles.tableWrapper} className="card">

@@ -43,7 +43,7 @@ export default function QuestionGeneratorForm() {
   const [difficulty, setDifficulty] = useState("medium");
   const [cognitiveLevel, setCognitiveLevel] = useState("applying");
   const [questionType, setQuestionType] = useState("tita");
-  const [count, setCount] = useState("30");
+  const [count, setCount] = useState("");
   const [session, setSession] = useState("");
   const [isSessionModified, setIsSessionModified] = useState(false);
   const [regenerate, setRegenerate] = useState(false);
@@ -268,7 +268,7 @@ export default function QuestionGeneratorForm() {
         chapterId,
         difficulty: difficulty as any,
         cognitiveLevel,
-        count: parseInt(count, 10),
+        count: count ? parseInt(count, 10) : 5,
         regenerate,
         previewOnly: true, // Always request preview first so the admin can verify
         session: finalSessionName,
@@ -643,23 +643,6 @@ export default function QuestionGeneratorForm() {
 
           {/* Section 2: Assessment Parameters */}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", paddingTop: "0.4rem" }}>
-            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Assessment Parameters</h4>
-            
-            <div className="form-row-responsive">
-              <div style={styles.selectGroup}>
-                <label style={styles.label}>Difficulty Level<span className="required-asterisk">*</span></label>
-                <select
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value)}
-                  style={styles.select}
-                >
-                  <option value="easy">Easy (Foundational)</option>
-                  <option value="medium">Medium (Intermediate)</option>
-                  <option value="hard">Hard (Advanced Challenge)</option>
-                </select>
-              </div>
-            </div>
-
             <div className="form-row-responsive">
               <div style={styles.selectGroup}>
                 <Input
@@ -667,22 +650,9 @@ export default function QuestionGeneratorForm() {
                   type="number"
                   min="1"
                   max="30"
+                  placeholder="5"
                   value={count}
                   onChange={(e) => setCount(e.target.value)}
-                  required
-                />
-              </div>
-              <div style={styles.selectGroup}>
-                <Input
-                  label="Generation Session Name"
-                  type="text"
-                  placeholder="Auto-generated unique session name"
-                  value={session}
-                  onChange={(e) => {
-                    setSession(e.target.value);
-                    setIsSessionModified(true);
-                  }}
-                  required
                 />
               </div>
             </div>
@@ -704,7 +674,7 @@ export default function QuestionGeneratorForm() {
           {(generating || (progress > 0 && progress < 100)) && (
             <div style={styles.progressContainer}>
               <div style={styles.progressText}>
-                Generating {count} questions... {progress}%
+                Generating {count || 5} questions... {progress}%
               </div>
               <div style={styles.progressBarBg}>
                 <div style={{ ...styles.progressBarFill, width: `${progress}%` }} />

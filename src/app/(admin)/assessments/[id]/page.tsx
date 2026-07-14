@@ -8,6 +8,7 @@ import assessmentService from "@/services/assessment.service";
 import interviewService, { InterviewReport } from "@/services/interview.service";
 import subjectService from "@/services/subject.service";
 import classService from "@/services/class.service";
+import studentService from "@/services/student.service";
 import { AssessmentData } from "@/types/assessment.types";
 import { extractErrorMessage, formatClassName, isHindiText } from "@/utils/helpers";
 
@@ -475,13 +476,24 @@ export default function AssessmentDetailPage({ params }: PageProps) {
         title: `${assessment.title} - Copy`,
         subjectId: Number(assessment.subjectId),
         classId: Number(assessment.classId),
-        status: "Scheduled", // Saved as Draft
+        status: "Active",
         date: todayStr,
         questionsCount: assessment.questionsCount,
         questionIds: assessment.questions?.map(q => Number(q.id)) || [],
         questionsToAsk: assessment.questionsToAsk || 5
       });
-      setActionMessage("Assessment duplicated as draft!");
+
+      // Load class students and assign them bulk-wise
+      const classStudents = await studentService.getByClass(String(assessment.classId));
+      const studentIds = classStudents.map(s => Number(s.id));
+      if (studentIds.length > 0) {
+        await assessmentService.assignAssessmentBulk({
+          assessmentId: Number(dup.id),
+          studentIds: studentIds
+        });
+      }
+
+      setActionMessage("Assessment duplicated and assigned successfully!");
       setTimeout(() => {
         setActionMessage(null);
         router.push("/assessments");

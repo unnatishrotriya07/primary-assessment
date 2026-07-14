@@ -123,7 +123,7 @@ export default function LearningInsightsPage() {
                 >
                   <option value="all">All Classes</option>
                   {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.section})</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
