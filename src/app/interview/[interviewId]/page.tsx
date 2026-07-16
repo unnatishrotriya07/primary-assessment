@@ -1005,8 +1005,10 @@ export default function InterviewPage({ params }: PageProps) {
                 </div>
             )}
 
-            {/* Main Stage Grid Container */}
-            <div style={styles.stageGrid}>
+            {/* Scroll wrapper to prevent flexbox top-cutoff and allow scrolling */}
+            <div style={styles.scrollWrapper}>
+                {/* Main Stage Grid Container */}
+                <div style={styles.stageGrid}>
                 {/* Visual Progress Bar (Step 9) */}
                 {renderVisualProgress()}
 
@@ -1455,10 +1457,11 @@ export default function InterviewPage({ params }: PageProps) {
                     )}
                 </div>
 
-                {/* Error Banner Toast */}
-                {error && <div style={styles.errorToast}>{error}</div>}
             </div>
         </div>
+        {/* Error Banner Toast */}
+        {error && <div style={styles.errorToast}>{error}</div>}
+    </div>
     );
 }
 
@@ -1471,10 +1474,17 @@ const styles: Record<string, React.CSSProperties> = {
         top: 0,
         left: 0,
         fontFamily: "var(--font-sans), system-ui, sans-serif",
+        overflowY: "auto"
+    },
+    scrollWrapper: {
+        width: "100%",
+        minHeight: "100vh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        overflow: "hidden"
+        padding: "2rem 0",
+        boxSizing: "border-box"
     },
     splitGrid: {
         display: "flex",
@@ -1504,20 +1514,20 @@ const styles: Record<string, React.CSSProperties> = {
         boxSizing: "border-box"
     },
     confettiOverlay: {
-        position: "absolute",
+        position: "fixed",
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         zIndex: 50,
         pointerEvents: "none"
     },
     offlineBoxCover: {
-        position: "absolute",
+        position: "fixed",
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         backgroundColor: "rgba(15,23,42,0.4)",
         backdropFilter: "blur(6px)",
         display: "flex",

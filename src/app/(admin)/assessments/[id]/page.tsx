@@ -194,7 +194,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     { time: "9:05 AM", student: "Anjali Completed", desc: "5 Questions evaluated. Overall accuracy 92%", completed: true },
     { time: "9:05 AM", student: "Aryan Started", desc: "Access verified via Scholar ID 3011", completed: false },
     { time: "9:10 AM", student: "Sneha Completed", desc: "5 Questions evaluated. Overall accuracy 48%", completed: true },
-    { time: "9:10 AM", student: "Evaluation Finished", desc: "AI Insights generated for 3 completed transcripts", completed: true, type: "system" }
+    { time: "9:10 AM", student: "Evaluation Finished", desc: "Learning Insights generated for 3 completed transcripts", completed: true, type: "system" }
   ];
 
   // Mock Question Analytics for fractions
@@ -546,29 +546,37 @@ export default function AssessmentDetailPage({ params }: PageProps) {
             }}>
               {displayStatus}
             </span>
+            {displayStatus === "LIVE" && (
+              <button
+                onClick={handleShare}
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  padding: "2px 10px",
+                  borderRadius: "999px",
+                  border: "1px solid",
+                  borderColor: copiedLink ? "var(--success)" : "var(--border-color)",
+                  backgroundColor: copiedLink ? "var(--success-light)" : "var(--bg-surface)",
+                  color: copiedLink ? "var(--success)" : "var(--text-secondary)",
+                  cursor: "pointer",
+                  marginLeft: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                {copiedLink ? "Copied!" : "Copy Link"}
+              </button>
+            )}
           </div>
           <p style={styles.pageSubtitle} className={isHindi ? "font-hindi" : ""}>
             {subjectDisplayName} • {classDisplayName} • {totalStudents} Students • Created {assessment.date || "Yesterday"}
           </p>
-        </div>
-
-        {/* Sticky Actions Grid */}
-        <div style={styles.stickyActionsPanel}>
-          <button onClick={() => setShowPreviewModal(true)} style={styles.actionBtn}>
-            Preview
-          </button>
-          <button onClick={handleDuplicate} style={styles.actionBtn}>
-            Duplicate
-          </button>
-          <button onClick={() => setIsModalOpen(true)} style={styles.actionBtn}>
-            Edit
-          </button>
-          <button onClick={handleShare} style={{ ...styles.actionBtn, color: copiedLink ? "var(--success)" : "var(--primary)" }}>
-            {copiedLink ? "Copied!" : "Share Link"}
-          </button>
-          <button onClick={handleExport} style={styles.actionBtn}>
-            Export
-          </button>
         </div>
       </div>
 
@@ -685,7 +693,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* AI Insights & Info Panels */}
+            {/* Learning Insights & Info Panels */}
             <div style={styles.overviewRightColumn}>
               <div style={styles.insightsCard}>
                 <div style={styles.insightsCardHeader}>
@@ -693,11 +701,11 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                     <path d="M18 10a6 6 0 0 0-12 0c0 7 3 9 3 9h6s3-2 3-9Z" />
                     <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Z" />
                   </svg>
-                  <h3 style={{ ...styles.sectionTitle, color: "var(--text-primary)" }}>AI Insight Panel</h3>
+                  <h3 style={{ ...styles.sectionTitle, color: "var(--text-primary)" }}>Learning Insights</h3>
                 </div>
                 <div style={styles.insightsCardBody}>
                   <div style={styles.insightAlertRow}>
-                    <span style={styles.insightAlertTitle}>AI noticed</span>
+                    <span style={styles.insightAlertTitle}>Observation</span>
                     <p style={styles.insightAlertDesc}>
                       68% of students confused numerator and denominator on Question 2.
                     </p>
@@ -728,20 +736,6 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   <div key={q.num} style={styles.qAnalyticsCard}>
                     <div style={styles.qAnalyticsTop}>
                       <span style={styles.qNumLabel}>Question {q.num}</span>
-                      <div style={styles.qStatsMetrics}>
-                        <div style={styles.qStatColumn}>
-                          <span style={styles.qStatLabel}>Class Correctness</span>
-                          <strong style={{ ...styles.qStatVal, color: q.danger ? "var(--error)" : "var(--success)" }}>{q.correct}</strong>
-                        </div>
-                        <span style={{
-                          ...styles.qStatusBadge,
-                          backgroundColor: q.danger ? "var(--error-light)" : "var(--success-light)",
-                          color: q.danger ? "var(--error)" : "var(--success)",
-                          borderColor: q.danger ? "#FCA5A5" : "#A7F3D0"
-                        }}>
-                          {q.status}
-                        </span>
-                      </div>
                     </div>
                     <p style={styles.qTextBody} className={isHindi || isHindiText(q.text) ? "font-hindi" : ""}>{q.text}</p>
                     <div style={styles.qAnalyticsDivider} />
@@ -752,26 +746,10 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                 ))
               ) : (
                 assessment.questions?.map((q, idx) => {
-                  const correctness = 100 - (idx * 15) % 45; // Deterministic dummy math for real ones
-                  const isNeedsAttention = correctness < 60;
                   return (
                     <div key={q.id || idx} style={styles.qAnalyticsCard}>
                       <div style={styles.qAnalyticsTop}>
                         <span style={styles.qNumLabel}>Question {idx + 1}</span>
-                        <div style={styles.qStatsMetrics}>
-                          <div style={styles.qStatColumn}>
-                            <span style={styles.qStatLabel}>Correctness</span>
-                            <strong style={{ ...styles.qStatVal, color: isNeedsAttention ? "var(--error)" : "var(--success)" }}>{correctness}%</strong>
-                          </div>
-                          <span style={{
-                            ...styles.qStatusBadge,
-                            backgroundColor: isNeedsAttention ? "var(--error-light)" : "var(--success-light)",
-                            color: isNeedsAttention ? "var(--error)" : "var(--success)",
-                            borderColor: isNeedsAttention ? "#FCA5A5" : "#A7F3D0"
-                          }}>
-                            {isNeedsAttention ? "Needs Attention" : "Satisfactory"}
-                          </span>
-                        </div>
                       </div>
                       <p style={styles.qTextBody} className={isHindi || isHindiText(q.text) ? "font-hindi" : ""}>{q.text}</p>
                       <div style={styles.qAnalyticsDivider} />
@@ -1514,27 +1492,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid",
     letterSpacing: "0.05em",
   },
-  stickyActionsPanel: {
-    display: "flex",
-    gap: "0.5rem",
-    backgroundColor: "var(--bg-surface)",
-    padding: "6px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: "10px",
-    boxShadow: "var(--shadow-sm)",
-    alignItems: "center",
-  },
-  actionBtn: {
-    backgroundColor: "transparent",
-    color: "var(--text-secondary)",
-    border: "none",
-    padding: "6px 12px",
-    fontSize: "0.88rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    borderRadius: "6px",
-    transition: "all var(--transition-fast)",
-  },
+
   actionToast: {
     position: "fixed",
     top: "24px",
@@ -1550,11 +1508,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tabsHeader: {
     display: "flex",
-    gap: "2rem",
     borderBottom: "1px solid var(--border-color)",
     width: "100%",
   },
   tabItem: {
+    flex: 1,
+    textAlign: "center",
     padding: "0.8rem 0",
     borderBottom: "2px solid transparent",
     fontSize: "0.95rem",

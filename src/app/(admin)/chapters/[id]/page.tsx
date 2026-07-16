@@ -973,16 +973,7 @@ export default function ChapterReadPage() {
                               Page: {q.page}
                             </span>
                           )}
-                          {q.confidence !== undefined && (
-                            <span style={{
-                              ...styles.metaBadge,
-                              backgroundColor: q.confidence > 85 ? "#DCFCE7" : "#FEF3C7",
-                              color: q.confidence > 85 ? "#15803D" : "#B45309",
-                              fontWeight: 600
-                            }}>
-                              Confidence: {q.confidence}%
-                            </span>
-                          )}
+
                         </div>
 
                         {q.referenceText && (

@@ -488,7 +488,7 @@ function StudentsWorkspace() {
               <LearningTrendChart trendData={journeyData.trendData} />
             </div>
 
-            {/* Teacher Notes and Recommendations */}
+            {/* Teacher Notes */}
             <div style={styles.notesGrid}>
               <TeacherNotesPanel
                 studentId={activeStudent.id}
@@ -500,28 +500,6 @@ function StudentsWorkspace() {
                   })
                 }
               />
-              <div style={styles.aiRecommendationsCard} className="card">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 600 }}>Suggested Next Pedagogical Steps</h4>
-                </div>
-                <ul style={{ listStyleType: "none", padding: 0 }}>
-                  {journeyData.teacherRecommendations.length === 0 ? (
-                    <li style={{ fontSize: "13.5px", color: "var(--text-muted)", opacity: 0.8 }}>
-                      No recommendations compile. Complete assessments to generate pedagogical suggestions.
-                    </li>
-                  ) : (
-                    journeyData.teacherRecommendations.map((rec, idx) => (
-                      <li key={idx} style={{ fontSize: "13.5px", color: "var(--text-secondary)", marginBottom: "12px", display: "flex", alignItems: "flex-start" }}>
-                        <span style={{ color: "var(--primary)", fontWeight: "bold", marginRight: "8px" }}>→</span>
-                        {rec}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
             </div>
           </div>
         )}
@@ -1670,12 +1648,5 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
     gap: "1.5rem",
-  },
-  aiRecommendationsCard: {
-    backgroundColor: "var(--bg-surface)",
-    border: "1px solid var(--border-color)",
-    borderRadius: "var(--radius-md)",
-    padding: "1.2rem",
-    boxShadow: "var(--shadow-sm)",
   }
 };

@@ -32,7 +32,7 @@ export default function AssessmentsClient() {
 
   // Search & filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeStateFilter, setActiveStateFilter] = useState("All"); // All, Live, Upcoming, Completed, Needs Review
+  const [activeStateFilter, setActiveStateFilter] = useState("All"); // All, Live, Completed, Expired
   const [copiedAsmtId, setCopiedAsmtId] = useState<string | null>(null);
 
   // Fetch teacher's name
@@ -124,11 +124,9 @@ export default function AssessmentsClient() {
   }, [refreshKey]);
 
   // Translate DB status to User-Friendly Display Status
-  const getDisplayStatus = (item: AssessmentData): "Live" | "Upcoming" | "Completed" => {
-    if (item.status === "Active") return "Live";
+  const getDisplayStatus = (item: AssessmentData): "Live" | "Completed" => {
     if (item.status === "Completed") return "Completed";
-    if (item.status === "Scheduled") return "Upcoming";
-    return (item.status as any) || "Live";
+    return "Live";
   };
 
   const handleCopyShareableLink = async (e: React.MouseEvent, assessmentId: string) => {
@@ -150,14 +148,12 @@ export default function AssessmentsClient() {
 
     // 1. State Filter Check
     if (activeStateFilter !== "All") {
-      if (activeStateFilter === "Needs Review") {
-        // Needs review if completed but average score is below 60%
-        const completedStudentAssessments = item.assignedStudents?.filter(s => s.status === "Completed");
-        if (!completedStudentAssessments || completedStudentAssessments.length === 0) return false;
-        
-        const sumScores = completedStudentAssessments.reduce((acc, curr) => acc + (curr.interview?.overallScore || 0), 0);
-        const avg = sumScores / completedStudentAssessments.length;
-        if (avg >= 60) return false;
+      if (activeStateFilter === "Expired") {
+        const hasExpired = item.assignedStudents?.some(s => 
+          s.status === "Expired" || 
+          (s.status !== "Completed" && s.expiresAt && new Date(s.expiresAt) < new Date())
+        );
+        if (!hasExpired) return false;
       } else if (displayStatus !== activeStateFilter) {
         return false;
       }
@@ -275,7 +271,6 @@ export default function AssessmentsClient() {
 
   // Section divisions for the grid
   const liveAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Live");
-  const upcomingAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Upcoming");
   const completedAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Completed");
 
   // Recently Generated: Top 3 newest assessments by creation time
@@ -405,80 +400,33 @@ export default function AssessmentsClient() {
                   )}
                 </div>
 
-                {/* Right Columns: Next Assessment and AI Insight */}
+                {/* Right Columns: Quick Actions and Learning Insights */}
                 <div style={styles.heroSideColumns}>
-                  {/* Next Assessment Panel */}
-                  {(() => {
-                    const upcomingAsmt = assessments.find(item => getDisplayStatus(item) === "Upcoming");
-                    return upcomingAsmt ? (
-                      <div style={styles.sidePanelCard}>
-                        <div style={styles.sidePanelHeader}>
-                          <span style={styles.sidePanelLabel}>Next Assessment</span>
-                          <span style={styles.sidePanelTag}>Upcoming</span>
-                        </div>
-                        <h4 style={styles.sidePanelTitle}>{upcomingAsmt.title}</h4>
-                        <p style={styles.sidePanelDesc}>
-                          Configured for {subjectsMap[upcomingAsmt.subjectId] || "Curriculum"}. Class: {classesMap[upcomingAsmt.classId] || "Grade"}.
-                        </p>
-                        <Link href={`/assessments/${upcomingAsmt.id}`} style={{ ...styles.sidePanelActionBtn, textDecoration: "none", display: "inline-block", textAlign: "center" }}>
-                          View Details
-                        </Link>
-                      </div>
-                    ) : (
-                      <div style={styles.sidePanelCard}>
-                        <div style={styles.sidePanelHeader}>
-                          <span style={styles.sidePanelLabel}>Schedule Next Unit</span>
-                        </div>
-                        <h4 style={styles.sidePanelTitle}>Plan Next Assessment</h4>
-                        <p style={styles.sidePanelDesc}>Create a scheduled oral evaluation or written diagnostic for any grade.</p>
-                        <button 
-                          onClick={() => setIsModalOpen(true)} 
-                          style={styles.sidePanelActionBtn}
-                        >
-                          Create Assessment
-                        </button>
-                      </div>
-                    );
-                  })()}
+                  {/* Create Assessment Panel */}
+                  <div style={styles.sidePanelCard}>
+                    <div style={styles.sidePanelHeader}>
+                      <span style={styles.sidePanelLabel}>Quick Actions</span>
+                    </div>
+                    <h4 style={styles.sidePanelTitle}>New Evaluation</h4>
+                    <p style={styles.sidePanelDesc}>Create an oral evaluation or written diagnostic for any grade.</p>
+                    <button 
+                      onClick={() => setIsModalOpen(true)} 
+                      style={styles.sidePanelActionBtn}
+                    >
+                      Create Assessment
+                    </button>
+                  </div>
 
-                  {/* Recent AI Insight Panel */}
-                  {(() => {
-                    const completedAsmt = assessments.find(item => getDisplayStatus(item) === "Completed");
-                    const hasReports = assessments.some(item => 
-                      item.assignedStudents?.some(s => s.status === "Completed")
-                    );
-
-                    return hasReports ? (
-                      <div style={styles.sidePanelCard}>
-                        <div style={styles.sidePanelHeader}>
-                          <span style={styles.sidePanelLabel}>Recent AI Insight</span>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5">
-                            <path d="M18 10a6 6 0 0 0-12 0c0 7 3 9 3 9h6s3-2 3-9Z" />
-                            <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Z" />
-                          </svg>
-                        </div>
-                        <h4 style={styles.sidePanelTitle}>
-                          {completedAsmt ? completedAsmt.title : "Equivalent Fractions"}
-                        </h4>
-                        <p style={{ ...styles.sidePanelDesc, color: "var(--text-primary)", fontWeight: 500 }}>
-                          "Students demonstrated strong progress. Focus reinforcing foundational chapter exercises."
-                        </p>
-                        <span style={styles.insightRecommendation}>
-                          Recommendation: Plan a follow-up review for this unit.
-                        </span>
-                      </div>
-                    ) : (
-                      <div style={styles.sidePanelCard}>
-                        <div style={styles.sidePanelHeader}>
-                          <span style={styles.sidePanelLabel}>Learning Insights</span>
-                        </div>
-                        <h4 style={styles.sidePanelTitle}>Diagnostics Insight</h4>
-                        <p style={styles.sidePanelDesc}>
-                          Detailed performance reports and conceptual learning recommendations will compile here automatically once students finish tests.
-                        </p>
-                      </div>
-                    );
-                  })()}
+                  {/* Learning Insights Panel */}
+                  <div style={styles.sidePanelCard}>
+                    <div style={styles.sidePanelHeader}>
+                      <span style={styles.sidePanelLabel}>Learning Insights</span>
+                    </div>
+                    <h4 style={styles.sidePanelTitle}>Diagnostics Insight</h4>
+                    <p style={styles.sidePanelDesc}>
+                      Detailed performance reports and conceptual learning recommendations will compile here automatically once students finish tests.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -500,7 +448,7 @@ export default function AssessmentsClient() {
 
               {/* State Filter Buttons */}
               <div style={styles.stateFilterRow}>
-                {["All", "Live", "Upcoming", "Completed", "Needs Review"].map((state) => {
+                {["All", "Live", "Completed", "Expired"].map((state) => {
                   const isActive = activeStateFilter === state;
                   return (
                     <button
@@ -542,27 +490,6 @@ export default function AssessmentsClient() {
                             subjectsMap={subjectsMap}
                             classesMap={classesMap}
                             displayStatus="Live"
-                            copiedAsmtId={copiedAsmtId}
-                            onCopyShare={handleCopyShareableLink}
-                            searchMatch={renderSearchMatchInfo(item)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Section 2: Upcoming Assessments */}
-                  {upcomingAssessments.length > 0 && (
-                    <div style={styles.workspaceSection}>
-                      <h3 style={styles.sectionTitle}>Upcoming Assessments</h3>
-                      <div style={styles.cardsGrid}>
-                        {upcomingAssessments.map(item => (
-                          <AssessmentGridCard 
-                            key={item.id} 
-                            item={item} 
-                            subjectsMap={subjectsMap}
-                            classesMap={classesMap}
-                            displayStatus="Upcoming"
                             copiedAsmtId={copiedAsmtId}
                             onCopyShare={handleCopyShareableLink}
                             searchMatch={renderSearchMatchInfo(item)}
