@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SmoothScrollProvider from "@/components/common/SmoothScrollProvider";
+import PageLoader from "@/components/common/PageLoader";
 
 export const metadata: Metadata = {
   title: "Momentum | Unified Assessment & Learning Platform",
@@ -17,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        {children}
+        <PageLoader>
+          <SmoothScrollProvider>{children}</SmoothScrollProvider>
+        </PageLoader>
       </body>
     </html>
   );

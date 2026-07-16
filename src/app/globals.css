@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind components;
+@tailwind utilities;
 
 :root {
   /* Typography */
@@ -1338,6 +1341,205 @@ button, input, select, textarea {
   font-family: var(--font-hindi) !important;
 }
 
+/* ==================== Landing Page Custom Classes ==================== */
 
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
 
+/* Clay / neumorphic card */
+.clay-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(3, 83, 164, 0.08);
+  box-shadow:
+    0 4px 6px -1px rgba(3, 83, 164, 0.05),
+    0 2px 4px -2px rgba(3, 83, 164, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.clay-card:hover {
+  box-shadow:
+    0 20px 40px -10px rgba(3, 83, 164, 0.12),
+    0 4px 12px -4px rgba(3, 83, 164, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px);
+}
+
+/* Aurora gradient mesh */
+.aurora-mesh {
+  background:
+    radial-gradient(ellipse 80% 80% at 20% 30%, rgba(3, 83, 164, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 60% at 80% 70%, rgba(6, 26, 64, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 109, 170, 0.08) 0%, transparent 50%);
+}
+
+/* Iridescent gradient text */
+.iridescent-text {
+  background: linear-gradient(
+    135deg,
+    #0353a4 0%,
+    #006daa 30%,
+    #0353a4 50%,
+    #061a40 70%,
+    #0353a4 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: iridescent-shift 4s ease-in-out infinite alternate;
+}
+
+@keyframes iridescent-shift {
+  0% { background-position: 0% center; }
+  100% { background-position: 100% center; }
+}
+
+/* Mockup 3D container */
+.mockup-container {
+  perspective: 1000px;
+}
+
+.mockup-frame {
+  transform: rotateY(0deg) rotateX(2deg);
+  transition: transform 0.5s ease;
+}
+
+.mockup-frame:hover {
+  transform: rotateY(-3deg) rotateX(2deg);
+}
+
+/* Scroll reveal animation */
+.reveal-anim {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal-anim.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Side scroll reveal animation (alternating features) */
+.scroll-reveal-right,
+.scroll-reveal-left,
+.scroll-reveal-scale {
+  will-change: transform, opacity;
+  transform-origin: center bottom;
+}
+
+/* Accordion item */
+.accordion-item .accordion-content {
+  display: none;
+}
+
+.accordion-item.open .accordion-content {
+  display: block;
+}
+
+.accordion-item .accordion-icon {
+  transition: transform 0.3s ease;
+}
+
+.accordion-item.open .accordion-icon {
+  transform: rotate(180deg);
+}
+
+/* ==================== Logo Loader Animation ==================== */
+
+.logo-loader-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-loader-svg {
+  display: block;
+}
+
+/* Layer 1: Semicircle — fade-in + zoom */
+.logo-layer-semicircle {
+  animation: semicircle-enter 1s ease both;
+  transform-origin: center;
+}
+
+@keyframes semicircle-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Layer 2: Bottom lines — left-to-right draw */
+.logo-layer-bottom {
+  animation: bottom-draw 0.8s ease 0.9s both;
+}
+
+@keyframes bottom-draw {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Layer 3: Upper segments — 3 groups staggered left to right */
+.logo-layer-upper-0 {
+  animation: upper-enter 0.8s ease 0.9s both;
+}
+
+.logo-layer-upper-1 {
+  animation: upper-enter 0.8s ease 1.8s both;
+}
+
+.logo-layer-upper-2 {
+  animation: upper-enter 0.8s ease 2.6s both;
+}
+
+@keyframes upper-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Page loader overlay */
+.page-loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafaff;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.page-loader-overlay.loaded {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.page-loader-overlay.loaded {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 
