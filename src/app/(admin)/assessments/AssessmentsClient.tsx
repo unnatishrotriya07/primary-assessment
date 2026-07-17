@@ -124,8 +124,13 @@ export default function AssessmentsClient() {
   }, [refreshKey]);
 
   // Translate DB status to User-Friendly Display Status
-  const getDisplayStatus = (item: AssessmentData): "Live" | "Completed" => {
+  const getDisplayStatus = (item: AssessmentData): "Live" | "Completed" | "Expired" => {
     if (item.status === "Completed") return "Completed";
+    const hasExpired = item.assignedStudents?.some(s => 
+      s.status === "Expired" || 
+      (s.status !== "Completed" && s.expiresAt && new Date(s.expiresAt) < new Date())
+    );
+    if (hasExpired) return "Expired";
     return "Live";
   };
 
@@ -147,16 +152,8 @@ export default function AssessmentsClient() {
     const displayStatus = getDisplayStatus(item);
 
     // 1. State Filter Check
-    if (activeStateFilter !== "All") {
-      if (activeStateFilter === "Expired") {
-        const hasExpired = item.assignedStudents?.some(s => 
-          s.status === "Expired" || 
-          (s.status !== "Completed" && s.expiresAt && new Date(s.expiresAt) < new Date())
-        );
-        if (!hasExpired) return false;
-      } else if (displayStatus !== activeStateFilter) {
-        return false;
-      }
+    if (activeStateFilter !== "All" && displayStatus !== activeStateFilter) {
+      return false;
     }
 
     // 2. Search Term Check (Searches titles, subjects, classes, student names, and questions)
@@ -272,6 +269,7 @@ export default function AssessmentsClient() {
   // Section divisions for the grid
   const liveAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Live");
   const completedAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Completed");
+  const expiredAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Expired");
 
   // Recently Generated: Top 3 newest assessments by creation time
   const recentlyGenerated = [...filteredAssessments]
@@ -522,6 +520,27 @@ export default function AssessmentsClient() {
                     </div>
                   )}
 
+                  {/* Section 4.5: Expired Assessments */}
+                  {expiredAssessments.length > 0 && (
+                    <div style={styles.workspaceSection}>
+                      <h3 style={styles.sectionTitle}>Expired Assessments</h3>
+                      <div style={styles.cardsGrid}>
+                        {expiredAssessments.map(item => (
+                          <AssessmentGridCard 
+                            key={item.id} 
+                            item={item} 
+                            subjectsMap={subjectsMap}
+                            classesMap={classesMap}
+                            displayStatus="Expired"
+                            copiedAsmtId={copiedAsmtId}
+                            onCopyShare={handleCopyShareableLink}
+                            searchMatch={renderSearchMatchInfo(item)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Empty State if all filtered lists are empty */}
                   {filteredAssessments.length === 0 && (
                     <div style={styles.emptyStateContainer}>
@@ -591,7 +610,7 @@ interface AssessmentGridCardProps {
   item: AssessmentData;
   subjectsMap: Record<string, string>;
   classesMap: Record<string, string>;
-  displayStatus: "Live" | "Upcoming" | "Completed";
+  displayStatus: "Live" | "Upcoming" | "Completed" | "Expired";
   copiedAsmtId: string | null;
   onCopyShare: (e: React.MouseEvent, id: string) => void;
   searchMatch?: React.ReactNode;
@@ -622,6 +641,10 @@ function AssessmentGridCard({
         return { bg: "#DCFCE7", color: "#16A34A", border: "#BBF7D0" };
       case "Upcoming":
         return { bg: "#FEF3C7", color: "#D97706", border: "#FDE68A" };
+      case "Expired":
+        return { bg: "#F3F4F6", color: "#4B5563", border: "#E5E7EB" };
+      default:
+        return { bg: "#F3F4F6", color: "#4B5563", border: "#E5E7EB" };
     }
   };
 
@@ -1188,12 +1211,12 @@ const styles: Record<string, React.CSSProperties> = {
   generatorWrapper: {
     width: "100%",
     display: "flex",
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   formContainer: {
     padding: "2rem",
     width: "100%",
-    maxWidth: "800px",
+    maxWidth: "100%",
     borderRadius: "var(--radius-md)",
     border: "1px solid var(--border-color)",
     backgroundColor: "var(--bg-surface)",

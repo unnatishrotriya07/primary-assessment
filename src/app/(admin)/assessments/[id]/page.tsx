@@ -25,6 +25,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
 
   // State variables
   const [assessment, setAssessment] = useState<AssessmentData | null>(null);
+  const [interviews, setInterviews] = useState<InterviewReport[]>([]);
   const [subjectsMap, setSubjectsMap] = useState<Record<string, string>>({});
   const [classesMap, setClassesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -306,9 +307,18 @@ export default function AssessmentDetailPage({ params }: PageProps) {
 
         if (id === "demo-fractions") {
           setAssessment(mockFractionsData);
+          setInterviews([
+            getMockStudentReport("101"),
+            getMockStudentReport("102"),
+            getMockStudentReport("105")
+          ]);
         } else {
-          const asmt = await assessmentService.getById(id);
+          const [asmt, interviewsList] = await Promise.all([
+            assessmentService.getById(id),
+            interviewService.getByAssessment(parseInt(id, 10)).catch(() => [])
+          ]);
           setAssessment(asmt);
+          setInterviews(interviewsList || []);
         }
       } catch (err: any) {
         setError(extractErrorMessage(err, "Failed to load assessment."));
@@ -364,8 +374,12 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     if (hasActiveSessions) {
       const interval = setInterval(async () => {
         try {
-          const updatedAsmt = await assessmentService.getById(id);
+          const [updatedAsmt, updatedInterviews] = await Promise.all([
+            assessmentService.getById(id),
+            interviewService.getByAssessment(parseInt(id, 10)).catch(() => [])
+          ]);
           setAssessment(updatedAsmt);
+          setInterviews(updatedInterviews || []);
         } catch (err) {
           console.error("Failed to poll assessment updates", err);
         }
@@ -375,7 +389,98 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     }
   }, [id, assessment]);
 
-  // Save notes handler
+  // Compile classroom insights dynamically from student reports
+  const getClassroomInsights = () => {
+    const conceptStrengths: { concept: string; description: string; count: number; avgScore: number }[] = [];
+    const conceptGaps: { concept: string; description: string; count: number; severity: string; avgScore: number }[] = [];
+
+    const completedIvs = interviews.filter(iv => iv.status === "Completed");
+
+    if (completedIvs.length === 0) {
+      return { strengths: [], gaps: [] };
+    }
+
+    completedIvs.forEach(iv => {
+      const score = iv.overall_score || 0;
+      if (iv.strengths) {
+        const lines = iv.strengths.split("\n");
+        lines.forEach(line => {
+          const cleanLine = line.replace(/^[•\-\*\s]+/, "").trim();
+          if (!cleanLine) return;
+
+          let concept = cleanLine;
+          let description = "Demonstrated solid understanding and reasoning.";
+          const colonIndex = cleanLine.indexOf(":");
+          if (colonIndex > 0) {
+            concept = cleanLine.substring(0, colonIndex).trim();
+            description = cleanLine.substring(colonIndex + 1).trim();
+          }
+
+          const existing = conceptStrengths.find(c => c.concept.toLowerCase() === concept.toLowerCase());
+          if (existing) {
+            existing.count += 1;
+            existing.avgScore += score;
+          } else {
+            conceptStrengths.push({ concept, description, count: 1, avgScore: score });
+          }
+        });
+      }
+
+      if (iv.improvements) {
+        const lines = iv.improvements.split("\n");
+        lines.forEach(line => {
+          const cleanLine = line.replace(/^[•\-\*\s]+/, "").trim();
+          if (!cleanLine) return;
+
+          let concept = cleanLine;
+          let description = "Requires reinforcement and additional class exercises.";
+          let severity = "Medium";
+
+          const colonIndex = cleanLine.indexOf(":");
+          if (colonIndex > 0) {
+            concept = cleanLine.substring(0, colonIndex).trim();
+            const rest = cleanLine.substring(colonIndex + 1).trim();
+            const sevMatch = rest.match(/\((High|Medium|Low|Critical)\)$/i);
+            if (sevMatch) {
+              severity = sevMatch[1];
+              description = rest.substring(0, rest.length - sevMatch[0].length).trim();
+            } else {
+              description = rest;
+            }
+          }
+
+          const existing = conceptGaps.find(c => c.concept.toLowerCase() === concept.toLowerCase());
+          if (existing) {
+            existing.count += 1;
+            existing.avgScore += score;
+            if (severity === "High" && existing.severity !== "High") {
+              existing.severity = "High";
+            }
+          } else {
+            conceptGaps.push({ concept, description, severity, count: 1, avgScore: score });
+          }
+        });
+      }
+    });
+
+    const finalStrengths = conceptStrengths.map(c => ({
+      concept: c.concept,
+      description: c.description,
+      accuracy: Math.round(c.avgScore / c.count),
+      count: c.count
+    })).sort((a, b) => b.accuracy - a.accuracy || b.count - a.count);
+
+    const finalGaps = conceptGaps.map(c => ({
+      concept: c.concept,
+      description: c.description,
+      accuracy: Math.round(c.avgScore / c.count),
+      severity: c.severity,
+      count: c.count
+    })).sort((a, b) => a.accuracy - b.accuracy || b.count - a.count);
+
+    return { strengths: finalStrengths, gaps: finalGaps };
+  };
+
   const handleSaveNotes = async () => {
     if (!selectedStudentReport) return;
     setIsSavingNotes(true);
@@ -445,6 +550,8 @@ export default function AssessmentDetailPage({ params }: PageProps) {
   const inProgressCount = assignedStudents.filter(s => s.status === "Started" || s.status === "Evaluating").length;
   const pendingCount = assignedStudents.filter(s => s.status === "Pending").length;
   const totalStudents = assignedStudents.length;
+
+  const insights = getClassroomInsights();
 
   // Calculate average score
   const completedStudents = assignedStudents.filter(s => s.interview && s.interview.overallScore);
@@ -959,51 +1066,87 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               </p>
             </div>
 
-            <div style={styles.insightsGrid}>
-              <div style={styles.insightsCard}>
-                <div style={styles.insightsCardHeader}>
-                  <h3 style={styles.sectionTitle}>Core Concepts Strengths</h3>
-                </div>
-                <div style={styles.insightsListGroup}>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorGreen} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Visual Shape Fractions (91% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Students are highly capable at identifying half and quarter components on visual shapes.</p>
-                    </div>
-                  </div>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorGreen} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Word Problems (74% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Understands ratios when presented as slice counts in food math.</p>
-                    </div>
-                  </div>
-                </div>
+            {completedCount === 0 ? (
+              <div style={{
+                textAlign: "center",
+                padding: "4rem 2rem",
+                backgroundColor: "var(--bg-surface)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-color)",
+                boxShadow: "var(--shadow-sm)",
+                marginTop: "1.5rem"
+              }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "1rem" }}>
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                <h4 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 0.5rem 0" }}>No Diagnostic Insights Yet</h4>
+                <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto 1.5rem auto", lineHeight: "1.5" }}>
+                  Insights are dynamically compiled in real-time as students complete their assessments. Have your students log in and complete their interviews to see detailed concepts analysis here.
+                </p>
               </div>
+            ) : (
+              <div style={styles.insightsGrid}>
+                <div style={styles.insightsCard}>
+                  <div style={styles.insightsCardHeader}>
+                    <h3 style={styles.sectionTitle}>Core Concepts Strengths</h3>
+                  </div>
+                  <div style={styles.insightsListGroup}>
+                    {insights.strengths.length > 0 ? (
+                      insights.strengths.map((item, idx) => (
+                        <div key={idx} style={styles.insightBulletItem}>
+                          <span style={styles.insightIndicatorGreen} />
+                          <div>
+                            <h4 style={styles.insightBulletHeader}>{item.concept} ({item.accuracy}% Accuracy)</h4>
+                            <p style={styles.insightBulletText}>{item.description}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", margin: "0.5rem 0" }}>
+                        No conceptual strengths identified yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-              <div style={styles.insightsCard}>
-                <div style={styles.insightsCardHeader}>
-                  <h3 style={styles.sectionTitle}>Concept Gaps & Interventions</h3>
-                </div>
-                <div style={styles.insightsListGroup}>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorRed} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Numerator/Denominator confusion (48% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Significant counts of students mix up division components, prioritizing the divisor.</p>
-                    </div>
+                <div style={styles.insightsCard}>
+                  <div style={styles.insightsCardHeader}>
+                    <h3 style={styles.sectionTitle}>Concept Gaps & Interventions</h3>
                   </div>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorRed} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Equivalent Simplification (55% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Difficulty simplifying 3/6 back to half. Struggles with comparative ratios.</p>
-                    </div>
+                  <div style={styles.insightsListGroup}>
+                    {insights.gaps.length > 0 ? (
+                      insights.gaps.map((item, idx) => (
+                        <div key={idx} style={styles.insightBulletItem}>
+                          <span style={styles.insightIndicatorRed} />
+                          <div>
+                            <h4 style={styles.insightBulletHeader}>{item.concept} ({item.accuracy}% Accuracy)</h4>
+                            <p style={styles.insightBulletText}>
+                              {item.description} {item.severity && (
+                                <span style={{ 
+                                  fontSize: "0.75rem", 
+                                  fontWeight: 600, 
+                                  padding: "0.1rem 0.4rem", 
+                                  borderRadius: "999px", 
+                                  backgroundColor: item.severity.toLowerCase() === "high" || item.severity.toLowerCase() === "critical" ? "#FEE2E2" : "#FEF3C7", 
+                                  color: item.severity.toLowerCase() === "high" || item.severity.toLowerCase() === "critical" ? "#DC2626" : "#D97706", 
+                                  marginLeft: "0.5rem" 
+                                }}>
+                                  {item.severity} severity
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", margin: "0.5rem 0" }}>
+                        No concept gaps or learning struggles detected.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

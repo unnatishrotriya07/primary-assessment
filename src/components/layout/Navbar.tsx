@@ -277,7 +277,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     color: "var(--text-secondary)",
     cursor: "pointer",
-    display: "none",
     padding: 0,
   },
   breadcrumbs: {

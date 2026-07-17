@@ -218,7 +218,7 @@ export default function ReportCard({
 
           {/* Skills progress grid */}
           {scoreCommunication !== null && scoreCommunication !== undefined && (
-            <div style={styles.skillGrid}>
+            <div className="report-skill-grid" style={styles.skillGrid}>
               {SKILL_CONFIG.map(({ key, label, color }) => {
                 const val = Math.round((({
                   scoreCommunication,
@@ -530,7 +530,7 @@ export default function ReportCard({
 
       <div style={styles.divider} />
 
-      <div style={styles.grid}>
+      <div className="report-metric-grid" style={styles.grid}>
         <div style={styles.metric}>
           <span style={styles.metricLabel}>Total Score</span>
           <span style={styles.metricValue}>{score}%</span>

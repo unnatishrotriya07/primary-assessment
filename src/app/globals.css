@@ -1338,6 +1338,140 @@ button, input, select, textarea {
   font-family: var(--font-hindi) !important;
 }
 
+/* ==========================================================================
+   Mobile Compatibility & Responsive Layout Overrides
+   ========================================================================== */
+
+@media (max-width: 1200px) {
+  /* Ensure admin layout container does not clip or overflow horizontally */
+  .admin-layout-container {
+    overflow-x: hidden !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Grid layouts & auto-fit columns overrides */
+  div[style*="gridTemplateColumns"],
+  .dashboard-section-grid,
+  .metricsGrid,
+  .metricGrid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  /* Form and controls wrapping */
+  div[style*="actionsBar"], 
+  .actions-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.8rem !important;
+  }
+
+  div[style*="searchContainer"] {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Tables container horizontal scrolling */
+  [style*="rosterCard"], 
+  .roster-card {
+    overflow-x: auto !important;
+    width: 100% !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  [style*="rosterCard"] table,
+  .roster-card table {
+    min-width: 600px !important;
+  }
+
+  /* Report Card Grid stack overrides */
+  .report-skill-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.8rem !important;
+  }
+
+  .report-metric-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.2rem !important;
+  }
+
+  .report-skill-grid div[style*="skillCard"] {
+    padding: 0.8rem !important;
+  }
+
+  /* Active Interview/Assessment mobile optimizations */
+  .interview-split-grid {
+    flex-direction: column !important;
+    gap: 1rem !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    padding: 0 1rem !important;
+  }
+
+  .interview-panel-card {
+    height: auto !important;
+    min-height: 280px !important;
+    padding: 1.5rem !important;
+    flex: none !important;
+  }
+
+  .interview-top-bar {
+    flex-direction: column !important;
+    height: auto !important;
+    padding: 1rem !important;
+    gap: 0.8rem !important;
+    align-items: center !important;
+  }
+
+  .interview-top-bar button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .interview-question-container {
+    margin-bottom: 1rem !important;
+    padding: 0 1rem !important;
+  }
+
+  .interview-question-container h2 {
+    font-size: 1.15rem !important;
+  }
+
+  .interview-progress-path {
+    padding: 0 5% !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .interview-status-container {
+    margin-top: 1rem !important;
+    padding: 0 1rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .interview-status-container div {
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  .interview-bubble-box {
+    padding: 1rem 1.25rem !important;
+    margin: 0 1rem !important;
+    max-width: calc(100% - 2rem) !important;
+  }
+
+  /* Spacing and margins on mobile devices */
+  .admin-content-area {
+    padding: 1rem !important;
+  }
+
+  main[style*="container"] {
+    padding: 0 1rem !important;
+    margin: 2rem auto !important;
+  }
+}
+
 
 
 

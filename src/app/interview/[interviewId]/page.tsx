@@ -1093,7 +1093,7 @@ export default function InterviewPage({ params }: PageProps) {
         const pct = (currentIdx / (questions.length - 1)) * 100;
         
         return (
-            <div style={styles.pathOuter}>
+            <div className="interview-progress-path" style={styles.pathOuter}>
                 <div style={styles.pathLineBg} />
                 <div style={{ ...styles.pathLineFill, width: `${pct}%` }} />
                 
@@ -1116,7 +1116,7 @@ export default function InterviewPage({ params }: PageProps) {
             ? `${subjectName} - ${chapterTitle}`
             : (chapterTitle || subjectName || "Assessment");
         return (
-            <div style={styles.assessmentTopBar}>
+            <div className="interview-top-bar" style={styles.assessmentTopBar}>
                 <div style={styles.topBarTitle}>
                     📚 {displayTitle}
                 </div>
@@ -1133,7 +1133,7 @@ export default function InterviewPage({ params }: PageProps) {
         const totalNum = questions.length;
         
         return (
-            <div style={styles.topQuestionTextContainer}>
+            <div className="interview-question-container" style={styles.topQuestionTextContainer}>
                 <div style={styles.questionNumberText}>
                     Question {currentNum} of {totalNum} {chapterTitle ? ` • ${chapterTitle}` : ""}
                 </div>
@@ -1208,15 +1208,15 @@ export default function InterviewPage({ params }: PageProps) {
 
                 {/* Buddy & Speech bubble Section or Split Layout depending on phase */}
                 {phase === "interview" ? (
-                    <div style={styles.splitGrid}>
+                    <div className="interview-split-grid" style={styles.splitGrid}>
                         {/* Left Panel: Bot */}
-                        <div style={styles.panelCard}>
+                        <div className="interview-left-card interview-panel-card" style={styles.panelCard}>
                             {/* Speech bubble removed to avoid double display; teacher-generated question is at the top */}
                             {renderBuddyAvatar(180)}
                         </div>
 
                         {/* Right Panel: Student camera / Waveform */}
-                        <div style={styles.panelCard}>
+                        <div className="interview-right-card interview-panel-card" style={styles.panelCard}>
                             {cameraEnabled ? (
                                 <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px", border: "1px solid #E5E7EB" }} />
                             ) : (
@@ -1273,10 +1273,10 @@ export default function InterviewPage({ params }: PageProps) {
                 ) : (
                     /* Default Setup View */
                     phase !== "device_setup" ? (
-                        <div style={styles.buddyZone}>
+                        <div className="interview-buddy-zone" style={styles.buddyZone}>
                             {/* Speech bubble - hide in comfort_conv */}
                             {phase !== "comfort_conv" && (
-                                <div style={styles.bubbleBox}>
+                                <div className="interview-bubble-box" style={styles.bubbleBox}>
                                     <div style={styles.bubbleArrow} />
                                     <p style={styles.speechText}>
                                         {getBuddySpeechText()}
@@ -1292,7 +1292,7 @@ export default function InterviewPage({ params }: PageProps) {
 
                 {/* Bottom subtitle/live caption capsule for interview */}
                 {phase === "interview" && (
-                    <div style={styles.bottomStatusContainer}>
+                    <div className="interview-status-container" style={styles.bottomStatusContainer}>
                         <div style={{
                             display: "flex",
                             alignItems: "center",
