@@ -16,8 +16,11 @@ export class BrowserTTSService implements ITextToSpeechService {
   private activeUtterance: SpeechSynthesisUtterance | null = null;
   private keepAliveInterval: any = null;
   private isSpeakingActive: boolean = false;
+  private config: VoiceEngineConfig | null = null;
 
-  async initialize(config: VoiceEngineConfig): Promise<void> {}
+  async initialize(config: VoiceEngineConfig): Promise<void> {
+    this.config = config;
+  }
 
   async speak(text: string, callbacks?: TTSCallbacks): Promise<void> {
     if (typeof window === "undefined" || !window.speechSynthesis) {
@@ -38,13 +41,46 @@ export class BrowserTTSService implements ITextToSpeechService {
     utt.rate = 0.88;
     utt.pitch = 1.15;
 
-    const voices = window.speechSynthesis.getVoices();
-    const voice =
-      voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
-      voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
-      voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
-      voices.find((v) => v.lang.startsWith("en") && /female/i.test(v.name)) ||
-      voices[0];
+    const lang = this.config?.language || "en-IN";
+    utt.lang = lang;
+
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      // Chrome/Safari often load voices asynchronously on first page load
+      await new Promise<void>((resolve) => {
+        const handler = () => {
+          voices = window.speechSynthesis.getVoices();
+          resolve();
+        };
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+          window.speechSynthesis.onvoiceschanged = handler;
+        }
+        setTimeout(() => {
+          voices = window.speechSynthesis.getVoices();
+          resolve();
+        }, 200);
+      });
+    }
+
+    let voice = null;
+    if (lang.startsWith("hi")) {
+      voice =
+        voices.find((v) => v.lang.startsWith("hi") && /google/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("hi") && /lekha/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("hi") && /kalpana/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("hi") && /female/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("hi")) ||
+        voices.find((v) => v.lang.includes("IN"));
+    } else {
+      voice =
+        voices.find((v) => v.lang.startsWith("en") && /google/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /samantha/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /zira/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /veena/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /karen/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /tessa/i.test(v.name)) ||
+        voices.find((v) => v.lang.startsWith("en") && /female/i.test(v.name));
+    }
 
     if (voice) {
       utt.voice = voice;

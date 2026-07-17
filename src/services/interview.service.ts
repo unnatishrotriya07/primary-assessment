@@ -38,6 +38,7 @@ export interface InterviewSubmitPayload {
 
 export interface InterviewReport {
     id: number;
+    session_id?: string;
     student_name: string;
     student_class: string;
     assessment_title?: string;
@@ -159,11 +160,11 @@ const interviewService = {
     /**
      * V2 Real-Time Conversation Engine turn execution.
      */
-    executeTurn: (
-        interviewId: number,
+    executeTurn: async (
+        sessionId: string | number,
         payload: {
             student_response: string;
-            network_status: string;
+            network_status?: string;
             audio_url?: string;
         }
     ): Promise<{
@@ -176,8 +177,33 @@ const interviewService = {
         current_question_index: number;
         comfort_index: number;
         completion_status: string;
-    }> =>
-        api.post(`/interviews/${interviewId}/turn`, payload),
+    }> => {
+        const res = await api.post<{
+            question: string;
+            assessment_state: string;
+            conversation_complete: boolean;
+            current_question_index?: number;
+            comfort_index?: number;
+            active_hint?: string | null;
+            hints_remaining?: number;
+            followups_remaining?: number;
+            completion_status?: string;
+        }>("/assessment/message", {
+            session_id: sessionId.toString(),
+            message: payload.student_response
+        });
+
+        return {
+            next_speech: res.question,
+            next_state: res.assessment_state,
+            hints_remaining: res.hints_remaining ?? 0,
+            followups_remaining: res.followups_remaining ?? 0,
+            active_hint: res.active_hint ?? null,
+            current_question_index: res.current_question_index ?? 0,
+            comfort_index: res.comfort_index ?? 0,
+            completion_status: res.completion_status ?? (res.conversation_complete ? "Completed" : "In Progress")
+        };
+    },
 
     /**
      * Teacher: review and approve evaluation report.
