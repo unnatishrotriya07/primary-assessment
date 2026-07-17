@@ -130,22 +130,24 @@ export default function StudentReportModal({
               </div>
 
               {/* Skills progress grid */}
-              <div style={styles.skillGrid}>
-                {SKILL_CONFIG.map(({ key, label, color }) => {
-                  const val = Math.round((report[key as keyof InterviewReport] as number) ?? 0);
-                  return (
-                    <div key={key} style={styles.skillCard}>
-                      <p style={styles.skillLabel}>{label}</p>
-                      <div style={styles.barTrack}>
-                        <div style={{ ...styles.barFill, width: `${val}%`, background: color }} />
+              {report.score_communication !== null && report.score_communication !== undefined && (
+                <div style={styles.skillGrid}>
+                  {SKILL_CONFIG.map(({ key, label, color }) => {
+                    const val = Math.round((report[key as keyof InterviewReport] as number) ?? 0);
+                    return (
+                      <div key={key} style={styles.skillCard}>
+                        <p style={styles.skillLabel}>{label}</p>
+                        <div style={styles.barTrack}>
+                          <div style={{ ...styles.barFill, width: `${val}%`, background: color }} />
+                        </div>
+                        <p style={styles.skillScore}>
+                          {val}<span style={styles.skillOf}>/100</span>
+                        </p>
                       </div>
-                      <p style={styles.skillScore}>
-                        {val}<span style={styles.skillOf}>/100</span>
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Summary */}
               {report.summary && (

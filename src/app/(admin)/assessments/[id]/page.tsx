@@ -1043,7 +1043,6 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               <span style={styles.statBadge}>📄 Transcript Ready</span>
             </div>
           )}
-
           <div style={styles.drawerDivider} />
 
           {/* Drawer Tab Headers for STEP 16 */}
@@ -1051,12 +1050,8 @@ export default function AssessmentDetailPage({ params }: PageProps) {
             <div style={styles.drawerTabs}>
               {[
                 { id: "conversation", label: "Conversation" },
-                { id: "transcript", label: "Transcript" },
                 { id: "evaluation", label: "Evaluation" },
-                { id: "insights", label: "Learning Insights" },
-                { id: "recommendations", label: "Recommendations" },
-                { id: "notes", label: "Teacher Notes" },
-                { id: "audio", label: "Replay Audio" }
+                { id: "notes", label: "Teacher Notes" }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1128,26 +1123,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 2. Tab: Transcript */}
-                {drawerTab === "transcript" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Raw Session Transcript</h4>
-                    <div style={styles.rawTranscriptDoc}>
-                      {selectedStudentReport.transcript && selectedStudentReport.transcript.length > 0 ? (
-                        selectedStudentReport.transcript.map((entry, idx) => (
-                          <div key={idx} style={styles.rawTranscriptRow}>
-                            <span style={styles.rawTranscriptRole}>
-                              {entry.role === "ai" ? "Buddy" : selectedStudentReport.student_name}:
-                            </span>
-                            <span style={styles.rawTranscriptText} className={isHindi || isHindiText(entry.text) ? "font-hindi" : ""}>"{entry.text}"</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>No transcript entries found.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* 3. Tab: Evaluation */}
                 {drawerTab === "evaluation" && (
@@ -1184,89 +1160,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 4. Tab: Learning Insights */}
-                {drawerTab === "insights" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Concept & Diagnostic Scores</h4>
-                    
-                    {/* Radial/Bar metrics */}
-                    <div style={styles.scoreBarGroup}>
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Numeracy Reasoning</span>
-                          <strong>{selectedStudentReport.score_numeracy}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_numeracy}%`, backgroundColor: "var(--success)" }} />
-                        </div>
-                      </div>
 
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Oral Communication</span>
-                          <strong>{selectedStudentReport.score_communication}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_communication}%`, backgroundColor: "var(--primary)" }} />
-                        </div>
-                      </div>
-
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Creative Explanations</span>
-                          <strong>{selectedStudentReport.score_creativity}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_creativity}%`, backgroundColor: "var(--warning)" }} />
-                        </div>
-                      </div>
-
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Focus & Emotional IQ</span>
-                          <strong>{selectedStudentReport.score_emotional_iq}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_emotional_iq}%`, backgroundColor: "#9CA3AF" }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Qualitative summary */}
-                    <div style={{ ...styles.insightsCard, border: "none", boxShadow: "none", padding: 0, marginTop: "2rem" }}>
-                      <h4 style={styles.drawerSectionTitle}>Observed Summary</h4>
-                      <p style={styles.insightsSummaryText}>
-                        {selectedStudentReport.summary || "Student finished the interview session successfully."}
-                      </p>
-
-                      <div style={styles.diagnosticLists}>
-                        <div style={styles.diagGroup}>
-                          <span style={styles.diagLabelGreen}>Strengths</span>
-                          <p style={styles.diagText}>{selectedStudentReport.strengths}</p>
-                        </div>
-                        <div style={styles.diagGroup}>
-                          <span style={styles.diagLabelRed}>Gaps Identified</span>
-                          <p style={styles.diagText}>{selectedStudentReport.improvements || "No major deficits identified."}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. Tab: Recommendations */}
-                {drawerTab === "recommendations" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Suggested Pedagogical Follow-up</h4>
-                    <div style={styles.followUpCard}>
-                      <h5 style={styles.followUpHeader}>Action Plan</h5>
-                      <p style={styles.followUpText}>
-                        {selectedStudentReport.improvements 
-                          ? `Assign targeted visual worksheets focusing on observed gaps: ${selectedStudentReport.improvements}`
-                          : `Assign advanced chapter worksheets to challenge ${selectedStudentReport.student_name}.`}
-                      </p>
-                    </div>
-                  </div>
-                )}
 
                 {/* 6. Tab: Teacher Notes */}
                 {drawerTab === "notes" && (
@@ -1312,70 +1206,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 7. Tab: Replay Audio */}
-                {drawerTab === "audio" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Interview Audio Recording</h4>
-                    
-                    <div style={styles.audioPlayerBox}>
-                      <div style={styles.audioControlsRow}>
-                        <button 
-                          onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                          style={styles.audioPlayBtn}
-                        >
-                          {isPlayingAudio ? (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                              <rect x="4" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-                            </svg>
-                          ) : (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                          )}
-                        </button>
-                        
-                        <div style={styles.waveformContainer}>
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "14px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.2s infinite ease" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "22px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 0.8s infinite ease 0.2s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "32px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.4s infinite ease 0.4s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "18px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1s infinite ease 0.1s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "26px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.1s infinite ease 0.3s" : "none"
-                          }} />
-                        </div>
 
-                        <span style={styles.audioTime}>02:14</span>
-                      </div>
-
-                      <span style={styles.buddySpeechIndicator}>
-                        {isPlayingAudio ? "Speaking (Streaming Audio playback)" : "Buddy Voice Portal Recording"}
-                      </span>
-                    </div>
-                  </div>
-                )}
 
               </div>
             )
