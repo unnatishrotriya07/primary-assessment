@@ -642,7 +642,9 @@ export default function QuestionGeneratorForm() {
           </div>
 
           {/* Section 2: Assessment Parameters */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", paddingTop: "0.4rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "1.2rem", paddingTop: "0.4rem" }}>
+            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Assessment Parameters</h4>
+            
             <div className="form-row-responsive">
               <div style={styles.selectGroup}>
                 <Input
@@ -654,6 +656,49 @@ export default function QuestionGeneratorForm() {
                   value={count}
                   onChange={(e) => setCount(e.target.value)}
                 />
+              </div>
+
+              <div style={styles.selectGroup}>
+                <label style={styles.label}>Difficulty</label>
+                <select
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row-responsive">
+              <div style={styles.selectGroup}>
+                <label style={styles.label}>Cognitive Level (Bloom's Taxonomy)</label>
+                <select
+                  value={cognitiveLevel}
+                  onChange={(e) => setCognitiveLevel(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="remembering">Remembering (Recall facts)</option>
+                  <option value="understanding">Understanding (Explain concepts)</option>
+                  <option value="applying">Applying (Use information in new contexts)</option>
+                  <option value="analyzing">Analyzing (Draw connections)</option>
+                  <option value="evaluating">Evaluating (Justify a stand/decision)</option>
+                  <option value="creating">Creating (Produce new or original work)</option>
+                </select>
+              </div>
+
+              <div style={styles.selectGroup}>
+                <label style={styles.label}>Question Type</label>
+                <select
+                  value={questionType}
+                  onChange={(e) => setQuestionType(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="tita">Descriptive / TITA (Type In The Answer)</option>
+                  <option value="mcq">Multiple Choice / MCQ</option>
+                </select>
               </div>
             </div>
           </div>
@@ -739,7 +784,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1.5rem",
-    maxWidth: "720px",
+    maxWidth: "100%",
     width: "100%",
   },
   selectGroup: {

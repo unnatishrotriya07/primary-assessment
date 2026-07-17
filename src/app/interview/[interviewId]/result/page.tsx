@@ -205,22 +205,24 @@ export default function InterviewResultPage({ params }: PageProps) {
                 </div>
 
                 {/* Skill bars */}
-                <div style={s.skillGrid} className="result-skill-grid">
-                    {SKILL_CONFIG.map(({ key, label, color }) => {
-                        const val = Math.round((report[key as keyof InterviewReport] as number) ?? 0);
-                        return (
-                            <div key={key} style={s.skillCard}>
-                                <p style={s.skillLabel}>{label}</p>
-                                <div style={s.barTrack}>
-                                    <div style={{ ...s.barFill, width: `${val}%`, background: color }} />
+                {report.score_communication !== null && report.score_communication !== undefined && (
+                    <div style={s.skillGrid} className="result-skill-grid">
+                        {SKILL_CONFIG.map(({ key, label, color }) => {
+                            const val = Math.round((report[key as keyof InterviewReport] as number) ?? 0);
+                            return (
+                                <div key={key} style={s.skillCard}>
+                                    <p style={s.skillLabel}>{label}</p>
+                                    <div style={s.barTrack}>
+                                        <div style={{ ...s.barFill, width: `${val}%`, background: color }} />
+                                    </div>
+                                    <p style={s.skillScore}>
+                                        {val}<span style={s.skillOf}>/100</span>
+                                    </p>
                                 </div>
-                                <p style={s.skillScore}>
-                                    {val}<span style={s.skillOf}>/100</span>
-                                </p>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {/* Summary */}
                 {report.summary && (

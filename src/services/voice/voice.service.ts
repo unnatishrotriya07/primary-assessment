@@ -30,24 +30,8 @@ export class VoiceService implements IVoiceService {
     this.setState("initializing");
 
     let finalConfig = { ...config };
-
-    try {
-      // 1. Probe backend availability
-      const health = await api.get<{ status: string; whisper?: string; kokoro?: string }>("/voice/health");
-      if (health && (health.status === "ok" || health.status === "degraded")) {
-        // Force sttProvider to "browser" to bypass MediaRecorder compatibility issues
-        finalConfig.sttProvider = "browser";
-        finalConfig.ttsProvider = health.kokoro === "available" ? "kokoro" : "browser";
-        console.log(`[VoiceEngine] Connected to voice backend. Providers initialized: STT=${finalConfig.sttProvider}, TTS=${finalConfig.ttsProvider}`);
-      } else {
-        throw new Error("Backend health status not ok.");
-      }
-    } catch (err) {
-      // 2. Fallback to browser Web Speech API
-      finalConfig.sttProvider = "browser";
-      finalConfig.ttsProvider = "browser";
-      console.warn("[VoiceEngine] Voice backend not available. Falling back to local browser Speech API.", err);
-    }
+    finalConfig.sttProvider = "browser";
+    finalConfig.ttsProvider = "browser";
 
     this.config = finalConfig;
 

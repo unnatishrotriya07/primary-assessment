@@ -25,6 +25,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
 
   // State variables
   const [assessment, setAssessment] = useState<AssessmentData | null>(null);
+  const [interviews, setInterviews] = useState<InterviewReport[]>([]);
   const [subjectsMap, setSubjectsMap] = useState<Record<string, string>>({});
   const [classesMap, setClassesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -194,7 +195,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     { time: "9:05 AM", student: "Anjali Completed", desc: "5 Questions evaluated. Overall accuracy 92%", completed: true },
     { time: "9:05 AM", student: "Aryan Started", desc: "Access verified via Scholar ID 3011", completed: false },
     { time: "9:10 AM", student: "Sneha Completed", desc: "5 Questions evaluated. Overall accuracy 48%", completed: true },
-    { time: "9:10 AM", student: "Evaluation Finished", desc: "AI Insights generated for 3 completed transcripts", completed: true, type: "system" }
+    { time: "9:10 AM", student: "Evaluation Finished", desc: "Learning Insights generated for 3 completed transcripts", completed: true, type: "system" }
   ];
 
   // Mock Question Analytics for fractions
@@ -306,9 +307,18 @@ export default function AssessmentDetailPage({ params }: PageProps) {
 
         if (id === "demo-fractions") {
           setAssessment(mockFractionsData);
+          setInterviews([
+            getMockStudentReport("101"),
+            getMockStudentReport("102"),
+            getMockStudentReport("105")
+          ]);
         } else {
-          const asmt = await assessmentService.getById(id);
+          const [asmt, interviewsList] = await Promise.all([
+            assessmentService.getById(id),
+            interviewService.getByAssessment(parseInt(id, 10)).catch(() => [])
+          ]);
           setAssessment(asmt);
+          setInterviews(interviewsList || []);
         }
       } catch (err: any) {
         setError(extractErrorMessage(err, "Failed to load assessment."));
@@ -364,8 +374,12 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     if (hasActiveSessions) {
       const interval = setInterval(async () => {
         try {
-          const updatedAsmt = await assessmentService.getById(id);
+          const [updatedAsmt, updatedInterviews] = await Promise.all([
+            assessmentService.getById(id),
+            interviewService.getByAssessment(parseInt(id, 10)).catch(() => [])
+          ]);
           setAssessment(updatedAsmt);
+          setInterviews(updatedInterviews || []);
         } catch (err) {
           console.error("Failed to poll assessment updates", err);
         }
@@ -375,7 +389,98 @@ export default function AssessmentDetailPage({ params }: PageProps) {
     }
   }, [id, assessment]);
 
-  // Save notes handler
+  // Compile classroom insights dynamically from student reports
+  const getClassroomInsights = () => {
+    const conceptStrengths: { concept: string; description: string; count: number; avgScore: number }[] = [];
+    const conceptGaps: { concept: string; description: string; count: number; severity: string; avgScore: number }[] = [];
+
+    const completedIvs = interviews.filter(iv => iv.status === "Completed");
+
+    if (completedIvs.length === 0) {
+      return { strengths: [], gaps: [] };
+    }
+
+    completedIvs.forEach(iv => {
+      const score = iv.overall_score || 0;
+      if (iv.strengths) {
+        const lines = iv.strengths.split("\n");
+        lines.forEach(line => {
+          const cleanLine = line.replace(/^[•\-\*\s]+/, "").trim();
+          if (!cleanLine) return;
+
+          let concept = cleanLine;
+          let description = "Demonstrated solid understanding and reasoning.";
+          const colonIndex = cleanLine.indexOf(":");
+          if (colonIndex > 0) {
+            concept = cleanLine.substring(0, colonIndex).trim();
+            description = cleanLine.substring(colonIndex + 1).trim();
+          }
+
+          const existing = conceptStrengths.find(c => c.concept.toLowerCase() === concept.toLowerCase());
+          if (existing) {
+            existing.count += 1;
+            existing.avgScore += score;
+          } else {
+            conceptStrengths.push({ concept, description, count: 1, avgScore: score });
+          }
+        });
+      }
+
+      if (iv.improvements) {
+        const lines = iv.improvements.split("\n");
+        lines.forEach(line => {
+          const cleanLine = line.replace(/^[•\-\*\s]+/, "").trim();
+          if (!cleanLine) return;
+
+          let concept = cleanLine;
+          let description = "Requires reinforcement and additional class exercises.";
+          let severity = "Medium";
+
+          const colonIndex = cleanLine.indexOf(":");
+          if (colonIndex > 0) {
+            concept = cleanLine.substring(0, colonIndex).trim();
+            const rest = cleanLine.substring(colonIndex + 1).trim();
+            const sevMatch = rest.match(/\((High|Medium|Low|Critical)\)$/i);
+            if (sevMatch) {
+              severity = sevMatch[1];
+              description = rest.substring(0, rest.length - sevMatch[0].length).trim();
+            } else {
+              description = rest;
+            }
+          }
+
+          const existing = conceptGaps.find(c => c.concept.toLowerCase() === concept.toLowerCase());
+          if (existing) {
+            existing.count += 1;
+            existing.avgScore += score;
+            if (severity === "High" && existing.severity !== "High") {
+              existing.severity = "High";
+            }
+          } else {
+            conceptGaps.push({ concept, description, severity, count: 1, avgScore: score });
+          }
+        });
+      }
+    });
+
+    const finalStrengths = conceptStrengths.map(c => ({
+      concept: c.concept,
+      description: c.description,
+      accuracy: Math.round(c.avgScore / c.count),
+      count: c.count
+    })).sort((a, b) => b.accuracy - a.accuracy || b.count - a.count);
+
+    const finalGaps = conceptGaps.map(c => ({
+      concept: c.concept,
+      description: c.description,
+      accuracy: Math.round(c.avgScore / c.count),
+      severity: c.severity,
+      count: c.count
+    })).sort((a, b) => a.accuracy - b.accuracy || b.count - a.count);
+
+    return { strengths: finalStrengths, gaps: finalGaps };
+  };
+
   const handleSaveNotes = async () => {
     if (!selectedStudentReport) return;
     setIsSavingNotes(true);
@@ -445,6 +550,8 @@ export default function AssessmentDetailPage({ params }: PageProps) {
   const inProgressCount = assignedStudents.filter(s => s.status === "Started" || s.status === "Evaluating").length;
   const pendingCount = assignedStudents.filter(s => s.status === "Pending").length;
   const totalStudents = assignedStudents.length;
+
+  const insights = getClassroomInsights();
 
   // Calculate average score
   const completedStudents = assignedStudents.filter(s => s.interview && s.interview.overallScore);
@@ -546,29 +653,37 @@ export default function AssessmentDetailPage({ params }: PageProps) {
             }}>
               {displayStatus}
             </span>
+            {displayStatus === "LIVE" && (
+              <button
+                onClick={handleShare}
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  padding: "2px 10px",
+                  borderRadius: "999px",
+                  border: "1px solid",
+                  borderColor: copiedLink ? "var(--success)" : "var(--border-color)",
+                  backgroundColor: copiedLink ? "var(--success-light)" : "var(--bg-surface)",
+                  color: copiedLink ? "var(--success)" : "var(--text-secondary)",
+                  cursor: "pointer",
+                  marginLeft: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                {copiedLink ? "Copied!" : "Copy Link"}
+              </button>
+            )}
           </div>
           <p style={styles.pageSubtitle} className={isHindi ? "font-hindi" : ""}>
             {subjectDisplayName} • {classDisplayName} • {totalStudents} Students • Created {assessment.date || "Yesterday"}
           </p>
-        </div>
-
-        {/* Sticky Actions Grid */}
-        <div style={styles.stickyActionsPanel}>
-          <button onClick={() => setShowPreviewModal(true)} style={styles.actionBtn}>
-            Preview
-          </button>
-          <button onClick={handleDuplicate} style={styles.actionBtn}>
-            Duplicate
-          </button>
-          <button onClick={() => setIsModalOpen(true)} style={styles.actionBtn}>
-            Edit
-          </button>
-          <button onClick={handleShare} style={{ ...styles.actionBtn, color: copiedLink ? "var(--success)" : "var(--primary)" }}>
-            {copiedLink ? "Copied!" : "Share Link"}
-          </button>
-          <button onClick={handleExport} style={styles.actionBtn}>
-            Export
-          </button>
         </div>
       </div>
 
@@ -685,7 +800,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* AI Insights & Info Panels */}
+            {/* Learning Insights & Info Panels */}
             <div style={styles.overviewRightColumn}>
               <div style={styles.insightsCard}>
                 <div style={styles.insightsCardHeader}>
@@ -693,11 +808,11 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                     <path d="M18 10a6 6 0 0 0-12 0c0 7 3 9 3 9h6s3-2 3-9Z" />
                     <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Z" />
                   </svg>
-                  <h3 style={{ ...styles.sectionTitle, color: "var(--text-primary)" }}>AI Insight Panel</h3>
+                  <h3 style={{ ...styles.sectionTitle, color: "var(--text-primary)" }}>Learning Insights</h3>
                 </div>
                 <div style={styles.insightsCardBody}>
                   <div style={styles.insightAlertRow}>
-                    <span style={styles.insightAlertTitle}>AI noticed</span>
+                    <span style={styles.insightAlertTitle}>Observation</span>
                     <p style={styles.insightAlertDesc}>
                       68% of students confused numerator and denominator on Question 2.
                     </p>
@@ -728,20 +843,6 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   <div key={q.num} style={styles.qAnalyticsCard}>
                     <div style={styles.qAnalyticsTop}>
                       <span style={styles.qNumLabel}>Question {q.num}</span>
-                      <div style={styles.qStatsMetrics}>
-                        <div style={styles.qStatColumn}>
-                          <span style={styles.qStatLabel}>Class Correctness</span>
-                          <strong style={{ ...styles.qStatVal, color: q.danger ? "var(--error)" : "var(--success)" }}>{q.correct}</strong>
-                        </div>
-                        <span style={{
-                          ...styles.qStatusBadge,
-                          backgroundColor: q.danger ? "var(--error-light)" : "var(--success-light)",
-                          color: q.danger ? "var(--error)" : "var(--success)",
-                          borderColor: q.danger ? "#FCA5A5" : "#A7F3D0"
-                        }}>
-                          {q.status}
-                        </span>
-                      </div>
                     </div>
                     <p style={styles.qTextBody} className={isHindi || isHindiText(q.text) ? "font-hindi" : ""}>{q.text}</p>
                     <div style={styles.qAnalyticsDivider} />
@@ -752,26 +853,10 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                 ))
               ) : (
                 assessment.questions?.map((q, idx) => {
-                  const correctness = 100 - (idx * 15) % 45; // Deterministic dummy math for real ones
-                  const isNeedsAttention = correctness < 60;
                   return (
                     <div key={q.id || idx} style={styles.qAnalyticsCard}>
                       <div style={styles.qAnalyticsTop}>
                         <span style={styles.qNumLabel}>Question {idx + 1}</span>
-                        <div style={styles.qStatsMetrics}>
-                          <div style={styles.qStatColumn}>
-                            <span style={styles.qStatLabel}>Correctness</span>
-                            <strong style={{ ...styles.qStatVal, color: isNeedsAttention ? "var(--error)" : "var(--success)" }}>{correctness}%</strong>
-                          </div>
-                          <span style={{
-                            ...styles.qStatusBadge,
-                            backgroundColor: isNeedsAttention ? "var(--error-light)" : "var(--success-light)",
-                            color: isNeedsAttention ? "var(--error)" : "var(--success)",
-                            borderColor: isNeedsAttention ? "#FCA5A5" : "#A7F3D0"
-                          }}>
-                            {isNeedsAttention ? "Needs Attention" : "Satisfactory"}
-                          </span>
-                        </div>
                       </div>
                       <p style={styles.qTextBody} className={isHindi || isHindiText(q.text) ? "font-hindi" : ""}>{q.text}</p>
                       <div style={styles.qAnalyticsDivider} />
@@ -981,51 +1066,87 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               </p>
             </div>
 
-            <div style={styles.insightsGrid}>
-              <div style={styles.insightsCard}>
-                <div style={styles.insightsCardHeader}>
-                  <h3 style={styles.sectionTitle}>Core Concepts Strengths</h3>
-                </div>
-                <div style={styles.insightsListGroup}>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorGreen} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Visual Shape Fractions (91% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Students are highly capable at identifying half and quarter components on visual shapes.</p>
-                    </div>
-                  </div>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorGreen} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Word Problems (74% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Understands ratios when presented as slice counts in food math.</p>
-                    </div>
-                  </div>
-                </div>
+            {completedCount === 0 ? (
+              <div style={{
+                textAlign: "center",
+                padding: "4rem 2rem",
+                backgroundColor: "var(--bg-surface)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-color)",
+                boxShadow: "var(--shadow-sm)",
+                marginTop: "1.5rem"
+              }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: "1rem" }}>
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                <h4 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 0.5rem 0" }}>No Diagnostic Insights Yet</h4>
+                <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto 1.5rem auto", lineHeight: "1.5" }}>
+                  Insights are dynamically compiled in real-time as students complete their assessments. Have your students log in and complete their interviews to see detailed concepts analysis here.
+                </p>
               </div>
+            ) : (
+              <div style={styles.insightsGrid}>
+                <div style={styles.insightsCard}>
+                  <div style={styles.insightsCardHeader}>
+                    <h3 style={styles.sectionTitle}>Core Concepts Strengths</h3>
+                  </div>
+                  <div style={styles.insightsListGroup}>
+                    {insights.strengths.length > 0 ? (
+                      insights.strengths.map((item, idx) => (
+                        <div key={idx} style={styles.insightBulletItem}>
+                          <span style={styles.insightIndicatorGreen} />
+                          <div>
+                            <h4 style={styles.insightBulletHeader}>{item.concept} ({item.accuracy}% Accuracy)</h4>
+                            <p style={styles.insightBulletText}>{item.description}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", margin: "0.5rem 0" }}>
+                        No conceptual strengths identified yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-              <div style={styles.insightsCard}>
-                <div style={styles.insightsCardHeader}>
-                  <h3 style={styles.sectionTitle}>Concept Gaps & Interventions</h3>
-                </div>
-                <div style={styles.insightsListGroup}>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorRed} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Numerator/Denominator confusion (48% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Significant counts of students mix up division components, prioritizing the divisor.</p>
-                    </div>
+                <div style={styles.insightsCard}>
+                  <div style={styles.insightsCardHeader}>
+                    <h3 style={styles.sectionTitle}>Concept Gaps & Interventions</h3>
                   </div>
-                  <div style={styles.insightBulletItem}>
-                    <span style={styles.insightIndicatorRed} />
-                    <div>
-                      <h4 style={styles.insightBulletHeader}>Equivalent Simplification (55% Accuracy)</h4>
-                      <p style={styles.insightBulletText}>Difficulty simplifying 3/6 back to half. Struggles with comparative ratios.</p>
-                    </div>
+                  <div style={styles.insightsListGroup}>
+                    {insights.gaps.length > 0 ? (
+                      insights.gaps.map((item, idx) => (
+                        <div key={idx} style={styles.insightBulletItem}>
+                          <span style={styles.insightIndicatorRed} />
+                          <div>
+                            <h4 style={styles.insightBulletHeader}>{item.concept} ({item.accuracy}% Accuracy)</h4>
+                            <p style={styles.insightBulletText}>
+                              {item.description} {item.severity && (
+                                <span style={{ 
+                                  fontSize: "0.75rem", 
+                                  fontWeight: 600, 
+                                  padding: "0.1rem 0.4rem", 
+                                  borderRadius: "999px", 
+                                  backgroundColor: item.severity.toLowerCase() === "high" || item.severity.toLowerCase() === "critical" ? "#FEE2E2" : "#FEF3C7", 
+                                  color: item.severity.toLowerCase() === "high" || item.severity.toLowerCase() === "critical" ? "#DC2626" : "#D97706", 
+                                  marginLeft: "0.5rem" 
+                                }}>
+                                  {item.severity} severity
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", margin: "0.5rem 0" }}>
+                        No concept gaps or learning struggles detected.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -1065,7 +1186,6 @@ export default function AssessmentDetailPage({ params }: PageProps) {
               <span style={styles.statBadge}>📄 Transcript Ready</span>
             </div>
           )}
-
           <div style={styles.drawerDivider} />
 
           {/* Drawer Tab Headers for STEP 16 */}
@@ -1073,12 +1193,8 @@ export default function AssessmentDetailPage({ params }: PageProps) {
             <div style={styles.drawerTabs}>
               {[
                 { id: "conversation", label: "Conversation" },
-                { id: "transcript", label: "Transcript" },
                 { id: "evaluation", label: "Evaluation" },
-                { id: "insights", label: "Learning Insights" },
-                { id: "recommendations", label: "Recommendations" },
-                { id: "notes", label: "Teacher Notes" },
-                { id: "audio", label: "Replay Audio" }
+                { id: "notes", label: "Teacher Notes" }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1150,26 +1266,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 2. Tab: Transcript */}
-                {drawerTab === "transcript" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Raw Session Transcript</h4>
-                    <div style={styles.rawTranscriptDoc}>
-                      {selectedStudentReport.transcript && selectedStudentReport.transcript.length > 0 ? (
-                        selectedStudentReport.transcript.map((entry, idx) => (
-                          <div key={idx} style={styles.rawTranscriptRow}>
-                            <span style={styles.rawTranscriptRole}>
-                              {entry.role === "ai" ? "Buddy" : selectedStudentReport.student_name}:
-                            </span>
-                            <span style={styles.rawTranscriptText} className={isHindi || isHindiText(entry.text) ? "font-hindi" : ""}>"{entry.text}"</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>No transcript entries found.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* 3. Tab: Evaluation */}
                 {drawerTab === "evaluation" && (
@@ -1206,89 +1303,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 4. Tab: Learning Insights */}
-                {drawerTab === "insights" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Concept & Diagnostic Scores</h4>
-                    
-                    {/* Radial/Bar metrics */}
-                    <div style={styles.scoreBarGroup}>
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Numeracy Reasoning</span>
-                          <strong>{selectedStudentReport.score_numeracy}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_numeracy}%`, backgroundColor: "var(--success)" }} />
-                        </div>
-                      </div>
 
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Oral Communication</span>
-                          <strong>{selectedStudentReport.score_communication}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_communication}%`, backgroundColor: "var(--primary)" }} />
-                        </div>
-                      </div>
-
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Creative Explanations</span>
-                          <strong>{selectedStudentReport.score_creativity}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_creativity}%`, backgroundColor: "var(--warning)" }} />
-                        </div>
-                      </div>
-
-                      <div style={styles.scoreBarItem}>
-                        <div style={styles.scoreBarLabels}>
-                          <span>Focus & Emotional IQ</span>
-                          <strong>{selectedStudentReport.score_emotional_iq}%</strong>
-                        </div>
-                        <div style={styles.scoreTrack}>
-                          <div style={{ ...styles.scoreFill, width: `${selectedStudentReport.score_emotional_iq}%`, backgroundColor: "#9CA3AF" }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Qualitative summary */}
-                    <div style={{ ...styles.insightsCard, border: "none", boxShadow: "none", padding: 0, marginTop: "2rem" }}>
-                      <h4 style={styles.drawerSectionTitle}>Observed Summary</h4>
-                      <p style={styles.insightsSummaryText}>
-                        {selectedStudentReport.summary || "Student finished the interview session successfully."}
-                      </p>
-
-                      <div style={styles.diagnosticLists}>
-                        <div style={styles.diagGroup}>
-                          <span style={styles.diagLabelGreen}>Strengths</span>
-                          <p style={styles.diagText}>{selectedStudentReport.strengths}</p>
-                        </div>
-                        <div style={styles.diagGroup}>
-                          <span style={styles.diagLabelRed}>Gaps Identified</span>
-                          <p style={styles.diagText}>{selectedStudentReport.improvements || "No major deficits identified."}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. Tab: Recommendations */}
-                {drawerTab === "recommendations" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Suggested Pedagogical Follow-up</h4>
-                    <div style={styles.followUpCard}>
-                      <h5 style={styles.followUpHeader}>Action Plan</h5>
-                      <p style={styles.followUpText}>
-                        {selectedStudentReport.improvements 
-                          ? `Assign targeted visual worksheets focusing on observed gaps: ${selectedStudentReport.improvements}`
-                          : `Assign advanced chapter worksheets to challenge ${selectedStudentReport.student_name}.`}
-                      </p>
-                    </div>
-                  </div>
-                )}
 
                 {/* 6. Tab: Teacher Notes */}
                 {drawerTab === "notes" && (
@@ -1334,70 +1349,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* 7. Tab: Replay Audio */}
-                {drawerTab === "audio" && (
-                  <div style={styles.tabWorkspace}>
-                    <h4 style={styles.workspaceSectionTitle}>Interview Audio Recording</h4>
-                    
-                    <div style={styles.audioPlayerBox}>
-                      <div style={styles.audioControlsRow}>
-                        <button 
-                          onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                          style={styles.audioPlayBtn}
-                        >
-                          {isPlayingAudio ? (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                              <rect x="4" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-                            </svg>
-                          ) : (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                          )}
-                        </button>
-                        
-                        <div style={styles.waveformContainer}>
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "14px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.2s infinite ease" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "22px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 0.8s infinite ease 0.2s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "32px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.4s infinite ease 0.4s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "18px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1s infinite ease 0.1s" : "none"
-                          }} />
-                          <div style={{
-                            ...styles.waveformBar,
-                            height: "26px",
-                            backgroundColor: isPlayingAudio ? "var(--primary)" : "var(--text-muted)",
-                            animation: isPlayingAudio ? "wave 1.1s infinite ease 0.3s" : "none"
-                          }} />
-                        </div>
 
-                        <span style={styles.audioTime}>02:14</span>
-                      </div>
-
-                      <span style={styles.buddySpeechIndicator}>
-                        {isPlayingAudio ? "Speaking (Streaming Audio playback)" : "Buddy Voice Portal Recording"}
-                      </span>
-                    </div>
-                  </div>
-                )}
 
               </div>
             )
@@ -1514,27 +1466,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid",
     letterSpacing: "0.05em",
   },
-  stickyActionsPanel: {
-    display: "flex",
-    gap: "0.5rem",
-    backgroundColor: "var(--bg-surface)",
-    padding: "6px 12px",
-    border: "1px solid var(--border-color)",
-    borderRadius: "10px",
-    boxShadow: "var(--shadow-sm)",
-    alignItems: "center",
-  },
-  actionBtn: {
-    backgroundColor: "transparent",
-    color: "var(--text-secondary)",
-    border: "none",
-    padding: "6px 12px",
-    fontSize: "0.88rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    borderRadius: "6px",
-    transition: "all var(--transition-fast)",
-  },
+
   actionToast: {
     position: "fixed",
     top: "24px",
@@ -1550,11 +1482,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tabsHeader: {
     display: "flex",
-    gap: "2rem",
     borderBottom: "1px solid var(--border-color)",
     width: "100%",
   },
   tabItem: {
+    flex: 1,
+    textAlign: "center",
     padding: "0.8rem 0",
     borderBottom: "2px solid transparent",
     fontSize: "0.95rem",

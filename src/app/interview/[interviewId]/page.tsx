@@ -62,6 +62,7 @@ export default function InterviewPage({ params }: PageProps) {
     const [isFocused, setIsFocused] = useState(false);
     const [silenceRetryCount, setSilenceRetryCount] = useState(0);
     const [speechSupported, setSpeechSupported] = useState(true);
+    const [sessionId, setSessionId] = useState<string | null>(null);
 
     // Media permissions
     const [micEnabled, setMicEnabled] = useState(true);
@@ -98,7 +99,39 @@ export default function InterviewPage({ params }: PageProps) {
     const phaseRef = useRef<any>("loading");
     const answersRef = useRef<AnswerEntry[]>([]);
     const transcriptRef = useRef<TranscriptEntry[]>([]);
+    const chatEndRef = useRef<HTMLDivElement>(null);
     const unusedEncouragementsRef = useRef<string[]>([]);
+
+    const fastForwardComfortPhase = async (startIdx: number) => {
+        try {
+            let currentCIdx = startIdx;
+            let lastResult: any = null;
+            
+            while (currentCIdx < 3) {
+                const respText = currentCIdx === 0 ? "" : "yes";
+                const result = await interviewService.executeTurn(sessionId || interviewId, {
+                    student_response: respText,
+                    network_status: navigator.onLine ? "online" : "offline"
+                });
+                
+                lastResult = result;
+                currentCIdx = result.comfort_index;
+            }
+            
+            if (currentCIdx === 3) {
+                const result = await interviewService.executeTurn(sessionId || interviewId, {
+                    student_response: "yes",
+                    network_status: navigator.onLine ? "online" : "offline"
+                });
+                lastResult = result;
+            }
+            
+            return lastResult;
+        } catch (err) {
+            console.error("Fast forward failed:", err);
+            throw err;
+        }
+    };
 
     // Encouragement history tracking to prevent direct repetition
     const [unusedEncouragements, setUnusedEncouragements] = useState<string[]>([...ENCOURAGEMENTS]);
@@ -173,6 +206,32 @@ export default function InterviewPage({ params }: PageProps) {
         unusedEncouragementsRef.current = unusedEncouragements;
     }, [unusedEncouragements]);
 
+    // Scroll chat to bottom on updates
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [transcript, buddyState]);
+
+    // Auto-request mic and camera permissions in device_setup phase
+    useEffect(() => {
+        if (phase === "device_setup") {
+            const requestPermissionsAutomatically = async () => {
+                try {
+                    await requestPermission("mic");
+                } catch (err) {
+                    console.error("Auto mic request failed:", err);
+                }
+                try {
+                    await requestPermission("camera");
+                } catch (err) {
+                    console.error("Auto camera request failed:", err);
+                }
+            };
+            requestPermissionsAutomatically();
+        }
+    }, [phase]);
+
     // Track online/offline listeners
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -205,11 +264,12 @@ export default function InterviewPage({ params }: PageProps) {
         async function initSession() {
             setPhase("loading");
             try {
+                const selectedLang = sessionStorage.getItem("selected_language") || "en-IN";
                 await voiceService.initialize({
                     mode: "auto",
                     sttProvider: "browser",
                     ttsProvider: "browser",
-                    language: "en-US"
+                    language: selectedLang
                 });
                 const isSpeechEnabled = voiceService.isSpeechSupported();
                 setSpeechSupported(isSpeechEnabled);
@@ -232,12 +292,19 @@ export default function InterviewPage({ params }: PageProps) {
                     subName = data.subject_name || "Fractions";
                     chNum = data.chapter_number || "";
                     chTitle = data.chapter_title || "";
+                    if (data.session_id) {
+                        setSessionId(data.session_id);
+                    }
                 } catch (_) {}
             }
 
             try {
                 const dbSession = await interviewService.getReport(parseInt(interviewId, 10));
                 if (!isMounted) return;
+
+                if (dbSession.session_id) {
+                    setSessionId(dbSession.session_id);
+                }
 
                 sName = dbSession.student_name || sName;
                 setStudentName(sName);
@@ -249,8 +316,20 @@ export default function InterviewPage({ params }: PageProps) {
                 setQuestions(questionsList);
 
                 if (dbSession.status === "In Progress" || dbSession.status === "Transcript Saved") {
+                    let mappedTranscript: TranscriptEntry[] = [];
                     if (dbSession.transcript && dbSession.transcript.length > 0) {
-                        setTranscript(dbSession.transcript);
+                        let comfortCount = 0;
+                        const finalChapterName = chTitle || dbSession.assessment_title || subName || "Fractions";
+                        mappedTranscript = dbSession.transcript.map(t => {
+                            if (t.role === "ai" && (t.question_category === "comfort_conv" || t.question_category === "meet_buddy")) {
+                                comfortCount++;
+                                if (comfortCount === 1) return { ...t, text: "Hello! I'm Buddy. Can you tell me how you're feeling today?" };
+                                if (comfortCount === 2) return { ...t, text: "What's something you enjoyed doing today?" };
+                                if (comfortCount === 3) return { ...t, text: "Great! We'll be learning about " + finalChapterName + " today. Are you ready to begin?" };
+                            }
+                            return t;
+                        });
+                        setTranscript(mappedTranscript);
                     }
                     if (dbSession.raw_answers && dbSession.raw_answers.length > 0) {
                         setAnswers(dbSession.raw_answers as any);
@@ -282,22 +361,48 @@ export default function InterviewPage({ params }: PageProps) {
                         return;
                     }
 
-                    if (savedState === "interview") {
-                        setPhase("interview");
-                        const qText = questionsList[savedIdx]?.q || "Let's continue.";
-                        speakText(qText, () => {
-                            startSpeechRecognition();
-                        });
-                    } else if (savedState === "comfort_conv") {
-                        setPhase("comfort_conv");
-                        const cIdx = dbSession.comfort_index || 0;
-                        setComfortIdx(cIdx);
-                        let comfortQText = "Ready to learn together?";
-                        if (cIdx === 0) comfortQText = `How are you today, ${sName}?`;
-                        else if (cIdx === 1) comfortQText = "What did you enjoy doing today?";
-                        speakText(comfortQText, () => {
-                            startSpeechRecognition();
-                        });
+                    if (dbSession.transcript && dbSession.transcript.length > 0) {
+                        if (savedState === "comfort_conv" || savedState === "meet_buddy") {
+                            setPhase("comfort_conv");
+                            setBuddyState("speaking");
+                            const finalChapterName = chTitle || dbSession.assessment_title || subName || "Fractions";
+                            const welcomeSpeech = `Hi! I'm Buddy, your learning assistant. Let's start learning ${finalChapterName} together!`;
+
+                            const fastForwardPromise = fastForwardComfortPhase(dbSession.comfort_index || 0);
+                            speakText(welcomeSpeech, async () => {
+                                try {
+                                    const result = await fastForwardPromise;
+                                    if (result) {
+                                        setTranscript(result.transcript || []);
+                                        setPhase("interview");
+                                        setCurrentIdx(result.current_question_index);
+                                        setComfortIdx(result.comfort_index);
+                                        setActiveHint(result.active_hint);
+
+                                        const firstQuestionText = result.next_speech || "";
+                                        setBuddyState("speaking");
+                                        speakText(firstQuestionText, () => {
+                                            startSpeechRecognition();
+                                        });
+                                    }
+                                } catch (_) {
+                                    setError("Failed to restore the session.");
+                                    setPhase("device_setup");
+                                }
+                            });
+                        } else {
+                            const aiMsgs = mappedTranscript.filter(t => t.role === "ai");
+                            const lastAiText = aiMsgs.length > 0 ? aiMsgs[aiMsgs.length - 1].text : "Let's continue.";
+
+                            setPhase(savedState === "GOODBYE" ? "completed" : "interview");
+                            setBuddyState(savedState === "GOODBYE" ? "completed" : "speaking");
+
+                            speakText(lastAiText, () => {
+                                if (dbSession.completion_status !== "Completed" && savedState !== "GOODBYE") {
+                                    startSpeechRecognition();
+                                }
+                            });
+                        }
                     } else {
                         setPhase("device_setup");
                         setBuddyState("waving");
@@ -454,6 +559,7 @@ export default function InterviewPage({ params }: PageProps) {
         if (isSpeakingRef.current || isSubmitting || !micEnabled || isOffline) return;
 
         isListeningRef.current = true;
+        textRef.current = ""; // Clear text ref to start fresh
 
         voiceService.startListening({
             onStart: () => {
@@ -471,12 +577,12 @@ export default function InterviewPage({ params }: PageProps) {
                 if (gracePeriodTimeoutRef.current) {
                     clearTimeout(gracePeriodTimeoutRef.current);
                     gracePeriodTimeoutRef.current = null;
-                    console.log("[Silence Detection] Speech detected. Grace period cleared.");
                 }
 
                 speechConfidenceRef.current = confidence ?? 1.0;
                 setLiveCaption(currentSpeech);
                 setTypedText(currentSpeech);
+                textRef.current = currentSpeech; // Sync directly and synchronously
 
                 const lowerSpeech = currentSpeech.toLowerCase().trim();
                 const keywords = [
@@ -508,18 +614,17 @@ export default function InterviewPage({ params }: PageProps) {
                 }
             },
             onSpeechEnd: () => {
-                console.log("[Silence Detection] Speech ended. Starting 15-second grace period countdown...");
-                if (gracePeriodTimeoutRef.current) clearTimeout(gracePeriodTimeoutRef.current);
-                
-                gracePeriodTimeoutRef.current = setTimeout(() => {
-                    const activeState = phaseRef.current;
-                    if (isListeningRef.current && !isOffline && (activeState === "interview" || activeState === "comfort_conv")) {
-                        console.log("[Silence Detection] Grace period expired. Auto-submitting current answer...");
-                        const text = textRef.current.trim();
-                        setSilenceRetryCount(0);
-                        submitTurnLocal(text || "(No spoken response)");
-                    }
-                }, 15000); // 15-second grace period
+                const text = textRef.current.trim();
+                if (!text) {
+                    console.log("[Silence Detection] Speech ended but no text transcribed. Ignoring auto-submit.");
+                    return;
+                }
+                console.log("[Silence Detection] Speech ended. Auto-submitting response:", text);
+                const activeState = phaseRef.current;
+                if (isListeningRef.current && !isOffline && (activeState === "interview" || activeState === "comfort_conv")) {
+                    setSilenceRetryCount(0);
+                    submitTurnLocal(text);
+                }
             },
             onError: (err) => {
                 console.error("Speech recognition error:", err);
@@ -555,7 +660,10 @@ export default function InterviewPage({ params }: PageProps) {
         // 8-Second Nudge: if no speech is heard for 8 consecutive seconds
         silenceTimeoutRef.current = setTimeout(() => {
             if (speechToUse.length === 0 && isListeningRef.current && !isOffline) {
-                speakText("Take your time, tell me whatever you remember!", () => {
+                const nudgeText = phaseRef.current === "comfort_conv"
+                    ? "Go ahead, I'm listening!"
+                    : "Take your time, tell me whatever you remember!";
+                speakText(nudgeText, () => {
                     startSpeechRecognition();
                 });
             }
@@ -573,6 +681,7 @@ export default function InterviewPage({ params }: PageProps) {
             setTypedText("");
             setLiveCaption("");
             setActiveHint(null);
+            textRef.current = ""; // Clear speech text ref synchronously
 
             isListeningRef.current = false;
             voiceService.stopListening();
@@ -582,141 +691,114 @@ export default function InterviewPage({ params }: PageProps) {
             const activeState = phaseRef.current;
             const currentIdxVal = currentIdxRef.current;
             const comfortIdxVal = comfortIdxRef.current;
-            const answersVal = answersRef.current;
             const transcriptVal = transcriptRef.current;
 
-            if (activeState === "comfort_conv") {
-                const nextComfortIdx = comfortIdxVal + 1;
-                let nextSpeech = "";
-                
-                const updatedTranscript = [
-                    ...transcriptVal,
-                    { role: "student" as const, text: responseText, question_category: "comfort_conv" }
-                ];
+            // Call the backend executeTurn endpoint
+            const result = await interviewService.executeTurn(sessionId || interviewId, {
+                student_response: responseText,
+                network_status: navigator.onLine ? "online" : "offline"
+            });
 
-                if (nextComfortIdx === 1) {
-                    nextSpeech = "What did you enjoy doing today?";
-                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "comfort_conv" });
-                    setComfortIdx(1);
-                    setTranscript(updatedTranscript);
-                    setBuddyState("speaking");
-                    speakText(nextSpeech, () => {
-                        startSpeechRecognition();
-                    });
-                } else if (nextComfortIdx === 2) {
-                    nextSpeech = "Ready to learn together?";
-                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "comfort_conv" });
-                    setComfortIdx(2);
-                    setTranscript(updatedTranscript);
-                    setBuddyState("speaking");
-                    speakText(nextSpeech, () => {
-                        startSpeechRecognition();
-                    });
-                } else {
-                    // Transition to interview phase
-                    const firstQ = questions[0];
-                    if (firstQ) {
-                        nextSpeech = firstQ.q;
-                        updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: firstQ.category });
-                        setPhase("interview");
-                        setCurrentIdx(0);
-                        setTranscript(updatedTranscript);
-                        setBuddyState("speaking");
-                        speakText(nextSpeech, () => {
-                            startSpeechRecognition();
-                        });
-                    } else {
-                        nextSpeech = "Let's begin the assessment.";
-                        updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: "interview" });
-                        setPhase("interview");
-                        setCurrentIdx(0);
-                        setTranscript(updatedTranscript);
-                        setBuddyState("speaking");
-                        speakText(nextSpeech, () => {
-                            startSpeechRecognition();
-                        });
-                    }
+            // Update states from result
+            setBuddyState("speaking");
+            
+            const nextState = result.next_state;
+            const nextSpeech = result.next_speech;
+            
+            let speechToUse = nextSpeech;
+            if (nextState === "comfort_conv") {
+                if (result.comfort_index === 1) {
+                    speechToUse = "Hello! I'm Buddy. Can you tell me how you're feeling today?";
+                } else if (result.comfort_index === 2) {
+                    speechToUse = "What's something you enjoyed doing today?";
+                } else if (result.comfort_index === 3) {
+                    speechToUse = `Great! We'll be learning about ${chapterTitle || subjectName || "Fractions"} today. Are you ready to begin?`;
                 }
+            }
 
-                isSubmittingRef.current = false;
-                setIsSubmitting(false);
-            } else if (activeState === "interview") {
-                const currentQuestion = questions[currentIdxVal];
-                const nextIdx = currentIdxVal + 1;
+            const isTransitioningFromComfort = activeState === "comfort_conv" && nextState === "interview";
 
-                const newAnswerEntry = {
-                    question_category: currentQuestion?.category || "Assessment Content",
-                    question: currentQuestion?.q || "",
-                    answer: responseText
-                };
-                const updatedAnswers = [...answersVal, newAnswerEntry];
-                setAnswers(updatedAnswers);
+            if (isTransitioningFromComfort) {
+                // 1. Transition to split layout
+                setPhase("interview");
+                setComfortIdx(result.comfort_index);
+                setCurrentIdx(result.current_question_index);
+                setActiveHint(result.active_hint);
 
-                const updatedTranscript = [
-                    ...transcriptVal,
-                    { role: "student" as const, text: responseText, question_category: currentQuestion?.category }
-                ];
+                const transitionText = `Awesome! Let's start our assessment on ${chapterTitle || subjectName || "Fractions"}. I'll ask you one question at a time. Take your time, and do your best!`;
+                
+                // Add student response + transition message to transcript
+                const updatedTranscript = [...transcriptVal];
+                if (responseText.trim()) {
+                    updatedTranscript.push({ role: "student" as const, text: responseText, question_category: activeState });
+                }
+                updatedTranscript.push({ role: "ai" as const, text: transitionText, question_category: "transition" });
+                setTranscript(updatedTranscript);
 
-                if (nextIdx < questions.length) {
-                    const nextQuestion = questions[nextIdx];
-                    const nextSpeech = nextQuestion.q;
-                    updatedTranscript.push({ role: "ai" as const, text: nextSpeech, question_category: nextQuestion.category });
+                // Speak transition message first
+                speakText(transitionText, () => {
+                    // Once transition finishes, speak and show the actual first question
+                    const firstQText = nextSpeech; // from backend
                     
-                    setCurrentIdx(nextIdx);
-                    setTranscript(updatedTranscript);
-                    setBuddyState("speaking");
+                    const finalTranscript = [...updatedTranscript, { role: "ai" as const, text: firstQText, question_category: "interview" }];
+                    setTranscript(finalTranscript);
                     
-                    speakText(nextSpeech, () => {
+                    speakText(firstQText, () => {
                         startSpeechRecognition();
                     });
+                });
+            } else {
+                // Normal turn execution flow (for comfort questions, and for subsequent interview turns)
+                const updatedTranscript = [...transcriptVal];
+                if (responseText.trim()) {
+                    updatedTranscript.push({ role: "student" as const, text: responseText, question_category: activeState });
+                }
+                updatedTranscript.push({ role: "ai" as const, text: speechToUse, question_category: nextState });
 
-                    isSubmittingRef.current = false;
-                    setIsSubmitting(false);
-                } else {
-                    const goodbyeText = "Fantastic job! We are all done today. Thank you for sharing your learning journey with me!";
-                    updatedTranscript.push({ role: "ai" as const, text: goodbyeText, question_category: "GOODBYE" });
-                    
-                    setTranscript(updatedTranscript);
+                setTranscript(updatedTranscript);
+                setPhase(nextState === "GOODBYE" ? "completed" : (nextState === "comfort_conv" || nextState === "meet_buddy" ? "comfort_conv" : "interview"));
+                setCurrentIdx(result.current_question_index);
+                setComfortIdx(result.comfort_index);
+                setActiveHint(result.active_hint);
+
+                if (result.completion_status === "Completed" || nextState === "GOODBYE") {
                     setPhase("completed");
                     setBuddyState("completed");
                     triggerConfetti();
-
-                    speakText(goodbyeText);
+                    
+                    speakText(speechToUse);
                     if (stream) {
                         stream.getTracks().forEach((t) => t.stop());
                     }
-
-                    try {
-                        const finalPayload = {
-                            interview_id: parseInt(interviewId, 10),
-                            transcript: updatedTranscript,
-                            answers: updatedAnswers
-                        };
-                        
-                        await interviewService.submit(finalPayload);
-                        
-                        setTimeout(async () => {
-                            try {
-                                const finalReport = await interviewService.getReport(parseInt(interviewId, 10));
-                                sessionStorage.setItem(`interview_report_${finalReport.id}`, JSON.stringify(finalReport));
-                            } catch (err) {
-                                console.error("Failed to load completed report:", err);
-                            }
-                        }, 2000);
-                    } catch (submitErr) {
-                        console.error("Failed to submit final payload:", submitErr);
-                        setError("Failed to submit the assessment. Please check your connection.");
-                    }
-
-                    isSubmittingRef.current = false;
-                    setIsSubmitting(false);
+                    
+                    setTimeout(async () => {
+                        try {
+                            const finalReport = await interviewService.getReport(parseInt(interviewId, 10));
+                            sessionStorage.setItem(`interview_report_${finalReport.id}`, JSON.stringify(finalReport));
+                        } catch (err) {
+                            console.error("Failed to load completed report:", err);
+                        }
+                    }, 2000);
+                } else {
+                    speakText(speechToUse, () => {
+                        startSpeechRecognition();
+                    });
                 }
             }
-        } catch (err) {
-            console.error("[InterviewPage] Exception in submitTurnLocal:", err);
-            setError("An unexpected error occurred. Please try again.");
+
             isSubmittingRef.current = false;
             setIsSubmitting(false);
+
+        } catch (err) {
+            console.error("[InterviewPage] Exception in submitTurnLocal:", err);
+            setError("An unexpected error occurred. Retrying automatically...");
+            
+            // Auto retry logic on network timeout / failure
+            setTimeout(() => {
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
+                submitTurnLocal(responseText);
+            }, 3000);
         }
     };
 
@@ -792,26 +874,44 @@ export default function InterviewPage({ params }: PageProps) {
             return;
         }
 
-        // Start directly with the interview phase
-        setPhase("interview");
-        setCurrentIdx(0);
-
         // Expose AnalyserNode for local visualizer drawing loop
         setTimeout(() => {
             drawWaveform();
         }, 200);
-        
-        const introText = `Hi ${studentName}! Let's start learning together today. We will talk about ${chapterTitle || subjectName || "Fractions"}.`;
-        const firstQText = questions[0]?.q || "Let's begin!";
-        const combinedSpeechText = `${introText} ${firstQText}`;
-        
-        setTranscript([{ role: "ai", text: firstQText }]);
-        
-        speakText(combinedSpeechText, () => {
-            startSpeechRecognition();
+
+        setPhase("comfort_conv");
+        setBuddyState("speaking");
+
+        const welcomeSpeech = `Hi! I'm Buddy, your learning assistant. Let's start learning ${chapterTitle || subjectName || "Fractions"} together!`;
+
+        // Start fast forwarding in the background
+        const fastForwardPromise = fastForwardComfortPhase(0);
+
+        speakText(welcomeSpeech, async () => {
+            try {
+                // Wait for background fast-forward to complete
+                const result = await fastForwardPromise;
+                if (result) {
+                    // Update frontend state with first question
+                    setTranscript(result.transcript || []);
+                    setPhase("interview");
+                    setCurrentIdx(result.current_question_index);
+                    setComfortIdx(result.comfort_index);
+                    setActiveHint(result.active_hint);
+
+                    // Buddy speaks the first question
+                    const firstQuestionText = result.next_speech || "";
+                    setBuddyState("speaking");
+                    speakText(firstQuestionText, () => {
+                        startSpeechRecognition();
+                    });
+                }
+            } catch (err) {
+                console.error("Failed starting session:", err);
+                setError("Failed to start the assessment. Please try again.");
+                setPhase("device_setup");
+            }
         });
-        recordTurn("ai", firstQText, questions[0]?.category);
-        saveSessionProgress(0, "interview", 0, answers, false);
     };
 
     // Submit individual question answers
@@ -903,6 +1003,53 @@ export default function InterviewPage({ params }: PageProps) {
         router.push("/");
     };
 
+    // Render Buddy Avatar with dynamic active animations
+    const renderBuddyAvatar = (size: number = 150) => (
+        <div style={styles.avatarBox}>
+            {isSpeaking && (
+                <div style={{ ...styles.glowRing, animation: "scaleGlow 1.8s infinite" }} />
+            )}
+            {isRecording && (
+                <div style={{ ...styles.glowRing, animation: "scaleGlow 1.4s infinite", borderColor: "#10B981" }} />
+            )}
+
+            <svg width={size} height={size} viewBox="0 0 100 100" style={styles.buddySvgMain}>
+                {/* Head/Face base */}
+                <circle cx="50" cy="55" r="26" fill="#BFDBFE" stroke="#2563EB" strokeWidth="2.5" />
+                
+                {/* Graduation Cap */}
+                <path d="M22 38 L50 24 L78 38 L50 52 Z" fill="#1E3A8A" stroke="#1E40AF" strokeWidth="2" />
+                <rect x="47" y="38" width="6" height="15" fill="#1E3A8A" />
+                <circle cx="50" cy="53" r="3.5" fill="#F59E0B" />
+                <path d="M70 38 L78 48 L78 53" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="78" cy="54" r="2" fill="#F59E0B" />
+
+                {/* Eyes (Blinking animation) */}
+                <g style={{ transformOrigin: "50% 53%", animation: "pupilBlink 6s infinite" }}>
+                    <ellipse cx="42" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                    <ellipse cx="58" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
+                </g>
+
+                {/* Cheeks */}
+                <circle cx="36" cy="59" r="3" fill="#F87171" opacity="0.65" />
+                <circle cx="64" cy="59" r="3" fill="#F87171" opacity="0.65" />
+
+                {/* Mouth (Talking animation) */}
+                {isSpeaking ? (
+                    <ellipse cx="50" cy="62" rx="3.5" ry="4.5" fill="#1E3A8A" style={{ transformOrigin: "50% 62%", animation: "mouthTalk 0.5s infinite" }} />
+                ) : (
+                    <path d="M45 61 Q50 67 55 61" fill="none" stroke="#1E3A8A" strokeWidth="2.5" strokeLinecap="round" />
+                )}
+
+                {/* Arm (Waving animation) */}
+                {buddyState === "waving" || buddyState === "completed" ? (
+                    <path d="M24 64 C20 60 14 62 16 68 L24 72" fill="none" stroke="#2563EB" strokeWidth="3.5" strokeLinecap="round"
+                          style={{ transformOrigin: "24px 68px", animation: "armWave 1s infinite ease" }} />
+                ) : null}
+            </svg>
+        </div>
+    );
+
     // Render speech bubbles
     const getBuddySpeechText = () => {
         if (phase === "meet_buddy") {
@@ -911,18 +1058,25 @@ export default function InterviewPage({ params }: PageProps) {
         if (phase === "device_setup") {
             return "Please allow your microphone and camera to start the assessment. Both must be enabled.";
         }
+        if (phase === "interview") {
+            if (activeHint) return activeHint;
+            return questions[currentIdx]?.q || "Let's begin!";
+        }
+
+        // Try to get latest AI message from transcript to guarantee perfect text-audio sync
+        const aiMsgs = transcript.filter(t => t.role === "ai");
+        if (aiMsgs.length > 0) {
+            return aiMsgs[aiMsgs.length - 1].text;
+        }
+
         if (phase === "comfort_conv") {
-            if (comfortIdx === 0) return `How are you today, ${studentName}?`;
-            if (comfortIdx === 1) return "What did you enjoy doing today?";
-            return "Ready to learn together?";
+            const finalChapterName = chapterTitle || subjectName || "Fractions";
+            if (comfortIdx === 0 || comfortIdx === 1) return "Hello! I'm Buddy. Can you tell me how you're feeling today?";
+            if (comfortIdx === 2) return "What's something you enjoyed doing today?";
+            return `Great! We'll be learning about ${finalChapterName} today. Are you ready to begin?`;
         }
         if (phase === "transition") {
             return `Great! Now let's talk about ${chapterTitle || subjectName || "Fractions"}.`;
-        }
-        if (phase === "interview") {
-            if (buddyState === "thinking") return "Hmm... Let me think...";
-            if (activeHint) return activeHint;
-            return questions[currentIdx]?.q || "Let's begin!";
         }
         if (phase === "generating") {
             return "Thinking... saving our conversation...";
@@ -939,7 +1093,7 @@ export default function InterviewPage({ params }: PageProps) {
         const pct = (currentIdx / (questions.length - 1)) * 100;
         
         return (
-            <div style={styles.pathOuter}>
+            <div className="interview-progress-path" style={styles.pathOuter}>
                 <div style={styles.pathLineBg} />
                 <div style={{ ...styles.pathLineFill, width: `${pct}%` }} />
                 
@@ -952,6 +1106,40 @@ export default function InterviewPage({ params }: PageProps) {
                 <div style={{ ...styles.pathBuddyWalker, left: `calc(${pct}% - 14px)` }}>
                     <div style={styles.pathBuddyDot} />
                 </div>
+            </div>
+        );
+    };
+
+    const renderTopBar = () => {
+        if (phase !== "interview" && phase !== "comfort_conv" && phase !== "device_setup") return null;
+        const displayTitle = subjectName && chapterTitle && subjectName !== chapterTitle
+            ? `${subjectName} - ${chapterTitle}`
+            : (chapterTitle || subjectName || "Assessment");
+        return (
+            <div className="interview-top-bar" style={styles.assessmentTopBar}>
+                <div style={styles.topBarTitle}>
+                    📚 {displayTitle}
+                </div>
+                <button onClick={handleReturnHome} style={styles.topBarLeaveBtn}>
+                    🚪 Leave Interview
+                </button>
+            </div>
+        );
+    };
+
+    const renderTopQuestionText = () => {
+        if (phase !== "interview" || questions.length === 0) return null;
+        const currentNum = currentIdx + 1;
+        const totalNum = questions.length;
+        
+        return (
+            <div className="interview-question-container" style={styles.topQuestionTextContainer}>
+                <div style={styles.questionNumberText}>
+                    Question {currentNum} of {totalNum} {chapterTitle ? ` • ${chapterTitle}` : ""}
+                </div>
+                <h2 style={styles.topQuestionTitle} className={isHindi ? "font-hindi" : ""}>
+                    {questions[currentIdx]?.q || ""}
+                </h2>
             </div>
         );
     };
@@ -1005,81 +1193,30 @@ export default function InterviewPage({ params }: PageProps) {
                 </div>
             )}
 
-            {/* Main Stage Grid Container */}
-            <div style={styles.stageGrid}>
+            {/* Scroll wrapper to prevent flexbox top-cutoff and allow scrolling */}
+            <div style={styles.scrollWrapper}>
+                {/* Main Stage Grid Container */}
+                <div style={styles.stageGrid}>
+                {/* Top header navigation bar */}
+                {renderTopBar()}
+
                 {/* Visual Progress Bar (Step 9) */}
                 {renderVisualProgress()}
 
+                {/* Question title and indicator displayed prominently at the top */}
+                {renderTopQuestionText()}
+
                 {/* Buddy & Speech bubble Section or Split Layout depending on phase */}
-                {(phase === "interview" || phase === "comfort_conv") ? (
-                    <div style={styles.splitGrid}>
+                {phase === "interview" ? (
+                    <div className="interview-split-grid" style={styles.splitGrid}>
                         {/* Left Panel: Bot */}
-                        <div style={styles.panelCard}>
-                            {/* Speech bubble */}
-                            <div style={{ textAlign: "center", width: "100%" }}>
-                                <p style={styles.speechText} className={isHindi ? "font-hindi" : ""}>
-                                    {getBuddySpeechText()}
-                                </p>
-                                {buddyState === "thinking" && (
-                                    <div style={styles.thinkDotRow}>
-                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite" }} />
-                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite 0.2s" }} />
-                                        <span style={{ ...styles.thinkDot, animation: "pulseDot 1.2s infinite 0.4s" }} />
-                                    </div>
-                                )}
-                                {liveCaption && isRecording && (
-                                    <p style={styles.liveCaptionText}>&ldquo;{liveCaption}&rdquo;</p>
-                                )}
-                            </div>
-
-                            {/* Buddy avatar SVG container */}
-                            <div style={styles.avatarBox}>
-                                {isSpeaking && (
-                                    <div style={{ ...styles.glowRing, animation: "scaleGlow 1.8s infinite" }} />
-                                )}
-                                {isRecording && (
-                                    <div style={{ ...styles.glowRing, animation: "scaleGlow 1.4s infinite", borderColor: "#10B981" }} />
-                                )}
-
-                                <svg width="150" height="150" viewBox="0 0 100 100" style={styles.buddySvgMain}>
-                                    {/* Head/Face base */}
-                                    <circle cx="50" cy="55" r="26" fill="#BFDBFE" stroke="#2563EB" strokeWidth="2.5" />
-                                    
-                                    {/* Graduation Cap */}
-                                    <path d="M22 38 L50 24 L78 38 L50 52 Z" fill="#1E3A8A" stroke="#1E40AF" strokeWidth="2" />
-                                    <rect x="47" y="38" width="6" height="15" fill="#1E3A8A" />
-                                    <circle cx="50" cy="53" r="3.5" fill="#F59E0B" />
-                                    <path d="M70 38 L78 48 L78 53" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" />
-                                    <circle cx="78" cy="54" r="2" fill="#F59E0B" />
-
-                                    {/* Eyes (Blinking animation) */}
-                                    <g style={{ transformOrigin: "50% 53%", animation: "pupilBlink 6s infinite" }}>
-                                        <ellipse cx="42" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
-                                        <ellipse cx="58" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
-                                    </g>
-
-                                    {/* Cheeks */}
-                                    <circle cx="36" cy="59" r="3" fill="#F87171" opacity="0.65" />
-                                    <circle cx="64" cy="59" r="3" fill="#F87171" opacity="0.65" />
-
-                                    {/* Mouth (Talking animation) */}
-                                    {isSpeaking ? (
-                                        <ellipse cx="50" cy="62" rx="3.5" ry="4.5" fill="#1E3A8A" style={{ transformOrigin: "50% 62%", animation: "mouthTalk 0.5s infinite" }} />
-                                    ) : (
-                                        <path d="M45 61 Q50 67 55 61" fill="none" stroke="#1E3A8A" strokeWidth="2.5" strokeLinecap="round" />
-                                    )}
-
-                                    {/* Arm (Waving animation) */}
-                                    {buddyState === "waving" || buddyState === "completed" ? (
-                                        <path d="M24 64 C20 60 14 62 16 68 L24 72" fill="none" stroke="#2563EB" strokeWidth="3.5" strokeLinecap="round"
-                                              style={{ transformOrigin: "24px 68px", animation: "armWave 1s infinite ease" }} />
-                                    ) : null}
-                                </svg>
-                            </div>
+                        <div className="interview-left-card interview-panel-card" style={styles.panelCard}>
+                            {/* Speech bubble removed to avoid double display; teacher-generated question is at the top */}
+                            {renderBuddyAvatar(180)}
                         </div>
 
                         {/* Right Panel: Student camera / Waveform */}
-                        <div style={styles.panelCard}>
+                        <div className="interview-right-card interview-panel-card" style={styles.panelCard}>
                             {cameraEnabled ? (
                                 <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px", border: "1px solid #E5E7EB" }} />
                             ) : (
@@ -1135,27 +1272,65 @@ export default function InterviewPage({ params }: PageProps) {
                     </div>
                 ) : (
                     /* Default Setup View */
-                    <div style={styles.buddyZone}>
-                        {/* Speech bubble */}
-                        <div style={styles.bubbleBox}>
-                            <div style={styles.bubbleArrow} />
-                            <p style={styles.speechText}>
-                                {getBuddySpeechText()}
-                            </p>
+                    phase !== "device_setup" ? (
+                        <div className="interview-buddy-zone" style={styles.buddyZone}>
+                            {/* Speech bubble - hide in comfort_conv */}
+                            {phase !== "comfort_conv" && (
+                                <div className="interview-bubble-box" style={styles.bubbleBox}>
+                                    <div style={styles.bubbleArrow} />
+                                    <p style={styles.speechText}>
+                                        {getBuddySpeechText()}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Buddy avatar SVG container */}
+                            {renderBuddyAvatar(180)}
+                        </div>
+                    ) : null
+                )}
+
+                {/* Bottom subtitle/live caption capsule for interview */}
+                {phase === "interview" && (
+                    <div className="interview-status-container" style={styles.bottomStatusContainer}>
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "8px 16px",
+                            backgroundColor: isSpeaking ? "#EFF6FF" : (isRecording ? "#E6F4EA" : "#F3F4F6"),
+                            border: `1px solid ${isSpeaking ? "#BFDBFE" : (isRecording ? "#A7F3D0" : "#E5E7EB")}`,
+                            borderRadius: "999px",
+                            fontSize: "13.5px",
+                            fontWeight: 600,
+                            color: isSpeaking ? "#2563EB" : (isRecording ? "#047857" : "#4B5563"),
+                            gap: "8px"
+                        }}>
+                            {isSpeaking && (
+                                <>
+                                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#2563EB", display: "inline-block", animation: "pulseDot 1.2s infinite" }} />
+                                    🔊 Buddy is speaking...
+                                </>
+                            )}
+                            {!isSpeaking && isRecording && (
+                                <>
+                                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10B981", display: "inline-block", animation: "pulseDot 1.2s infinite" }} />
+                                    🎤 Listening... Speak your answer.
+                                </>
+                            )}
+                            {!isSpeaking && !isRecording && (
+                                <>
+                                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#9CA3AF", display: "inline-block" }} />
+                                    ⏳ Processing...
+                                </>
+                            )}
                         </div>
 
-                        {/* Buddy avatar SVG container */}
-                        <div style={styles.avatarBox}>
-                            <svg width="180" height="180" viewBox="0 0 100 100" style={styles.buddySvgMain}>
-                                <circle cx="50" cy="55" r="26" fill="#BFDBFE" stroke="#2563EB" strokeWidth="2.5" />
-                                <path d="M22 38 L50 24 L78 38 L50 52 Z" fill="#1E3A8A" stroke="#1E40AF" strokeWidth="2" />
-                                <rect x="47" y="38" width="6" height="15" fill="#1E3A8A" />
-                                <circle cx="50" cy="53" r="3.5" fill="#F59E0B" />
-                                <ellipse cx="42" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
-                                <ellipse cx="58" cy="53" rx="2.5" ry="4" fill="#1E3A8A" />
-                                <path d="M45 61 Q50 67 55 61" fill="none" stroke="#1E3A8A" strokeWidth="2.5" strokeLinecap="round" />
-                            </svg>
-                        </div>
+                        {liveCaption && isRecording && (
+                            <div style={styles.liveSubtitlePill}>
+                                &ldquo;{liveCaption}&rdquo;
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1163,6 +1338,22 @@ export default function InterviewPage({ params }: PageProps) {
                 <div style={styles.interactiveArea}>
                     {phase === "device_setup" && (
                         <div style={styles.setupContainer}>
+                            {!speechSupported && (
+                                <div style={{
+                                    backgroundColor: "#FEF2F2",
+                                    border: "1.5px solid #FCA5A5",
+                                    borderRadius: "14px",
+                                    padding: "1rem",
+                                    marginBottom: "1rem",
+                                    color: "#991B1B",
+                                    fontSize: "14px",
+                                    lineHeight: "1.5",
+                                    textAlign: "center"
+                                }}>
+                                    <strong style={{ display: "block", marginBottom: "4px" }}>Browser Speech Recognition Unsupported</strong>
+                                    Speech recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.
+                                </div>
+                            )}
                             {cameraEnabled && (
                                 <div style={{
                                     width: "100%",
@@ -1242,211 +1433,31 @@ export default function InterviewPage({ params }: PageProps) {
                                     {cameraStatus === "granted" ? "Allowed" : "Allow camera"}
                                 </span>
                             </div>
-
-                            <button
-                                style={{
-                                    ...styles.ctaButton,
-                                    width: "100%",
-                                    marginTop: "1rem",
-                                    height: "48px",
-                                    backgroundColor: (micStatus === "granted" && cameraStatus === "granted") ? "#2563EB" : "#9CA3AF",
-                                    cursor: (micStatus === "granted" && cameraStatus === "granted") ? "pointer" : "not-allowed",
-                                    opacity: (micStatus === "granted" && cameraStatus === "granted") ? 1 : 0.6,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "8px"
-                                }}
-                                disabled={!(micStatus === "granted" && cameraStatus === "granted")}
-                                onClick={startAssessment}
-                            >
-                                Start Assessment
-                            </button>
-                        </div>
-                    )}
-
-                    {(phase === "interview" || phase === "comfort_conv") && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%", maxWidth: "680px", margin: "0 auto" }}>
-                            {/* Status label: Listening / Speaking / Keyboard */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px" }}>
-                                <span style={{ 
-                                    fontSize: "13px", 
-                                    fontWeight: "600",
-                                    color: isSpeaking ? "#2563EB" : (isRecording ? "#16A34A" : "#6B7280"),
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "6px"
-                                }}>
-                                    {isSpeaking && (
-                                        <>
-                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#2563EB", display: "inline-block" }} />
-                                            🔊 Buddy is speaking...
-                                        </>
-                                    )}
-                                    {!isSpeaking && isRecording && (
-                                        <>
-                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#16A34A", display: "inline-block", animation: "pulseDot 1.2s infinite" }} />
-                                            🎤 Listening... Speak your answer.
-                                        </>
-                                    )}
-                                    {!isSpeaking && !isRecording && (
-                                        <>
-                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#9CA3AF", display: "inline-block" }} />
-                                            ⌨️ Keyboard mode (Type or click mic to talk)
-                                        </>
-                                    )}
-                                </span>
-                                
-                                {activeHint && (
-                                    <span style={{ fontSize: "12px", color: "#D97706", fontWeight: "600" }}>
-                                        💡 Hint visible
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Main Input Text Area & Submit Button Row */}
-                            <div style={{ display: "flex", gap: "12px" }}>
-                                <textarea
-                                    style={{
-                                        flex: 1,
-                                        height: "64px",
-                                        border: "1px solid #D1D5DB",
-                                        borderRadius: "10px",
-                                        padding: "12px 16px",
-                                        fontSize: "15px",
-                                        fontFamily: isHindi ? "var(--font-hindi), sans-serif" : "Inter, sans-serif",
-                                        resize: "none",
-                                        outline: "none",
-                                        transition: "border-color 0.15s ease",
-                                        borderColor: isFocused ? "#2563EB" : "#D1D5DB",
-                                        boxShadow: isFocused ? "0 0 0 3px rgba(37, 99, 235, 0.15)" : "none"
-                                    }}
-                                    onFocus={() => setIsFocused(true)}
-                                    onBlur={() => setIsFocused(false)}
-                                    placeholder={isHindi ? "अपना उत्तर यहाँ लिखें या बोलें..." : "Type or speak your answer here..."}
-                                    value={typedText}
-                                    onChange={(e) => setTypedText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
-                                            e.preventDefault();
-                                            if (!isSpeaking && !isSubmitting) {
-                                                handleNextQuestionClick();
-                                            }
-                                        }
-                                    }}
-                                    disabled={isSpeaking || isSubmitting}
-                                    autoFocus
-                                />
-                                
+                            {micStatus === "granted" && cameraStatus === "granted" && (
                                 <button 
+                                    onClick={startAssessment}
                                     style={{
-                                        height: "64px",
-                                        padding: "0 28px",
-                                        backgroundColor: (!isSpeaking && !isSubmitting) ? "#2563EB" : "#D1D5DB",
+                                        width: "100%",
+                                        marginTop: "1.5rem",
+                                        backgroundColor: "#2563EB",
                                         color: "#FFFFFF",
-                                        border: "none",
                                         borderRadius: "10px",
-                                        fontWeight: "600",
+                                        height: "44px",
                                         fontSize: "15px",
-                                        cursor: (!isSpeaking && !isSubmitting) ? "pointer" : "default",
-                                        transition: "all 0.15s ease",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
+                                        fontWeight: "600",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        boxShadow: "0 2px 4px rgba(37, 99, 235, 0.15)",
+                                        transition: "all 0.15s ease"
                                     }}
-                                    onClick={() => {
-                                        if (!isSpeaking && !isSubmitting) {
-                                            handleNextQuestionClick();
-                                        }
-                                    }}
-                                    disabled={isSpeaking || isSubmitting}
                                 >
-                                    Next Question
+                                    Begin
                                 </button>
-                            </div>
-
-                            {/* Secondary Controls: Mic toggle, Repeat question, Hint toggle */}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
-                                <div style={{ display: "flex", gap: "10px" }}>
-                                    {speechSupported && (
-                                        <button
-                                            style={{
-                                                backgroundColor: "#FFFFFF",
-                                                border: "1px solid #E5E7EB",
-                                                borderRadius: "10px",
-                                                padding: "6px 14px",
-                                                fontSize: "13px",
-                                                fontWeight: "600",
-                                                color: isRecording ? "#EF4444" : "#2563EB",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "6px",
-                                                height: "36px"
-                                            }}
-                                            onClick={() => {
-                                                if (isRecording) {
-                                                    isListeningRef.current = false;
-                                                    setIsRecording(false);
-                                                    voiceService.stopListening();
-                                                } else {
-                                                    setMicEnabled(true);
-                                                    startSpeechRecognition();
-                                                }
-                                            }}
-                                            disabled={isSpeaking}
-                                        >
-                                            {isRecording ? "🔴 Stop Listening" : "🎤 Start Listening"}
-                                        </button>
-                                    )}
-
-                                    <button
-                                        style={{
-                                            backgroundColor: "#FFFFFF",
-                                            border: "1px solid #E5E7EB",
-                                            borderRadius: "10px",
-                                            padding: "6px 14px",
-                                            fontSize: "13px",
-                                            fontWeight: "600",
-                                            color: "#374151",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "6px",
-                                            height: "36px"
-                                        }}
-                                        onClick={triggerRepeat}
-                                        disabled={isSpeaking}
-                                    >
-                                        🔁 Repeat Question
-                                    </button>
-                                </div>
-
-                                {questions[currentIdx]?.hint && (
-                                    <button
-                                        style={{
-                                            backgroundColor: "#FEF3C7",
-                                            border: "1px solid #FDE68A",
-                                            borderRadius: "10px",
-                                            padding: "6px 14px",
-                                            fontSize: "13px",
-                                            fontWeight: "600",
-                                            color: "#D97706",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "6px",
-                                            height: "36px"
-                                        }}
-                                        onClick={triggerHint}
-                                        disabled={isSpeaking}
-                                    >
-                                        💡 Get Hint
-                                    </button>
-                                )}
-                            </div>
+                            )}
                         </div>
                     )}
+
+                    {/* Interactive controls removed for interview phase to focus on natural verbal dialogue */}
 
                     {phase === "completed" && (
                         <button style={styles.ctaButton} onClick={() => router.push(`/interview/${interviewId}/result`)}>
@@ -1455,10 +1466,11 @@ export default function InterviewPage({ params }: PageProps) {
                     )}
                 </div>
 
-                {/* Error Banner Toast */}
-                {error && <div style={styles.errorToast}>{error}</div>}
             </div>
         </div>
+        {/* Error Banner Toast */}
+        {error && <div style={styles.errorToast}>{error}</div>}
+    </div>
     );
 }
 
@@ -1471,10 +1483,17 @@ const styles: Record<string, React.CSSProperties> = {
         top: 0,
         left: 0,
         fontFamily: "var(--font-sans), system-ui, sans-serif",
+        overflowY: "auto"
+    },
+    scrollWrapper: {
+        width: "100%",
+        minHeight: "100vh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        overflow: "hidden"
+        padding: "2rem 0",
+        boxSizing: "border-box"
     },
     splitGrid: {
         display: "flex",
@@ -1483,13 +1502,13 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: "center",
         gap: "1.5rem",
         width: "100%",
-        maxWidth: "960px",
+        maxWidth: "1200px",
         boxSizing: "border-box",
         padding: "0 1rem"
     },
     panelCard: {
         flex: 1,
-        height: "420px",
+        height: "380px",
         borderRadius: "16px",
         backgroundColor: "#ffffff",
         border: "1px solid #E5E7EB",
@@ -1503,21 +1522,173 @@ const styles: Record<string, React.CSSProperties> = {
         padding: "2rem",
         boxSizing: "border-box"
     },
-    confettiOverlay: {
+    rightPanelCard: {
+        flex: 1,
+        height: "420px",
+        borderRadius: "16px",
+        backgroundColor: "#ffffff",
+        border: "1px solid #E5E7EB",
+        boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        overflow: "hidden",
+        boxSizing: "border-box"
+    },
+    cameraPreviewContainer: {
         position: "absolute",
-        top: 0,
-        left: 0,
+        top: "12px",
+        right: "12px",
+        width: "130px",
+        height: "90px",
+        borderRadius: "10px",
+        overflow: "hidden",
+        border: "2px solid #ffffff",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.15)",
+        backgroundColor: "#000000",
+        zIndex: 10
+    },
+    smallCameraVideo: {
         width: "100%",
         height: "100%",
+        objectFit: "cover"
+    },
+    smallCameraFallback: {
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "1.8rem",
+        fontWeight: 700,
+        color: "#2563EB",
+        backgroundColor: "#EFF6FF"
+    },
+    smallCameraLabel: {
+        position: "absolute",
+        bottom: "4px",
+        left: "4px",
+        backgroundColor: "rgba(17, 24, 39, 0.6)",
+        padding: "2px 6px",
+        borderRadius: "4px",
+        fontSize: "0.65rem",
+        fontWeight: 600,
+        color: "#ffffff",
+        whiteSpace: "nowrap"
+    },
+    smallCameraVisualizer: {
+        position: "absolute",
+        bottom: "4px",
+        right: "4px",
+        width: "40px",
+        height: "12px",
+        pointerEvents: "none"
+    },
+    chatConversationArea: {
+        flex: 1,
+        overflowY: "auto",
+        padding: "16px",
+        boxSizing: "border-box"
+    },
+    chatScrollContainer: {
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        minHeight: "100%",
+        paddingRight: "145px"
+    },
+    assessmentTopBar: {
+        width: "100%",
+        maxWidth: "1200px",
+        height: "56px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 1rem",
+        borderBottom: "1px solid #E5E7EB",
+        boxSizing: "border-box",
+        marginBottom: "1rem"
+    },
+    topBarTitle: {
+        fontSize: "1.1rem",
+        fontWeight: 700,
+        color: "#111827",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px"
+    },
+    topBarLeaveBtn: {
+        backgroundColor: "#FFFFFF",
+        border: "1px solid #D1D5DB",
+        borderRadius: "8px",
+        padding: "6px 12px",
+        fontSize: "13.5px",
+        fontWeight: "600",
+        color: "#DC2626",
+        cursor: "pointer",
+        transition: "all 0.15s ease",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px"
+    },
+    topQuestionTextContainer: {
+        width: "100%",
+        maxWidth: "1200px",
+        padding: "0 1rem",
+        boxSizing: "border-box",
+        marginBottom: "1.5rem",
+        textAlign: "center"
+    },
+    questionNumberText: {
+        fontSize: "0.9rem",
+        fontWeight: 600,
+        color: "#6B7280",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        marginBottom: "4px"
+    },
+    topQuestionTitle: {
+        fontSize: "1.3rem",
+        fontWeight: 600,
+        color: "#111827",
+        lineHeight: "1.45",
+        margin: 0
+    },
+    bottomStatusContainer: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        marginTop: "1.5rem"
+    },
+    liveSubtitlePill: {
+        marginTop: "12px",
+        backgroundColor: "rgba(17, 24, 39, 0.85)",
+        color: "#ffffff",
+        padding: "8px 16px",
+        borderRadius: "20px",
+        fontSize: "14px",
+        fontWeight: 500,
+        textAlign: "center",
+        maxWidth: "600px",
+        lineHeight: "1.4",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)"
+    },
+    confettiOverlay: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
         zIndex: 50,
         pointerEvents: "none"
     },
     offlineBoxCover: {
-        position: "absolute",
+        position: "fixed",
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         backgroundColor: "rgba(15,23,42,0.4)",
         backdropFilter: "blur(6px)",
         display: "flex",
@@ -1551,8 +1722,8 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: "1.5"
     },
     stageGrid: {
-        width: "90%",
-        maxWidth: "800px",
+        width: "100%",
+        maxWidth: "1200px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

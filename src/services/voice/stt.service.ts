@@ -36,8 +36,12 @@ export class BrowserSTTService implements ISpeechToTextService {
   private recognition: any = null;
   private isListeningActive: boolean = false;
   private callbacks: STTCallbacks | null = null;
+  private silenceTimer: any = null;
+  private config: VoiceEngineConfig | null = null;
 
-  async initialize(config: VoiceEngineConfig): Promise<void> {}
+  async initialize(config: VoiceEngineConfig): Promise<void> {
+    this.config = config;
+  }
 
   start(callbacks: STTCallbacks, options?: { interviewId?: number; questionIndex?: number }): void {
     if (typeof window === "undefined") return;
@@ -53,7 +57,7 @@ export class BrowserSTTService implements ISpeechToTextService {
 
     const rec = new SR();
     this.recognition = rec;
-    rec.lang = "en-IN";
+    rec.lang = this.config?.language || "en-IN";
     rec.interimResults = true;
     rec.continuous = true;
 
@@ -87,6 +91,17 @@ export class BrowserSTTService implements ISpeechToTextService {
       const transcriptText = (finalTranscript + interimTranscript).trim();
       const isFinal = e.results[e.results.length - 1].isFinal;
       callbacks.onResult?.(transcriptText, isFinal, lastConfidence);
+
+      if (transcriptText.length > 0) {
+        if (this.silenceTimer) {
+          clearTimeout(this.silenceTimer);
+        }
+        this.silenceTimer = setTimeout(() => {
+          console.log("[BrowserSTT] 2.5s of silence detected, finalizing response...");
+          this.stop();
+          callbacks.onSpeechEnd?.();
+        }, 2500);
+      }
     };
 
     rec.onerror = (err: any) => {
@@ -98,6 +113,10 @@ export class BrowserSTTService implements ISpeechToTextService {
 
     rec.onend = () => {
       this.isListeningActive = false;
+      if (this.silenceTimer) {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
       callbacks.onEnd?.();
     };
 
@@ -109,6 +128,10 @@ export class BrowserSTTService implements ISpeechToTextService {
   }
 
   stop(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
     if (this.recognition) {
       this.recognition.onend = null;
       this.recognition.onerror = null;
@@ -140,6 +163,8 @@ export class ApiSTTService implements ISpeechToTextService {
   private isListeningActive: boolean = false;
   private callbacks: STTCallbacks | null = null;
   private lastAudioUrl: string | null = null;
+  private unsubscribeFromLevels: (() => void) | null = null;
+  private silenceTimer: any = null;
 
   async initialize(config: VoiceEngineConfig): Promise<void> {}
 
@@ -207,6 +232,30 @@ export class ApiSTTService implements ISpeechToTextService {
           }
         };
 
+        // Initialize Web Audio API Energy VAD silence detection
+        let hasSpoken = false;
+        this.unsubscribeFromLevels = microphoneService.subscribeToLevels((level) => {
+          if (level > 4) {
+            if (!hasSpoken) {
+              hasSpoken = true;
+              console.log("[VAD] Voice activity detected");
+            }
+            if (this.silenceTimer) {
+              clearTimeout(this.silenceTimer);
+              this.silenceTimer = null;
+            }
+          } else {
+            if (hasSpoken && !this.silenceTimer) {
+              // Wait 2.5 seconds of silence before auto-finalizing response
+              this.silenceTimer = setTimeout(() => {
+                console.log("[VAD] Silence detected for 2500ms, finalizing transcription.");
+                this.stop();
+                callbacks.onSpeechEnd?.();
+              }, 2500);
+            }
+          }
+        });
+
         recorder.start();
         callbacks.onStart?.();
         
@@ -218,6 +267,14 @@ export class ApiSTTService implements ISpeechToTextService {
   }
 
   stop(): void {
+    if (this.unsubscribeFromLevels) {
+      this.unsubscribeFromLevels();
+      this.unsubscribeFromLevels = null;
+    }
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
     if (this.mediaRecorder) {
       this.mediaRecorder.ondataavailable = null;
       this.mediaRecorder.onstop = null;

@@ -18,6 +18,7 @@ function VerifyContent() {
   const [error, setError] = useState<string | null>(null);
   const [verifyData, setVerifyData] = useState<StudentAssessmentVerifyResponse | null>(null);
   const [authenticating, setAuthenticating] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("en-IN");
 
   useEffect(() => {
     if (!token || !email) {
@@ -45,6 +46,7 @@ function VerifyContent() {
     setError(null);
     const expectedEmail = verifyData?.studentEmail || email;
     try {
+      sessionStorage.setItem("selected_language", selectedLanguage);
       // Direct start without Gmail/Google picker modal
       const interviewSession = await interviewService.start(token, expectedEmail);
 
@@ -164,6 +166,20 @@ function VerifyContent() {
           );
         })()}
 
+        {/* Language Selection */}
+        <div style={styles.languageSelectContainer}>
+          <label htmlFor="language-select" style={styles.languageLabel}>Preferred Language:</label>
+          <select
+            id="language-select"
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
+            style={styles.languageSelect}
+          >
+            <option value="en-IN">English (India)</option>
+            <option value="hi-IN">हिन्दी (Hindi)</option>
+          </select>
+        </div>
+
         {/* Info notice */}
         <p style={styles.readyText}>Press Start when you're ready.</p>
 
@@ -197,6 +213,32 @@ export default function StudentVerifyPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  languageSelectContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    width: "100%",
+    margin: "0 auto 1.5rem auto",
+    textAlign: "left",
+  },
+  languageLabel: {
+    fontSize: "14px",
+    fontWeight: 500,
+    color: "#374151",
+  },
+  languageSelect: {
+    height: "44px",
+    padding: "0 12px",
+    borderRadius: "10px",
+    border: "1px solid #E5E7EB",
+    backgroundColor: "#FFFFFF",
+    fontSize: "15px",
+    color: "#111827",
+    outline: "none",
+    cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    transition: "border-color 0.15s ease",
+  },
   loadingContainer: { display: "flex", flexDirection: "column", alignItems: "center", minHeight: "60vh", color: "var(--text-secondary)", justifyContent: "center" },
   container: { maxWidth: "520px", margin: "4rem auto", padding: "0 1.5rem" },
   card: { padding: "3rem 2.5rem", boxShadow: "0 10px 30px rgba(15,23,42,0.06)", textAlign: "center", borderRadius: "16px", backgroundColor: "#ffffff", border: "1px solid #E5E7EB" },
