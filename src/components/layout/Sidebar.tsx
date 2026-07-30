@@ -182,7 +182,7 @@ export default function Sidebar({
       </div>
 
       {/* Navigation Groups */}
-      <nav style={styles.nav}>
+      <nav style={styles.nav} data-lenis-prevent>
         {/* Section 1: Today, Assessments, Students, Insights */}
         {isAllowed("/dashboard") && renderNavLink(
           "today",

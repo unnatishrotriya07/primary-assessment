@@ -138,7 +138,7 @@ export default function SubjectMasteryCard({ subject }: SubjectMasteryCardProps)
 
       {/* Expandable Chapters List */}
       {isExpanded && (
-        <div style={styles.chaptersList}>
+        <div style={styles.chaptersList} data-lenis-prevent>
           {subject.chapters.map((ch) => {
             const badge = getStatusBadge(ch.status);
             return (

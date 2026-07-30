@@ -834,7 +834,7 @@ export default function ChapterReadPage() {
 
       {/* Generation Workspace Drawer */}
       {drawerOpen && (
-        <div style={styles.drawerOverlay} onClick={() => setDrawerOpen(false)}>
+        <div style={styles.drawerOverlay} onClick={() => setDrawerOpen(false)} data-lenis-prevent>
           <div style={styles.drawer} onClick={(e) => e.stopPropagation()}>
             <div style={styles.drawerHeader}>
               <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>
@@ -1426,6 +1426,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     animation: "fadeIn 0.2s ease-out forwards",
+    overflow: "hidden",
   },
   drawerHeader: {
     padding: "1.5rem",
@@ -1515,8 +1516,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1rem",
-    maxHeight: "380px",
-    overflowY: "auto",
     border: "1px solid var(--border-color)",
     borderRadius: "10px",
     padding: "0.75rem",

@@ -554,9 +554,10 @@ export default function AssessmentDetailPage({ params }: PageProps) {
   const insights = getClassroomInsights();
 
   // Calculate average score
-  const completedStudents = assignedStudents.filter(s => s.interview && s.interview.overallScore);
-  const avgScore = completedStudents.length > 0
-    ? Math.round(completedStudents.reduce((acc, curr) => acc + (curr.interview?.overallScore || 0), 0) / completedStudents.length)
+  const completedStudents = assignedStudents.filter(s => s.status === "Completed");
+  const completedWithScore = assignedStudents.filter(s => s.interview && typeof s.interview.overallScore === 'number');
+  const avgScore = completedWithScore.length > 0
+    ? Math.round(completedWithScore.reduce((acc, curr) => acc + (curr.interview?.overallScore || 0), 0) / completedWithScore.length)
     : 74; // Default fallback
 
   const displayStatus = assessment.status === "Active" ? "LIVE" : assessment.status.toUpperCase();
@@ -782,7 +783,11 @@ export default function AssessmentDetailPage({ params }: PageProps) {
                             </div>
                             <div style={styles.timelineContentColumn}>
                               <h4 style={styles.timelineHeader}>{s.studentName} Completed</h4>
-                              <p style={styles.timelineDesc}>Score: {s.interview?.overallScore}% | Grade: {s.interview?.grade}</p>
+                              <p style={styles.timelineDesc}>
+                                {s.interview && typeof s.interview.overallScore === 'number'
+                                  ? `Score: ${s.interview.overallScore}% | Grade: ${s.interview.grade || "N/A"}`
+                                  : "Score: Pending | Report generating..."}
+                              </p>
                             </div>
                           </div>
                         );
@@ -1156,7 +1161,7 @@ export default function AssessmentDetailPage({ params }: PageProps) {
         ...styles.drawerOverlay,
         visibility: selectedStudentId ? "visible" : "hidden",
         opacity: selectedStudentId ? 1 : 0
-      }} onClick={() => setSelectedStudentId(null)}>
+      }} onClick={() => setSelectedStudentId(null)} data-lenis-prevent>
         
         <div style={{
           ...styles.drawerContainer,
@@ -1506,6 +1511,7 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "1.3fr 1fr",
     gap: "1.5rem",
     width: "100%",
+    alignItems: "start",
   },
   overviewLeftColumn: {
     display: "flex",
@@ -1984,6 +1990,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     zIndex: 9001,
+    overflow: "hidden",
   },
   drawerHeader: {
     padding: "24px",
@@ -2017,7 +2024,8 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "var(--divider)",
   },
   drawerContent: {
-    flexGrow: 1,
+    flex: "1 1 0%",
+    minHeight: 0,
     overflowY: "auto",
     padding: "24px",
     display: "flex",
@@ -2363,16 +2371,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
-    maxHeight: "380px",
-    overflowY: "auto",
     paddingRight: "8px",
   },
   rawTranscriptDoc: {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
-    maxHeight: "380px",
-    overflowY: "auto",
   },
   rawTranscriptRow: {
     fontSize: "0.95rem",
@@ -2391,8 +2395,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
-    maxHeight: "400px",
-    overflowY: "auto",
   },
   evaluationCardItem: {
     backgroundColor: "#F8FAFC",

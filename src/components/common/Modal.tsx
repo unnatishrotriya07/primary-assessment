@@ -28,6 +28,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "medium
       style={styles.overlay} 
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
+      data-lenis-prevent
     >
       <div 
         className="modal-content"
@@ -61,7 +62,7 @@ const styles: Record<string, React.CSSProperties> = {
     bottom: 0,
     backgroundColor: "rgba(15, 23, 42, 0.65)", // Premium dark translucent background
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     zIndex: 1000,
     overflowY: "auto",

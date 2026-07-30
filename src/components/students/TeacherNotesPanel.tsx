@@ -66,7 +66,7 @@ export default function TeacherNotesPanel({
       {errorMsg && <div style={styles.errorBanner}>{errorMsg}</div>}
 
       {/* Existing Notes List */}
-      <div style={styles.notesList}>
+      <div style={styles.notesList} data-lenis-prevent>
         {notes.length === 0 ? (
           <div style={styles.emptyNotes}>
             No teacher observation logs recorded yet.

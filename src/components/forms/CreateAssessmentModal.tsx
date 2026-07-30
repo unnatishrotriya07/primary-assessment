@@ -1459,7 +1459,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "1.5rem",
     width: "100%",
-    maxHeight: "75vh",
+    maxHeight: "calc(100vh - 280px)",
+    minHeight: 0,
   },
   reviewConfigCard: {
     backgroundColor: "var(--bg-app)",

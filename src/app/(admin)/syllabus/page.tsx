@@ -1075,7 +1075,7 @@ function SyllabusPageContent() {
           {/* Column 1: Classes */}
           <div style={styles.treeColumn}>
             <div style={styles.columnHeader}>Classes ({filteredClasses.length})</div>
-            <div style={styles.nodesWrapper}>
+            <div style={styles.nodesWrapper} data-lenis-prevent>
               {loadingClasses ? (
                 <div style={styles.loadingInner}><div className="spinner"></div></div>
               ) : errorClasses ? (
@@ -1117,7 +1117,7 @@ function SyllabusPageContent() {
           {/* Column 2: Subjects */}
           <div style={styles.treeColumn}>
             <div style={styles.columnHeader}>Subjects ({filteredSubjects.length})</div>
-            <div style={styles.nodesWrapper}>
+            <div style={styles.nodesWrapper} data-lenis-prevent>
               {!selectedClass ? (
                 <div style={styles.placeholderCard}>Select a Class node from the left to view academic subjects.</div>
               ) : loadingSubjects ? (
@@ -1160,7 +1160,7 @@ function SyllabusPageContent() {
           {/* Column 3: Chapters */}
           <div style={styles.treeColumn}>
             <div style={styles.columnHeader}>Chapters ({filteredChapters.length})</div>
-            <div style={styles.nodesWrapper}>
+            <div style={styles.nodesWrapper} data-lenis-prevent>
               {!selectedSubject ? (
                 <div style={styles.placeholderCard}>Select a Subject node to reveal its curriculum chapters.</div>
               ) : loadingChapters ? (
@@ -1438,7 +1438,7 @@ function SyllabusPageContent() {
                     </svg>
                     
                     {openDropdown === "grade" && (
-                      <div style={styles.customSelectDropdown}>
+                      <div style={styles.customSelectDropdown} data-lenis-prevent>
                         {gradeOptions.length === 0 ? (
                           <div style={styles.customSelectDropdownItemEmpty}>No grades found</div>
                         ) : (
@@ -1509,7 +1509,7 @@ function SyllabusPageContent() {
                     </svg>
                     
                     {openDropdown === "section" && (
-                      <div style={styles.customSelectDropdown}>
+                      <div style={styles.customSelectDropdown} data-lenis-prevent>
                         {sectionOptions.length === 0 ? (
                           <div style={styles.customSelectDropdownItemEmpty}>No sections found</div>
                         ) : (
@@ -1589,7 +1589,7 @@ function SyllabusPageContent() {
                     </svg>
                     
                     {openDropdown === "status" && (
-                      <div style={styles.customSelectDropdown}>
+                      <div style={styles.customSelectDropdown} data-lenis-prevent>
                         {statusOptions.map((status) => {
                           const isSelected = tempStatus.includes(status);
                           return (
@@ -1656,7 +1656,7 @@ function SyllabusPageContent() {
                     </svg>
                     
                     {openDropdown === "sync" && (
-                      <div style={styles.customSelectDropdown}>
+                      <div style={styles.customSelectDropdown} data-lenis-prevent>
                         {syncStatusOptions.map((sync) => {
                           const isSelected = tempSyncStatus.includes(sync);
                           return (
