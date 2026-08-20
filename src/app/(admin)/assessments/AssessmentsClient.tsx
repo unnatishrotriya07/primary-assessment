@@ -233,9 +233,9 @@ export default function AssessmentsClient() {
   };
 
   const tabs = [
-    { id: "workspace", label: "Assessment Workspace" },
+    { id: "workspace", label: "Assessments" },
     { id: "questions", label: "Question Library" },
-    { id: "generate", label: "AI Generator" },
+    { id: "generate", label: "Question Generator" },
   ];
 
   // Helper for rendering small search matches on cards
@@ -271,17 +271,6 @@ export default function AssessmentsClient() {
   const completedAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Completed");
   const expiredAssessments = filteredAssessments.filter(item => getDisplayStatus(item) === "Expired");
 
-  // Recently Generated: Top 3 newest assessments by creation time
-  const recentlyGenerated = [...filteredAssessments]
-    .sort((a, b) => {
-      const dateA = a.date || "";
-      const dateB = b.date || "";
-      return dateB.localeCompare(dateA);
-    })
-    .slice(0, 3);
-
-
-
   return (
     <div style={styles.container}>
       <PageHeader 
@@ -315,120 +304,6 @@ export default function AssessmentsClient() {
       <div style={styles.content}>
         {activeTab === "workspace" && (
           <div className="animate-fade-in" style={styles.workspaceWrapper}>
-            {/* Top Workspace Bar (Welcome & Hero Widgets) */}
-            {assessments.length > 0 && (
-              <div style={styles.workspaceHero}>
-                {/* Left Welcome and Live Tracker Card */}
-                <div style={styles.liveAssessmentCard}>
-                  <div style={styles.liveCardHeader}>
-                    <div>
-                      <h2 style={styles.greetingTitle}>Good Morning {userName} 👋</h2>
-                      <p style={styles.greetingSubtitle}>Here is today's active evaluation progress.</p>
-                    </div>
-                    {liveStats && (
-                      <span style={styles.livePulseTag}>
-                        <span style={styles.pulseDot}></span>
-                        LIVE MONITOR
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div style={styles.liveDivider} />
-
-                  {liveStats ? (
-                    <>
-                      <div style={styles.liveStatsDetails}>
-                        <div style={styles.liveStatsMain}>
-                          <h3 style={styles.liveAsmtTitle}>{liveStats.title}</h3>
-                          <span style={styles.liveAsmtStudents}>{liveStats.studentsCount} Students Assigned</span>
-                        </div>
-
-                        <div style={styles.liveStatsBreakdown}>
-                          <div style={styles.statCountItem}>
-                            <span style={styles.statCountLabel}>Completed</span>
-                            <strong style={{ ...styles.statCountVal, color: "var(--success)" }}>{liveStats.completed}</strong>
-                          </div>
-                          <div style={styles.statCountItem}>
-                            <span style={styles.statCountLabel}>In Progress</span>
-                            <strong style={{ ...styles.statCountVal, color: "var(--warning)" }}>{liveStats.inProgress}</strong>
-                          </div>
-                          <div style={styles.statCountItem}>
-                            <span style={styles.statCountLabel}>Pending</span>
-                            <strong style={{ ...styles.statCountVal, color: "var(--text-secondary)" }}>{liveStats.pending}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={styles.liveDivider} />
-
-                      <div style={styles.liveCardFooter}>
-                        <Link 
-                          href={`/assessments/${liveStats.id}`} 
-                          style={styles.liveProgressBtn}
-                        >
-                          View Live Progress
-                        </Link>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ ...styles.liveStatsDetails, padding: "1.2rem", textAlign: "center", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                        <h4 style={{ ...styles.liveAsmtTitle, fontSize: "0.95rem", color: "var(--text-secondary)" }}>No Active Evaluation</h4>
-                        <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                          Deploy one of your scheduled assessments from the list below to begin live evaluation monitoring.
-                        </p>
-                      </div>
-                      <div style={styles.liveDivider} />
-                      <div style={{ ...styles.liveCardFooter, justifyContent: "center" }}>
-                        <button 
-                          onClick={() => setIsModalOpen(true)} 
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "var(--primary)",
-                            fontSize: "0.85rem",
-                            fontWeight: 600,
-                            cursor: "pointer"
-                          }}
-                        >
-                          + Create Assessment
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Right Columns: Quick Actions and Learning Insights */}
-                <div style={styles.heroSideColumns}>
-                  {/* Create Assessment Panel */}
-                  <div style={styles.sidePanelCard}>
-                    <div style={styles.sidePanelHeader}>
-                      <span style={styles.sidePanelLabel}>Quick Actions</span>
-                    </div>
-                    <h4 style={styles.sidePanelTitle}>New Evaluation</h4>
-                    <p style={styles.sidePanelDesc}>Create an oral evaluation or written diagnostic for any grade.</p>
-                    <button 
-                      onClick={() => setIsModalOpen(true)} 
-                      style={styles.sidePanelActionBtn}
-                    >
-                      Create Assessment
-                    </button>
-                  </div>
-
-                  {/* Learning Insights Panel */}
-                  <div style={styles.sidePanelCard}>
-                    <div style={styles.sidePanelHeader}>
-                      <span style={styles.sidePanelLabel}>Learning Insights</span>
-                    </div>
-                    <h4 style={styles.sidePanelTitle}>Diagnostics Insight</h4>
-                    <p style={styles.sidePanelDesc}>
-                      Detailed performance reports and conceptual learning recommendations will compile here automatically once students finish tests.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Filter and Search Bar */}
             <div style={styles.filterSection}>
               <div style={styles.searchContainer}>
@@ -437,7 +312,7 @@ export default function AssessmentsClient() {
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search assessments, questions, students, or insights..."
+                  placeholder="Search assessments, questions, or assigned students..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={styles.searchInput}
@@ -454,8 +329,8 @@ export default function AssessmentsClient() {
                       onClick={() => setActiveStateFilter(state)}
                       style={{
                         ...styles.stateFilterBtn,
-                        backgroundColor: isActive ? "var(--primary)" : "var(--bg-surface)",
-                        color: isActive ? "#ffffff" : "var(--text-secondary)",
+                        backgroundColor: isActive ? "var(--selected-bg)" : "var(--bg-surface)",
+                        color: isActive ? "var(--primary)" : "var(--text-secondary)",
                         borderColor: isActive ? "var(--primary)" : "var(--border-color)",
                         fontWeight: isActive ? 600 : 500,
                       }}
@@ -472,14 +347,14 @@ export default function AssessmentsClient() {
               {loading ? (
                 <div style={styles.loaderCenter}>
                   <div className="spinner" style={{ width: "36px", height: "36px" }}></div>
-                  <p style={{ marginTop: "1rem", color: "var(--text-secondary)" }}>Loading assessments workspace...</p>
+                  <p style={{ marginTop: "1rem", color: "var(--text-secondary)" }}>Loading assessments...</p>
                 </div>
               ) : (
                 <>
                   {/* Section 1: Today's Active Assessments */}
                   {liveAssessments.length > 0 && (
                     <div style={styles.workspaceSection}>
-                      <h3 style={styles.sectionTitle}>Today's Active Assessments</h3>
+                      <h3 style={styles.sectionTitle}>Active Assessments</h3>
                       <div style={styles.cardsGrid}>
                         {liveAssessments.map(item => (
                           <AssessmentGridCard 
@@ -497,9 +372,7 @@ export default function AssessmentsClient() {
                     </div>
                   )}
 
-
-
-                  {/* Section 4: Completed Assessments */}
+                  {/* Section 2: Completed Assessments */}
                   {completedAssessments.length > 0 && (
                     <div style={styles.workspaceSection}>
                       <h3 style={styles.sectionTitle}>Completed Assessments</h3>
@@ -520,7 +393,7 @@ export default function AssessmentsClient() {
                     </div>
                   )}
 
-                  {/* Section 4.5: Expired Assessments */}
+                  {/* Section 3: Expired Assessments */}
                   {expiredAssessments.length > 0 && (
                     <div style={styles.workspaceSection}>
                       <h3 style={styles.sectionTitle}>Expired Assessments</h3>
@@ -552,29 +425,6 @@ export default function AssessmentsClient() {
                       <p style={styles.emptyStateDesc}>Try expanding your search query or removing the active filters.</p>
                     </div>
                   )}
-
-                  {/* Section 5: Recently Generated */}
-                  {recentlyGenerated.length > 0 && (
-                    <div style={styles.workspaceSection}>
-                      <h3 style={styles.sectionTitle}>Recently Generated</h3>
-                      <div style={styles.cardsGrid}>
-                        {recentlyGenerated.map(item => (
-                          <AssessmentGridCard 
-                            key={item.id} 
-                            item={item} 
-                            subjectsMap={subjectsMap}
-                            classesMap={classesMap}
-                            displayStatus={getDisplayStatus(item)}
-                            copiedAsmtId={copiedAsmtId}
-                            onCopyShare={handleCopyShareableLink}
-                            searchMatch={renderSearchMatchInfo(item)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-
                 </>
               )}
             </div>

@@ -79,7 +79,6 @@ function StudentsWorkspace() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");
   const [journeyData, setJourneyData] = useState<StudentJourneyData | null>(null);
   const [journeyLoading, setJourneyLoading] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);

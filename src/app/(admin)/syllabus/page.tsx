@@ -113,107 +113,9 @@ function SyllabusPageContent() {
   const [chapterPage, setChapterPage] = useState(1);
   const [chaptersPerPage] = useState(10);
 
-  // Applied Filter States
-  const [appliedGrades, setAppliedGrades] = useState<string[]>([]);
-  const [appliedSections, setAppliedSections] = useState<string[]>([]);
-  const [appliedOnlyWithStudents, setAppliedOnlyWithStudents] = useState(false);
-  const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
-  const [appliedSyncStatus, setAppliedSyncStatus] = useState<string[]>([]);
-  const [appliedOnlySynced, setAppliedOnlySynced] = useState(false);
-
-  // Temp Filter States (modal inputs)
-  const [tempGrades, setTempGrades] = useState<string[]>([]);
-  const [tempSections, setTempSections] = useState<string[]>([]);
-  const [tempOnlyWithStudents, setTempOnlyWithStudents] = useState(false);
-  const [tempStatus, setTempStatus] = useState<string[]>([]);
-  const [tempSyncStatus, setTempSyncStatus] = useState<string[]>([]);
-  const [tempOnlySynced, setTempOnlySynced] = useState(false);
-
-  // Modal & Dropdown visibility states
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<"grade" | "section" | "status" | "sync" | null>(null);
-
-  const toggleDropdown = (dropdown: "grade" | "section" | "status" | "sync") => {
-    setOpenDropdown(prev => prev === dropdown ? null : dropdown);
-  };
-
-  const toggleGrade = (grade: string) => {
-    setTempGrades(prev => 
-      prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade]
-    );
-  };
-
-  const toggleSection = (sec: string) => {
-    setTempSections(prev => 
-      prev.includes(sec) ? prev.filter(s => s !== sec) : [...prev, sec]
-    );
-  };
-
-  const toggleStatus = (status: string) => {
-    setTempStatus(prev => 
-      prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]
-    );
-  };
-
-  const toggleSyncStatus = (sync: string) => {
-    setTempSyncStatus(prev => 
-      prev.includes(sync) ? prev.filter(s => s !== sync) : [...prev, sync]
-    );
-  };
-
-  const handleOpenFilters = () => {
-    setTempGrades(appliedGrades);
-    setTempSections(appliedSections);
-    setTempOnlyWithStudents(appliedOnlyWithStudents);
-    setTempStatus(appliedStatus);
-    setTempSyncStatus(appliedSyncStatus);
-    setTempOnlySynced(appliedOnlySynced);
-    setOpenDropdown(null);
-    setIsFilterModalOpen(true);
-  };
-
-  const handleApplyFilters = () => {
-    setAppliedGrades(tempGrades);
-    setAppliedSections(tempSections);
-    setAppliedOnlyWithStudents(tempOnlyWithStudents);
-    setAppliedStatus(tempStatus);
-    setAppliedSyncStatus(tempSyncStatus);
-    setAppliedOnlySynced(tempOnlySynced);
-    setClassPage(1); // Reset page on filter apply
-    setChapterPage(1); // Reset page on filter apply
-    setIsFilterModalOpen(false);
-  };
-
-  const handleResetFilters = () => {
-    setTempGrades([]);
-    setTempSections([]);
-    setTempOnlyWithStudents(false);
-    setTempStatus([]);
-    setTempSyncStatus([]);
-    setTempOnlySynced(false);
-
-    setAppliedGrades([]);
-    setAppliedSections([]);
-    setAppliedOnlyWithStudents(false);
-    setAppliedStatus([]);
-    setAppliedSyncStatus([]);
-    setAppliedOnlySynced(false);
-    
-    setClassPage(1); // Reset page on filter reset
-    setChapterPage(1); // Reset page on filter reset
-    setIsFilterModalOpen(false);
-  };
-
-  const getActiveFiltersCount = () => {
-    let count = 0;
-    if (appliedGrades.length > 0) count++;
-    if (appliedSections.length > 0) count++;
-    if (appliedOnlyWithStudents) count++;
-    if (appliedStatus.length > 0) count++;
-    if (appliedSyncStatus.length > 0) count++;
-    if (appliedOnlySynced) count++;
-    return count;
-  };
+  // Inline Filter States
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState("all");
+  const [selectedSectionFilter, setSelectedSectionFilter] = useState("all");
 
   // CRUD Modals
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
@@ -490,7 +392,7 @@ function SyllabusPageContent() {
     );
   }
 
-  // Filter lists based on search parameters and advanced filters
+  // Filter lists based on search parameters and inline dropdown filters
   const filteredClasses = classes.filter((cls) => {
     const matchesSearch =
       cls.name.toLowerCase().includes(classSearch.toLowerCase()) ||
@@ -500,17 +402,12 @@ function SyllabusPageContent() {
     if (!matchesSearch) return false;
 
     // Grade Level Filter
-    if (appliedGrades.length > 0 && !appliedGrades.includes(cls.grade)) {
+    if (selectedGradeFilter !== "all" && String(cls.grade) !== selectedGradeFilter) {
       return false;
     }
 
     // Section Filter
-    if (appliedSections.length > 0 && !appliedSections.includes(cls.section)) {
-      return false;
-    }
-
-    // Students Enrollment Filter
-    if (appliedOnlyWithStudents && (!cls.studentsCount || cls.studentsCount === 0)) {
+    if (selectedSectionFilter !== "all" && cls.section.toLowerCase() !== selectedSectionFilter.toLowerCase()) {
       return false;
     }
 
@@ -522,17 +419,7 @@ function SyllabusPageContent() {
       sub.name.toLowerCase().includes(subjectSearch.toLowerCase()) ||
       sub.code.toLowerCase().includes(subjectSearch.toLowerCase());
 
-    if (!matchesSearch) return false;
-
-    // Subject Status Filter
-    if (appliedStatus.length > 0) {
-      const currentStatus = sub.status || "Active";
-      if (!appliedStatus.includes(currentStatus)) {
-        return false;
-      }
-    }
-
-    return true;
+    return matchesSearch;
   });
 
   const filteredChapters = chapters.filter((ch) => {
@@ -540,23 +427,7 @@ function SyllabusPageContent() {
       ch.title.toLowerCase().includes(chapterSearch.toLowerCase()) ||
       ch.number.toString().includes(chapterSearch);
 
-    if (!matchesSearch) return false;
-
-    // NCERT Sync Status Filter
-    if (appliedSyncStatus.length > 0) {
-      const isSynced = !!ch.textContent;
-      const statusStr = isSynced ? "NCERT Synced" : "Pending Sync";
-      if (!appliedSyncStatus.includes(statusStr)) {
-        return false;
-      }
-    }
-
-    // Only NCERT Synced Checkbox Filter
-    if (appliedOnlySynced && !ch.textContent) {
-      return false;
-    }
-
-    return true;
+    return matchesSearch;
   });
 
   const showTableView = true;
@@ -677,22 +548,40 @@ function SyllabusPageContent() {
                 onChange={handleSearchChange}
               />
             </div>
-            <div style={styles.toolbarActions}>
-              <button 
-                style={styles.iconButton} 
-                onClick={handleOpenFilters}
-                title="Filter Settings"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-                </svg>
-                {getActiveFiltersCount() > 0 && (
-                  <span style={styles.filterBadge}>{getActiveFiltersCount()}</span>
-                )}
-              </button>
-              <button style={styles.exportBtn} onClick={() => alert("Syllabus curriculum data exported successfully!")} title="Export Curriculum">
-                Export
-              </button>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+              {!activeClass && (
+                <>
+                  <select
+                    value={selectedGradeFilter}
+                    onChange={(e) => {
+                      setSelectedGradeFilter(e.target.value);
+                      setClassPage(1);
+                    }}
+                    style={styles.filterSelect}
+                    aria-label="Filter by Grade"
+                  >
+                    <option value="all">All Grades</option>
+                    {Array.from(new Set(classes.map(c => String(c.grade)))).sort((a, b) => Number(a) - Number(b)).map(g => (
+                      <option key={g} value={g}>Grade {g}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedSectionFilter}
+                    onChange={(e) => {
+                      setSelectedSectionFilter(e.target.value);
+                      setClassPage(1);
+                    }}
+                    style={styles.filterSelect}
+                    aria-label="Filter by Section"
+                  >
+                    <option value="all">All Sections</option>
+                    {Array.from(new Set(classes.map(c => c.section))).sort().map(sec => (
+                      <option key={sec} value={sec}>Section {sec}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </div>
 
@@ -1348,371 +1237,6 @@ function SyllabusPageContent() {
           </div>
         </div>
       </Modal>
-
-      {/* ========================================================================= */}
-      {/* 5. CUSTOM PREMIUM FILTERS MODAL                                           */}
-      {/* ========================================================================= */}
-      {isFilterModalOpen && (() => {
-        const gradeOptions = Array.from(new Set(classes.map((c) => c.grade))).sort((a, b) => Number(a) - Number(b));
-        const sectionOptions = Array.from(new Set(classes.map((c) => c.section))).sort();
-        const statusOptions = ["Active", "Inactive"];
-        const syncStatusOptions = ["NCERT Synced", "Pending Sync"];
-
-        return (
-          <div style={styles.filterModalOverlay} onClick={() => setIsFilterModalOpen(false)}>
-            {/* Blocker click-capture to close open dropdowns if user clicks elsewhere inside the modal */}
-            {openDropdown && (
-              <div 
-                style={{
-                  position: "fixed",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  zIndex: 999,
-                  backgroundColor: "transparent",
-                }} 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenDropdown(null);
-                }} 
-              />
-            )}
-
-            <div style={styles.filterModalContent} onClick={(e) => e.stopPropagation()}>
-              <div style={styles.filterModalHeader}>
-                <h2 style={styles.filterModalTitle}>Filters</h2>
-                <button 
-                  style={styles.filterModalCloseBtn} 
-                  className="filter-close-btn-hover"
-                  onClick={() => setIsFilterModalOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-              
-              <div style={styles.filterModalDivider} />
-              
-              <p style={styles.filterModalSubtitle}>
-                Pick a record to filter. New entries land in the relevant module and appear instantly across the workspace.
-              </p>
-
-              <div style={styles.filterModalBody}>
-                {/* 1. Grade level */}
-                <div style={styles.filterFieldGroup}>
-                  <label style={styles.filterFieldLabel}>Grade level</label>
-                  <div 
-                    style={styles.customSelectContainer} 
-                    className="custom-select-container-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDropdown("grade");
-                    }}
-                  >
-                    {tempGrades.length === 0 ? (
-                      <span style={styles.customSelectPlaceholder}>Click to select</span>
-                    ) : (
-                      <div style={styles.customSelectPillsContainer}>
-                        {tempGrades.map((grade) => (
-                          <span 
-                            key={grade} 
-                            style={styles.customSelectPillBlue}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Grade {grade}
-                            <span 
-                              style={styles.customSelectPillRemove} 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleGrade(grade);
-                              }}
-                            >
-                              ×
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="3" style={styles.customSelectArrow}>
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    
-                    {openDropdown === "grade" && (
-                      <div style={styles.customSelectDropdown} data-lenis-prevent>
-                        {gradeOptions.length === 0 ? (
-                          <div style={styles.customSelectDropdownItemEmpty}>No grades found</div>
-                        ) : (
-                          gradeOptions.map((grade) => {
-                            const isSelected = tempGrades.includes(grade);
-                            return (
-                              <div 
-                                key={grade} 
-                                style={{
-                                  ...styles.customSelectDropdownItem,
-                                  backgroundColor: isSelected ? "var(--primary-light)" : "transparent",
-                                  fontWeight: isSelected ? 600 : 400,
-                                }}
-                                className="custom-select-item-hover"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGrade(grade);
-                                }}
-                              >
-                                Grade {grade}
-                                {isSelected && <span style={{ marginLeft: "auto", color: "var(--primary)" }}>✓</span>}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Section */}
-                <div style={styles.filterFieldGroup}>
-                  <label style={styles.filterFieldLabel}>Section</label>
-                  <div 
-                    style={styles.customSelectContainer} 
-                    className="custom-select-container-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDropdown("section");
-                    }}
-                  >
-                    {tempSections.length === 0 ? (
-                      <span style={styles.customSelectPlaceholder}>Click to select</span>
-                    ) : (
-                      <div style={styles.customSelectPillsContainer}>
-                        {tempSections.map((sec) => (
-                          <span 
-                            key={sec} 
-                            style={styles.customSelectPillGreen}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Section {sec}
-                            <span 
-                              style={styles.customSelectPillRemove} 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSection(sec);
-                              }}
-                            >
-                              ×
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="3" style={styles.customSelectArrow}>
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    
-                    {openDropdown === "section" && (
-                      <div style={styles.customSelectDropdown} data-lenis-prevent>
-                        {sectionOptions.length === 0 ? (
-                          <div style={styles.customSelectDropdownItemEmpty}>No sections found</div>
-                        ) : (
-                          sectionOptions.map((sec) => {
-                            const isSelected = tempSections.includes(sec);
-                            return (
-                              <div 
-                                key={sec} 
-                                style={{
-                                  ...styles.customSelectDropdownItem,
-                                  backgroundColor: isSelected ? "var(--success-light)" : "transparent",
-                                  fontWeight: isSelected ? 600 : 400,
-                                }}
-                                className="custom-select-item-hover"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleSection(sec);
-                                }}
-                              >
-                                Section {sec}
-                                {isSelected && <span style={{ marginLeft: "auto", color: "var(--success)" }}>✓</span>}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Select only with students */}
-                  <div style={{ marginTop: "0.25rem" }}>
-                    <CustomCheckbox 
-                      checked={tempOnlyWithStudents} 
-                      onChange={setTempOnlyWithStudents} 
-                      label="Select only with students" 
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Subject status */}
-                <div style={styles.filterFieldGroup}>
-                  <label style={styles.filterFieldLabel}>Subject status</label>
-                  <div 
-                    style={styles.customSelectContainer} 
-                    className="custom-select-container-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDropdown("status");
-                    }}
-                  >
-                    {tempStatus.length === 0 ? (
-                      <span style={styles.customSelectPlaceholder}>Click to select</span>
-                    ) : (
-                      <div style={styles.customSelectPillsContainer}>
-                        {tempStatus.map((status) => (
-                          <span 
-                            key={status} 
-                            style={styles.customSelectPillPurple}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {status}
-                            <span 
-                              style={styles.customSelectPillRemove} 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleStatus(status);
-                              }}
-                            >
-                              ×
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="3" style={styles.customSelectArrow}>
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    
-                    {openDropdown === "status" && (
-                      <div style={styles.customSelectDropdown} data-lenis-prevent>
-                        {statusOptions.map((status) => {
-                          const isSelected = tempStatus.includes(status);
-                          return (
-                            <div 
-                              key={status} 
-                              style={{
-                                ...styles.customSelectDropdownItem,
-                                backgroundColor: isSelected ? "var(--primary-light)" : "transparent",
-                                fontWeight: isSelected ? 600 : 400,
-                              }}
-                              className="custom-select-item-hover"
-                              onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleStatus(status);
-                              }}
-                            >
-                              {status}
-                              {isSelected && <span style={{ marginLeft: "auto", color: "var(--primary)" }}>✓</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 4. NCERT sync status */}
-                <div style={styles.filterFieldGroup}>
-                  <label style={styles.filterFieldLabel}>NCERT sync status</label>
-                  <div 
-                    style={styles.customSelectContainer} 
-                    className="custom-select-container-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDropdown("sync");
-                    }}
-                  >
-                    {tempSyncStatus.length === 0 ? (
-                      <span style={styles.customSelectPlaceholder}>Click to select</span>
-                    ) : (
-                      <div style={styles.customSelectPillsContainer}>
-                        {tempSyncStatus.map((sync) => (
-                          <span 
-                            key={sync} 
-                            style={styles.customSelectPillYellow}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {sync}
-                            <span 
-                              style={styles.customSelectPillRemove} 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSyncStatus(sync);
-                              }}
-                            >
-                              ×
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="3" style={styles.customSelectArrow}>
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    
-                    {openDropdown === "sync" && (
-                      <div style={styles.customSelectDropdown} data-lenis-prevent>
-                        {syncStatusOptions.map((sync) => {
-                          const isSelected = tempSyncStatus.includes(sync);
-                          return (
-                            <div 
-                              key={sync} 
-                              style={{
-                                ...styles.customSelectDropdownItem,
-                                backgroundColor: isSelected ? "var(--warning-light)" : "transparent",
-                                fontWeight: isSelected ? 600 : 400,
-                              }}
-                              className="custom-select-item-hover"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSyncStatus(sync);
-                              }}
-                            >
-                              {sync}
-                              {isSelected && <span style={{ marginLeft: "auto", color: "var(--warning)" }}>✓</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Select only synced */}
-                  <div style={{ marginTop: "0.25rem" }}>
-                    <CustomCheckbox 
-                      checked={tempOnlySynced} 
-                      onChange={setTempOnlySynced} 
-                      label="Select only synced" 
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={styles.filterModalFooterActions}>
-                <button 
-                  style={styles.filterModalSubmitBtn} 
-                  className="filter-submit-btn-hover"
-                  onClick={handleApplyFilters}
-                >
-                  Filter
-                </button>
-                <button 
-                  style={styles.filterModalResetBtn} 
-                  className="filter-reset-btn-hover"
-                  onClick={handleResetFilters}
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -1762,6 +1286,17 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "1.5rem",
+  },
+  filterSelect: {
+    padding: "0.6rem 0.9rem",
+    backgroundColor: "var(--bg-surface)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-sm)",
+    fontSize: "0.9rem",
+    color: "var(--text-primary)",
+    outline: "none",
+    cursor: "pointer",
+    fontWeight: 500,
   },
   searchBarContainer: {
     maxWidth: "500px",
