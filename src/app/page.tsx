@@ -18,7 +18,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 
-const LOGO_URL = "/momentum-logo.png";
+const LOGO_URL = "/logo.png";
 
 export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -99,8 +99,8 @@ export default function Home() {
 
   const FAQ_DATA = [
     {
-      q: "Is Momentum compliant with data privacy standards?",
-      a: "Absolutely. Momentum is SOC2 Type II, GDPR, and FERPA compliant. We use end-to-end encryption for all student data and house our servers in sovereign regional data centers.",
+      q: "Is Proctors compliant with data privacy standards?",
+      a: "Absolutely. Proctors is SOC2 Type II, GDPR, and FERPA compliant. We use end-to-end encryption for all student data and house our servers in sovereign regional data centers.",
     },
     {
       q: "How does the AI prevent hallucinated questions?",
@@ -114,12 +114,12 @@ export default function Home() {
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-desktop py-4 bg-glass-bg backdrop-blur-md border-b border-glass-border">
         <div className="flex items-center gap-3">
           <img
-            alt="Momentum Logo"
+            alt="Proctors Logo"
             className="w-10 h-10 object-contain"
             src={LOGO_URL}
           />
           <span className="font-headline-lg text-2xl font-bold text-primary tracking-tight">
-            Momentum
+            Proctors
           </span>
         </div>
         <nav className="hidden md:flex items-center gap-8">
@@ -239,7 +239,7 @@ export default function Home() {
               </div>
               <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-secondary/80 to-transparent">
                 <p className="text-white font-headline-lg text-xl">
-                  The Momentum Platform Overview
+                  The Proctors Platform Overview
                 </p>
               </div>
             </div>
@@ -500,7 +500,7 @@ export default function Home() {
                 Ready to Define the Next Standard?
               </h2>
               <p className="font-body-lg text-xl text-white/90 mb-10 leading-relaxed">
-                Join 500+ institutions already leveraging Momentum to personalize
+                Join 500+ institutions already leveraging Proctors to personalize
                 the educational journey.
               </p>
               <div className="flex items-center gap-6">
@@ -552,12 +552,12 @@ export default function Home() {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-3">
               <img
-                alt="Momentum Logo"
+                alt="Proctors Logo"
                 className="w-8 h-8 object-contain"
                 src={LOGO_URL}
               />
               <span className="font-headline-lg text-2xl font-black text-on-surface tracking-tighter">
-                Momentum
+                Proctors
               </span>
             </div>
             <p className="font-body-md text-on-surface-variant max-w-xs leading-relaxed">
@@ -565,7 +565,7 @@ export default function Home() {
               standard in educational evaluation.
             </p>
             <p className="text-xs text-on-surface-variant/60 font-body-md">
-              &copy; 2024 Momentum Assessment Systems. All rights reserved.
+              &copy; 2024 Proctors Assessment Systems. All rights reserved.
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-12 lg:gap-24">

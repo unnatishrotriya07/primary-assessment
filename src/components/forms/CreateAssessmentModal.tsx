@@ -42,7 +42,7 @@ export default function CreateAssessmentModal({
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [selectedChapterId, setSelectedChapterId] = useState<string>("");
-  const [questionCount, setQuestionCount] = useState<number | "">("");
+  const [questionCount, setQuestionCount] = useState<number | "">(5);
 
   // AI preparation progress states
   const [prepStep, setPrepStep] = useState(0);
@@ -94,7 +94,7 @@ export default function CreateAssessmentModal({
       setSelectedClassId("");
       setSelectedSubjectId("");
       setSelectedChapterId("");
-      setQuestionCount(25);
+      setQuestionCount(5);
       setDraftQuestions([]);
       setAssessmentTitle("");
       setStudents([]);

@@ -1,6 +1,6 @@
 # Frontend Repository: Developer Onboarding & Setup Guide (Linux/Ubuntu)
 
-Welcome to the **Momentum Frontend** repository! This Next.js (TypeScript) application provides the web client for school directors, teachers, and students.
+Welcome to the **Proctors Frontend** repository! This Next.js (TypeScript) application provides the web client for school directors, teachers, and students.
 
 ---
 

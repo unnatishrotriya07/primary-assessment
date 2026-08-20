@@ -95,7 +95,7 @@ export default function QuestionGeneratorForm() {
         
         // Fallback: Restore classId from draft on mount
         if (typeof window !== "undefined") {
-          const saved = localStorage.getItem("momentum_draft_question_generator");
+          const saved = localStorage.getItem("proctors_draft_question_generator");
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
@@ -138,7 +138,7 @@ export default function QuestionGeneratorForm() {
         // Check if there is a matching draft subjectId
         let restoredSubjectId = "";
         if (typeof window !== "undefined") {
-          const saved = localStorage.getItem("momentum_draft_question_generator");
+          const saved = localStorage.getItem("proctors_draft_question_generator");
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
@@ -182,7 +182,7 @@ export default function QuestionGeneratorForm() {
         // Check if there is a matching draft chapterId
         let restoredChapterId = "";
         if (typeof window !== "undefined") {
-          const saved = localStorage.getItem("momentum_draft_question_generator");
+          const saved = localStorage.getItem("proctors_draft_question_generator");
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
@@ -219,7 +219,7 @@ export default function QuestionGeneratorForm() {
   // Save draft details to localStorage on change (only if not prefilled)
   useEffect(() => {
     if (typeof window !== "undefined" && !isPrefilled && (classId || subjectId || chapterId)) {
-      localStorage.setItem("momentum_draft_question_generator", JSON.stringify({
+      localStorage.setItem("proctors_draft_question_generator", JSON.stringify({
         classId,
         subjectId,
         chapterId,
@@ -394,7 +394,7 @@ export default function QuestionGeneratorForm() {
       
       // Clear draft localStorage upon successful save
       if (typeof window !== "undefined") {
-        localStorage.removeItem("momentum_draft_question_generator");
+        localStorage.removeItem("proctors_draft_question_generator");
       }
     } catch (err: any) {
       setError(extractErrorMessage(err, "Failed to save questions to database."));

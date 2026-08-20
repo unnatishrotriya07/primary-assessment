@@ -34,7 +34,7 @@ export default function SchoolSettingsPage() {
           if (storedUser) {
             try {
               const parsed = JSON.parse(storedUser);
-              setSchoolName(parsed.schoolName || "Momentum Academy");
+              setSchoolName(parsed.schoolName || "Proctors Academy");
               setTenantId(parsed.tenantId || "Global Tenant");
               if (parsed.schoolId) {
                 setSchoolCode(parsed.schoolId);
@@ -112,7 +112,7 @@ export default function SchoolSettingsPage() {
               required
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
-              placeholder="e.g. Momentum Academy"
+              placeholder="e.g. Proctors Academy"
             />
 
             <div style={styles.formGroup}>

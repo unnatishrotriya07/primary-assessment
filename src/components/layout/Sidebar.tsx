@@ -94,11 +94,11 @@ export default function Sidebar({
   const showSyllabus = isAllowed("/classes") || isAllowed("/subjects") || isAllowed("/chapters");
   const showTeamSettings = user && ((user.role === "admin" && !user.tenantId) || user.role === "director");
   const showSchoolSettings = user && user.role === "director";
-  const schoolDisplayName = user?.schoolName || "Momentum Academy";
+  const schoolDisplayName = user?.schoolName || "Proctors Academy";
   const isUserAdmin = user?.role === "admin";
   const isSuperAdmin = user?.role === "admin" && !user?.tenantId;
 
-  const displayNameText = isUserAdmin ? "Momentum" : schoolDisplayName;
+  const displayNameText = isUserAdmin ? "Proctors" : schoolDisplayName;
   const userRoleTitle = () => {
     if (!user) return "";
     if (user.role === "admin" && !user.tenantId) return "Super Admin";
@@ -176,7 +176,7 @@ export default function Sidebar({
         padding: isHovered ? "1.5rem 1rem 1rem 1rem" : "1.5rem 0.2rem 1rem 0.2rem",
       }}>
         <Link href="/dashboard" style={styles.logoLink} className="interactive-element" onClick={handleLinkClick}>
-          <img src="/logo.png" alt="Momentum Logo" style={styles.logoImg} />
+          <img src="/logo.png" alt="Proctors Logo" style={styles.logoImg} />
           {isHovered && <h2 style={styles.logoText}>{displayNameText}</h2>}
         </Link>
       </div>

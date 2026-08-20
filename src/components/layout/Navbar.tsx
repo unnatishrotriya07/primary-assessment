@@ -135,7 +135,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
   };
 
   const isSuperAdmin = user?.role === "admin" && !user?.tenantId;
-  const displayNameText = user?.schoolName || "Momentum Academy";
+  const displayNameText = user?.schoolName || "Proctors Academy";
   const displayName = user?.name || "Admin Account";
   const displayRole = getRoleTitle();
   const avatarChar = displayName.charAt(0).toUpperCase();

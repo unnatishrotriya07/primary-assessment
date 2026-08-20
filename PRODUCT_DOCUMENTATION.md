@@ -1,13 +1,13 @@
-# Momentum: Educational Assessment Platform
+# Proctors: Educational Assessment Platform
 ## Complete Product Documentation & Feature Catalog
 
-This document provides a comprehensive overview of the **Momentum** Primary School Assessment Platform, covering all system functionalities, database architecture, student-facing interview mechanics, evaluation workflows, and teacher-centric features.
+This document provides a comprehensive overview of the **Proctors** Primary School Assessment Platform, covering all system functionalities, database architecture, student-facing interview mechanics, evaluation workflows, and teacher-centric features.
 
 ---
 
 ## 1. Product Mission & Design Philosophy
 
-**Momentum** is a modern academic management and educational assessment platform built to help teachers understand student learning per chapter while reducing manual administration. 
+**Proctors** is a modern academic management and educational assessment platform built to help teachers understand student learning per chapter while reducing manual administration. 
 
 ### Core Tenets:
 * **Academic Integrity First:** The platform is styled and structured as a professional, academic tool. It aligns with existing school terminology (Classes, Subjects, Chapters, Scholar IDs) and behaves like a reliable enterprise school system.

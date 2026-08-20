@@ -5,8 +5,8 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     <div style={styles.container}>
       <header style={styles.header}>
         <Link href="/" style={styles.logoLink} className="interactive-element">
-          <img src="/logo.png" alt="Momentum Logo" style={styles.logoImg} />
-          <span style={styles.logoText}>Momentum Student Portal</span>
+          <img src="/logo.png" alt="Proctors Logo" style={styles.logoImg} />
+          <span style={styles.logoText}>Proctors Student Portal</span>
         </Link>
         <div style={styles.right}>
           <Link href="/" style={styles.exitLink} className="interactive-element">
@@ -20,7 +20,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       </main>
 
       <footer style={styles.footer}>
-        <p>© 2026 Momentum. Secure Testing Environment.</p>
+        <p>© 2026 Proctors. Secure Testing Environment.</p>
       </footer>
     </div>
   );

@@ -933,6 +933,73 @@ button, input, select, textarea {
   z-index: 1;
 }
 
+.auth-bloom-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Bloom Field Gradient Keyframe Animations */
+.bloom-aura-top {
+  animation: bloomFloatTop 18s ease-in-out infinite alternate;
+}
+
+.bloom-aura-bottom {
+  animation: bloomFloatBottom 22s ease-in-out infinite alternate;
+}
+
+.bloom-aura-center {
+  animation: bloomFloatCenter 16s ease-in-out infinite alternate;
+}
+
+@keyframes bloomFloatTop {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(8%, 10%) scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-6%, 5%) scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+@keyframes bloomFloatBottom {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(-10%, -8%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(6%, -12%) scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+@keyframes bloomFloatCenter {
+  0% {
+    transform: translate(0, 0) scale(0.95);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(12%, -6%) scale(1.18);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(4%, 8%) scale(1);
+    opacity: 0.75;
+  }
+}
+
 .auth-visual-content {
   position: relative;
   z-index: 2;

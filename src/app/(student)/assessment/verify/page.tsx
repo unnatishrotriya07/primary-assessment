@@ -103,8 +103,8 @@ function VerifyContent() {
       <div style={styles.card} className="glass-panel">
         {/* School Logo Area */}
         <div style={styles.schoolHeader}>
-          <span style={styles.schoolLogoIcon}>🎓</span>
-          <span style={styles.schoolLogoText}>Momentum Academy</span>
+          <img src="/logo.png" alt="Proctors Logo" style={styles.schoolLogoImg} />
+          <span style={styles.schoolLogoText}>Proctors Academy</span>
         </div>
 
         {/* Large Buddy Illustration */}
@@ -202,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: { maxWidth: "520px", margin: "4rem auto", padding: "0 1.5rem" },
   card: { padding: "3rem 2.5rem", boxShadow: "0 10px 30px rgba(15,23,42,0.06)", textAlign: "center", borderRadius: "16px", backgroundColor: "#ffffff", border: "1px solid #E5E7EB" },
   schoolHeader: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginBottom: "2rem" },
-  schoolLogoIcon: { fontSize: "1.2rem" },
+  schoolLogoImg: { width: "22px", height: "22px", borderRadius: "5px", objectFit: "contain" },
   schoolLogoText: { fontSize: "0.85rem", fontWeight: 600, color: "#6B7280", letterSpacing: "0.05em", textTransform: "uppercase" },
   buddyIllustrationContainer: { display: "flex", justifyContent: "center", marginBottom: "2rem" },
   buddySvg: { overflow: "visible" },

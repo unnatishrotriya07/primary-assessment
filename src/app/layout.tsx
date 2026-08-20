@@ -4,10 +4,15 @@ import SmoothScrollProvider from "@/components/common/SmoothScrollProvider";
 import PageLoader from "@/components/common/PageLoader";
 
 export const metadata: Metadata = {
-  title: "Momentum | Unified Assessment & Learning Platform",
+  title: "Proctors | Unified Assessment & Learning Platform",
   description: "A comprehensive dashboard and testing suite for teachers, administrators, and students.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
   },
 };
 

@@ -80,9 +80,9 @@ export default function AdminDashboard() {
   const [registeredSchools, setRegisteredSchools] = useState<any[]>([]);
 
   const schoolDetailsData: Record<string, any> = {
-    "Momentum Academy": {
+    "Proctors Academy": {
       directorName: "Dr. Alok Verma",
-      directorEmail: "alok@momentum.edu",
+      directorEmail: "alok@proctors.edu",
       assessmentsCreated: 58,
       assessmentsConducted: 240,
       avgScore: "91.2%",
@@ -131,7 +131,7 @@ export default function AdminDashboard() {
     {
       id: "int_1",
       studentName: "Aditya Roy",
-      schoolName: "Momentum Academy",
+      schoolName: "Proctors Academy",
       subject: "Math (Division)",
       date: "2026-07-03",
       score: 85,
@@ -710,7 +710,7 @@ export default function AdminDashboard() {
   // 2. school director render block
   // ----------------------------------------
   if (isDirector) {
-    const schoolDisplayName = user?.schoolName || "Momentum Academy";
+    const schoolDisplayName = user?.schoolName || "Proctors Academy";
     return (
       <div style={styles.container}>
         <PageHeader
