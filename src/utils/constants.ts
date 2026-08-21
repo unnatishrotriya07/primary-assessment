@@ -1,12 +1,9 @@
 const getApiBaseUrl = () => {
+  // In production/staging the URL must be set explicitly at build time
+  // (NEXT_PUBLIC_API_URL is inlined by Next.js). Never fall back to an
+  // http://{hostname}:5001 guess, which is broken behind a domain/TLS.
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== "undefined") {
-    const hostname = window.location.hostname;
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return `http://${hostname}:5001/api`;
-    }
   }
   return "http://localhost:5001/api";
 };

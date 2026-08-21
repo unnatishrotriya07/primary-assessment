@@ -1,0 +1,98 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (staging | production)"
+        required: true
+        default: staging
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: momentum-frontend
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event.inputs.environment }}" != "" ]; then
+            echo "env=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve API URL for build
+        id: api-url
+        run: |
+          if [ "${{ steps.env.outputs.env }}" = "production" ]; then
+            echo "url=${{ secrets.NEXT_PUBLIC_API_URL_PRODUCTION }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ secrets.NEXT_PUBLIC_API_URL_STAGING }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push frontend image
+        id: push
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="${{ steps.api-url.outputs.url }}" \
+            -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Re-register next task definition with new image
+        id: taskdef
+        env:
+          CLUSTER: momentum-${{ steps.env.outputs.env }}
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: |
+          FAMILY="${CLUSTER}-next"
+          CURRENT=$(aws ecs describe-task-definition --task-definition "$FAMILY" --query 'taskDefinition' --region ${{ env.AWS_REGION }})
+          # Drop read-only fields, then point the container at the new image.
+          DEF=$(echo "$CURRENT" | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+          NEW=$(echo "$DEF" | jq --arg img "$IMAGE" '.containerDefinitions[0].image = $img')
+          ARN=$(echo "$NEW" | jq -c '.' | aws ecs register-task-definition --cli-input-json /dev/stdin --region ${{ env.AWS_REGION }} --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "task_def=$ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy next service (rolling)
+        env:
+          CLUSTER: momentum-${{ steps.env.outputs.env }}
+          TASK_DEF: ${{ steps.taskdef.outputs.task_def }}
+        run: |
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "${CLUSTER}-next" \
+            --task-definition "$TASK_DEF" \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for service stable
+        env:
+          CLUSTER: momentum-${{ steps.env.outputs.env }}
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$CLUSTER" \
+            --services "${CLUSTER}-next" \
+            --region ${{ env.AWS_REGION }}

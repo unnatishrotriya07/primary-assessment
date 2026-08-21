@@ -119,9 +119,9 @@ The system hosts a searchable database of testing items categorized as:
 ### 3.6. Student Interactive Voice Portal ('Buddy')
 The student’s exam-taking experience is fully interactive, run locally in the browser, and guided by a friendly graduation-cap avatar named **"Buddy"**:
 * **Identity Verification:** Prior to launch, the student must provide their **Scholar ID** and **Student Name** on the verification page. If they match the database record, access is granted.
-* **Hybrid Voice Services:** The voice engine dynamically selects the most robust speech synthesis and recognition setup:
-  * **Self-Hosted Service (Preferred):** If backend voice health checks pass, speech synthesis (TTS) uses a local **Kokoro Container API** (chunking sentences at punctuation boundaries to maintain synthesis quality and caching results via SHA-256 hashes under `cache/tts/`). Speech recognition (STT) records student audio via the browser's `MediaRecorder` API in `.webm` format and transcribes it on the backend using a local self-hosted **faster-whisper** model.
-  * **Browser Service (Fallback):** Bypasses backend endpoints and runs speech processes natively via browser Web Speech APIs (`SpeechSynthesisUtterance` at a rate of `0.88`, and `webkitSpeechRecognition`). Includes keep-alive intervals to bypass Chrome's 15-second speech buffer limitation.
+* **Hybrid Voice Services:** The voice engine exposes a hybrid setup, but today only the browser path is active:
+  * **Self-Hosted Service (intended, NOT active):** The backend `/voice/*` endpoints and `WhisperService`/`KokoroService` are **stubs**, and the frontend hardcodes `sttProvider`/`ttsProvider` to `"browser"` (`voice.service.ts:33-34`), so the Kokoro/faster-whisper path is dead code.
+  * **Browser Service (functional):** Runs speech natively via browser Web Speech APIs (`SpeechSynthesisUtterance` at a rate of `0.88`, and `webkitSpeechRecognition`). Includes keep-alive intervals to bypass Chrome's 15-second speech buffer limitation. **Not supported on iOS Safari.**
 * **Visual Status Indicators:** Visual pulsing glow rings around Buddy change state depending on what the interface is doing:
   * *Buddy is Speaking:* Glowing speech rings.
   * *Mic Active / Listening:* Student microphone is active, capturing spoken responses.
@@ -234,8 +234,8 @@ The core database tables and entity associations are structured as follows:
 
 ### Integrations & Services
 * **SendGrid API:** Dispatching parent assessment invitations.
-* **Local Self-Hosted Speech Container:**
-  * **TTS:** Kokoro local container container API (`http://localhost:8880/v1`) using SHA-256 caching for synthesized MP3 segments.
-  * **STT:** Local self-hosted `faster-whisper` (defaulting to the `small` model size, running on CPU/CUDA).
+* **Local Self-Hosted Speech Container (stubbed, not active):**
+  * **TTS:** Kokoro local container API (`http://localhost:8880/v1`) with SHA-256 caching for synthesized MP3 segments — **not wired up**.
+  * **STT:** Local self-hosted `faster-whisper` (defaulting to the `small` model size, running on CPU/CUDA) — **not wired up**.
 * **AWS S3 Integration:** Accesses bucket `student-assessment-pictures-primary` in `us-east-1` for storing student audio waveforms, uploads, and textbook PDFs.
 * **AI Fallback APIs:** Groq SDK (`llama-3.3-70b-versatile`), OpenAI SDK (`gpt-4o-mini`), and Google GenAI SDK (`gemini-2.0-flash`).
